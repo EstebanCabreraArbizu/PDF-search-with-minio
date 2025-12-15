@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # ═══════════════════════════════════════════════════
+  # SERVICIO 1: MinIO (Storage tipo S3)
+  # ═══════════════════════════════════════════════════
+  minio:
+    image: minio/minio:latest  # 📦 Imagen oficial de MinIO
+    container_name: minio-storage
+    ports:
+      - "9000:9000"   # API (para subir/descargar archivos)
+      - "9001:9001"   # Web Console (interfaz gráfica)
+    environment:
+      MINIO_ROOT_USER: admin          # Usuario admin
+      MINIO_ROOT_PASSWORD: password123  # ⚠️ Cambia esto en producción
+    command: server /data --console-address ":9001"
+    volumes:
+      - ./minio/data:/data  # 💾 Guarda datos en tu disco local
+    networks:
+      - pdf-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ═══════════════════════════════════════════════════
+  # SERVICIO 2: Flask (API de búsqueda)
+  # ═══════════════════════════════════════════════════
+  flask-app:
+    build: ./flask-app  # 🏗️ Construye desde Dockerfile local
+    container_name: flask-api
+    ports:
+      - "5000:5000"  # Tu API estará en http://localhost:5000
+    environment:
+      MINIO_PUBLIC_ENDPOINT: localhost:9000  # ← URLs públicas
+      MINIO_ENDPOINT: minio:9000  # 🔗 Se conecta al servicio "minio" y no a si mismo (localhost)
+      MINIO_ACCESS_KEY: admin
+      MINIO_SECRET_KEY: password123
+    depends_on:
+      - minio  # ⏳ Espera a que MinIO inicie primero
+    volumes:
+      - ./flask-app:/app  # 🔄 Hot-reload: cambios en código se reflejan al instante
+    networks:
+      - pdf-network
+
+networks:
+  pdf-network:
+    driver: bridge  # 🌉 Red privada para que los contenedores se hablen
