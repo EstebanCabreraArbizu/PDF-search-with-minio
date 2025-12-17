@@ -1,3 +1,13 @@
 minio/data/*
 venv/
 postgres-data/*
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
