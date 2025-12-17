@@ -8,85 +8,181 @@
 </head>
 <body>
     <div class="container mt-5">
-        <h2 class="mb-4">🔍 Búsqueda Inteligente de PDFs</h2>
-        
-        <div class="card mb-4">
-            <div class="card-body">
-                <form id="searchForm">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label">Código Empleado</label>
-                            <input type="text" class="form-control" name="codigo_empleado" 
-                                   placeholder="Ej: 12345">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Banco</label>
-                            <select class="form-select" name="banco">
-                                <option value="">Todos</option>
-                                <option>BBVA</option>
-                                <option>BCP</option>
-                                <option>INTERBANK</option>
-                                <option>SCOTIABANK</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Mes</label>
-                            <select class="form-select" name="mes">
-                                <option value="">Todos</option>
-                                <option value="01">Enero</option>
-                                <option value="02">Febrero</option>
-                                <option value="03">Marzo</option>
-                                <option value="04">Abril</option>
-                                <option value="05">Mayo</option>
-                                <option value="06">Junio</option>
-                                <option value="07">Julio</option>
-                                <option value="08">Agosto</option>
-                                <option value="09">Septiembre</option>
-                                <option value="10">Octubre</option>
-                                <option value="11">Noviembre</option>
-                                <option value="12">Diciembre</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Razón Social</label>
-                            <select class="form-select" name="razon_social">
-                                <option value="">Todas</option>
-                                <option>RESGUARDO</option>
-                                <option>ALARMAS</option>
-                                <option>FACILITIES</option>
-                                <option>LIDERMAN SERVICIOS</option>
-                                <option>SELVA</option>
-                                <option>AZZARO</option>
-                            </select>
+        <!-- ========================================= -->
+        <!-- PANTALLA DE LOGIN (visible al inicio)    -->
+        <!-- ========================================= -->
+        <div id="loginScreen">
+            <div class="row justify-content-center">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h3 class="text-center mb-4">🔒 Iniciar Sesión</h3>
+                            <form id="loginForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Usuario</label>
+                                    <input type="text" class="form-control" name="username" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Contraseña</label>
+                                    <input type="password" class="form-control" name="password" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Ingresar</button>
+                                <div id="loginError" class="alert alert-danger mt-3 d-none"></div>
+                            </form>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary mt-3">
-                        <span id="searchBtn">Buscar</span>
-                        <span id="loadingBtn" class="d-none">
-                            <span class="spinner-border spinner-border-sm"></span> Buscando...
-                        </span>
-                    </button>
-                </form>
+                </div>
             </div>
         </div>
-        
-        <div id="resultsContainer" class="d-none">
-            <div class="alert alert-info">
-                <strong id="totalResults"></strong>
+
+        <!-- ========================================= -->
+        <!-- PANTALLA DE BÚSQUEDA (oculta al inicio)  -->
+        <!-- ========================================= -->
+        <div id="searchScreen" class="d-none">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>🔍 Búsqueda de Planillas</h2>
+                <div>
+                    <span id="username" class="me-3"></span>
+                    <button class="btn btn-sm btn-outline-danger" onclick="logout()">Cerrar Sesión</button>
+                </div>
             </div>
-            <div id="results" class="row"></div>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form id="searchForm">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Código Empleado</label>
+                                <input type="text" class="form-control" name="codigo_empleado" 
+                                       placeholder="Ej: 12345">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Banco</label>
+                                <select class="form-select" name="banco">
+                                    <option value="">Todos</option>
+                                    <option>BBVA</option>
+                                    <option>BCP</option>
+                                    <option>INTERBANK</option>
+                                    <option>SCOTIABANK</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Mes</label>
+                                <select class="form-select" name="mes">
+                                    <option value="">Todos</option>
+                                    <option value="01">Enero</option>
+                                    <option value="02">Febrero</option>
+                                    <option value="03">Marzo</option>
+                                    <option value="04">Abril</option>
+                                    <option value="05">Mayo</option>
+                                    <option value="06">Junio</option>
+                                    <option value="07">Julio</option>
+                                    <option value="08">Agosto</option>
+                                    <option value="09">Septiembre</option>
+                                    <option value="10">Octubre</option>
+                                    <option value="11">Noviembre</option>
+                                    <option value="12">Diciembre</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Razón Social</label>
+                                <select class="form-select" name="razon_social">
+                                    <option value="">Todas</option>
+                                    <option>RESGUARDO</option>
+                                    <option>ALARMAS</option>
+                                    <option>FACILITIES</option>
+                                    <option>LIDERMAN SERVICIOS</option>
+                                    <option>SELVA</option>
+                                    <option>AZZARO</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary mt-3">
+                            <span id="searchBtn">Buscar</span>
+                            <span id="loadingBtn" class="d-none">
+                                <span class="spinner-border spinner-border-sm"></span> Buscando...
+                            </span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <div id="resultsContainer" class="d-none">
+                <div class="alert alert-info">
+                    <strong id="totalResults"></strong>
+                </div>
+                <div id="results" class="row"></div>
+            </div>
         </div>
     </div>
     
     <script>
+        // Token JWT almacenado en memoria (más seguro que localStorage)
+        let authToken = null;
+        let currentUser = null;
+
+        // ========================================
+        // LOGIN
+        // ========================================
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const credentials = {
+                username: formData.get('username'),
+                password: formData.get('password')
+            };
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(credentials)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.access_token;
+                    currentUser = data.user;
+                    
+                    // DEBUG: Verificar que el token se guardó
+                    console.log('✓ Token recibido:', authToken ? authToken.substring(0, 20) + '...' : 'NULL');
+                    console.log('✓ Usuario:', currentUser);
+                    
+                    // Mostrar pantalla de búsqueda
+                    document.getElementById('loginScreen').classList.add('d-none');
+                    document.getElementById('searchScreen').classList.remove('d-none');
+                    document.getElementById('username').textContent = `👤 ${currentUser.full_name || currentUser.username}`;
+                } else {
+                    document.getElementById('loginError').textContent = data.error;
+                    document.getElementById('loginError').classList.remove('d-none');
+                }
+            } catch (error) {
+                alert('Error de conexión: ' + error);
+            }
+        });
+
+        // ========================================
+        // LOGOUT
+        // ========================================
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            document.getElementById('loginScreen').classList.remove('d-none');
+            document.getElementById('searchScreen').classList.add('d-none');
+            document.getElementById('loginForm').reset();
+        }
+
+        // ========================================
+        // BÚSQUEDA
+        // ========================================
         document.getElementById('searchForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            // UI: Mostrar loading
             document.getElementById('searchBtn').classList.add('d-none');
             document.getElementById('loadingBtn').classList.remove('d-none');
             
-            // Recolectar filtros
             const formData = new FormData(e.target);
             const filters = {};
             for (let [key, value] of formData.entries()) {
@@ -94,18 +190,39 @@
             }
             
             try {
+                // DEBUG: Verificar que el token existe antes de enviar
+                console.log('Enviando búsqueda con token:', authToken ? authToken.substring(0, 20) + '...' : 'NULL');
+                
                 const response = await fetch('/api/search', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`  // ← JWT incluido
+                    },
                     body: JSON.stringify(filters)
                 });
                 
+                console.log('Respuesta del servidor:', response.status);
+                
+                if (response.status === 401) {
+                    alert('Sesión expirada. Por favor inicia sesión nuevamente.');
+                    logout();
+                    return;
+                }
+                
                 const data = await response.json();
-                displayResults(data);
+                
+                // Manejar errores del servidor
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    document.getElementById('resultsContainer').classList.add('d-none');
+                } else {
+                    displayResults(data);
+                }
             } catch (error) {
                 alert('Error en la búsqueda: ' + error);
+                document.getElementById('resultsContainer').classList.add('d-none');
             } finally {
-                // UI: Ocultar loading
                 document.getElementById('searchBtn').classList.remove('d-none');
                 document.getElementById('loadingBtn').classList.add('d-none');
             }
@@ -115,6 +232,13 @@
             const container = document.getElementById('results');
             const totalEl = document.getElementById('totalResults');
             const resultsContainer = document.getElementById('resultsContainer');
+            
+            // Validar que data tiene la estructura esperada
+            if (!data || typeof data.total === 'undefined' || !Array.isArray(data.results)) {
+                console.error('Datos inválidos:', data);
+                alert('Error: Respuesta del servidor inválida');
+                return;
+            }
             
             totalEl.textContent = `Se encontraron ${data.total} documento(s)`;
             resultsContainer.classList.remove('d-none');
@@ -135,13 +259,43 @@
                                 <strong>Razón Social:</strong> ${r.metadata.razon_social}<br>
                                 <strong>Tamaño:</strong> ${r.size_kb} KB
                             </p>
-                            <a href="${r.download_url}" class="btn btn-sm btn-primary" target="_blank">
+                            <button onclick="downloadFile('${r.download_url}')" class="btn btn-sm btn-primary">
                                 📥 Descargar
-                            </a>
+                            </button>
                         </div>
                     </div>
                 </div>
             `).join('');
+        }
+
+        // ========================================
+        // DESCARGA (con JWT)
+        // ========================================
+        async function downloadFile(url) {
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.status === 401) {
+                    alert('Sesión expirada');
+                    logout();
+                    return;
+                }
+                
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = url.split('/').pop();
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            } catch (error) {
+                alert('Error descargando archivo: ' + error);
+            }
         }
     </script>
 </body>

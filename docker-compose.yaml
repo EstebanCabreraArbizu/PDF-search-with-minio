@@ -2,6 +2,27 @@ version: '3.8'
 
 services:
   # ═══════════════════════════════════════════════════
+  # NUEVO: PostgreSQL para usuarios
+  # ═══════════════════════════════════════════════════
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: pdf_search
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    networks:
+      - pdf-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d pdf_search"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  # ═══════════════════════════════════════════════════
   # SERVICIO 1: MinIO (Storage tipo S3)
   # ═══════════════════════════════════════════════════
   minio:
@@ -37,8 +58,15 @@ services:
       MINIO_ENDPOINT: minio:9000  # 🔗 Se conecta al servicio "minio" y no a si mismo (localhost)
       MINIO_ACCESS_KEY: admin
       MINIO_SECRET_KEY: password123
+      # NUEVAS variables para PostgreSQL
+      DATABASE_URL: postgresql://admin:password123@postgres:5432/pdf_search
+      JWT_SECRET_KEY: mi-super-secreto-jwt-2024-no-cambiar  # ✅ Clave fija para desarrollo
+      PYTHONUNBUFFERED: 1  # ✅ Forzar que print() se muestre inmediatamente
     depends_on:
-      - minio  # ⏳ Espera a que MinIO inicie primero
+      postgres:  # ⏳ Espera a que PostgreSQL inicie primero
+        condition: service_healthy
+      minio:
+        condition: service_healthy #⏳ Espera a que MinIO inicie
     volumes:
       - ./flask-app:/app  # 🔄 Hot-reload: cambios en código se reflejan al instante
     networks:

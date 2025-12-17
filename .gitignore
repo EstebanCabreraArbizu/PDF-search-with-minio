@@ -1,0 +1,3 @@
+minio/data/*
+venv/
+postgres-data/*
