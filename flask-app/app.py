@@ -3,13 +3,12 @@ from flask_jwt_extended import (
     JWTManager, create_access_token, 
     jwt_required, get_jwt_identity
 )
-
+from datetime import datetime, timedelta
 from minio import Minio
 from minio.error import S3Error
 import fitz  # PyMuPDF
 import os
 import re
-from datetime import timedelta
 from models import db, User, DownloadLog
 
 app = Flask(__name__)
@@ -109,21 +108,162 @@ def init_app():
         app.logger.info(f"✗ Error al crear bucket: {e}")
 
 # ═══════════════════════════════════════════════════
-# FUNCIÓN: Extraer metadata de ruta de archivo
+# CONSTANTES: Mapeo de razones sociales para estandarización
+# ═══════════════════════════════════════════════════
+# Mapeo de variaciones a nombre estandarizado (normalizado a MAYÚSCULAS)
+RAZONES_SOCIALES_MAP = {
+    # Variaciones con numeración → Nombre estandarizado
+    'J & V RESGUARDO': 'RESGUARDO',
+    'J&V RESGUARDO': 'RESGUARDO',
+    'RESGUARDO': 'RESGUARDO',
+    'ALARMAS': 'ALARMAS',
+    'AZZARO': 'AZZARO',
+    'FACILITIES': 'FACILITIES',
+    'LIDERMAN SERVICIOS': 'LIDERMAN SERVICIOS',
+    'LIDERMAN': 'LIDERMAN SERVICIOS',
+    'SELVA': 'SELVA',
+}
+
+# Lista de razones sociales válidas para el frontend
+RAZONES_SOCIALES_VALIDAS = sorted(set(RAZONES_SOCIALES_MAP.values()))
+
+# Bancos válidos
+BANCOS_VALIDOS = ['BBVA', 'BCP', 'INTERBANK', 'SCOTIABANK']
+
+# ═══════════════════════════════════════════════════
+# FUNCIÓN: Normalizar razón social
+# ═══════════════════════════════════════════════════
+def normalize_razon_social(raw_name):
+    """
+    Estandariza nombres de razones sociales que pueden tener:
+    - Numeración: "1. J & V Resguardo" → "RESGUARDO"
+    - Variaciones de escritura: "J&V RESGUARDO" → "RESGUARDO"
+    - Mayúsculas/minúsculas inconsistentes
+    
+    Ejemplos:
+        "1. J & V Resguardo"  → "RESGUARDO"
+        "02.ALARMAS"          → "ALARMAS"
+        "Liderman Servicios"  → "LIDERMAN SERVICIOS"
+        "RESGUARDO"           → "RESGUARDO"
+    """
+    if not raw_name:
+        return 'DESCONOCIDO'
+    
+    # 1. Remover numeración inicial: "1. ", "02.", "10. ", etc.
+    cleaned = re.sub(r'^\d+[\.\s\-]+', '', raw_name.strip())
+    
+    # 2. Convertir a mayúsculas para comparación
+    cleaned_upper = cleaned.upper().strip()
+    
+    # 3. Buscar en el mapeo (intenta coincidencia exacta primero)
+    if cleaned_upper in RAZONES_SOCIALES_MAP:
+        return RAZONES_SOCIALES_MAP[cleaned_upper]
+    
+    # 4. Buscar coincidencia parcial (si contiene alguna clave del mapeo)
+    for key, standard_name in RAZONES_SOCIALES_MAP.items():
+        if key in cleaned_upper or cleaned_upper in key:
+            return standard_name
+    
+    # 5. Si no hay match, retornar el nombre limpio en mayúsculas
+    app.logger.warning(f"⚠️ Razón social no reconocida: '{raw_name}' → usando '{cleaned_upper}'")
+    return cleaned_upper
+
+# ═══════════════════════════════════════════════════
+# FUNCIÓN: Extraer año de carpeta madre
+# ═══════════════════════════════════════════════════
+def extract_year_from_path(path_part):
+    """
+    Extrae el año de carpetas como:
+    - "Planillas 2019-2025" → "2024" (año actual o más reciente válido)
+    - "Planillas 2023"      → "2023"
+    - "2024"                → "2024"
+    
+    Para rangos como "2019-2025", retorna el año más reciente del rango
+    que no exceda el año actual.
+    """
+    if not path_part:
+        return None
+    
+    # Buscar rango de años: "2019-2025"
+    range_match = re.search(r'(\d{4})\s*[-–]\s*(\d{4})', path_part)
+    if range_match:
+        start_year = int(range_match.group(1))
+        end_year = int(range_match.group(2))
+        current_year = datetime.now().year
+        # Retornar el año más reciente que no exceda el actual
+        return str(min(end_year, current_year))
+    
+    # Buscar año simple: "2023", "Planillas 2023", etc.
+    year_match = re.search(r'(20\d{2})', path_part)
+    if year_match:
+        return year_match.group(1)
+    
+    return None
+
+# ═══════════════════════════════════════════════════
+# FUNCIÓN: Extraer metadata de ruta de archivo (MEJORADA)
 # ═══════════════════════════════════════════════════
 def extract_metadata(file_path):
     """
-    Extrae metadata de la ruta jerárquica:
+    Extrae metadata de la ruta jerárquica con soporte para:
+    
+    ESTRUCTURA NUEVA (con carpeta de año):
+    Planillas 2019-2025/1. J & V Resguardo/03.MARZO/BBVA/VACACIONES/planilla.pdf
+    → {año: '2025', razon_social: 'RESGUARDO', mes: '03', banco: 'BBVA', tipo_documento: 'VACACIONES'}
+    
+    ESTRUCTURA ACTUAL (sin carpeta de año):
     RESGUARDO/03.MARZO/BBVA/VACACIONES/planilla.pdf
-    → {razon_social: 'RESGUARDO', mes: '03', banco: 'BBVA', ...}
+    → {año: '2025' (actual), razon_social: 'RESGUARDO', mes: '03', banco: 'BBVA', tipo_documento: 'VACACIONES'}
     """
     parts = file_path.split('/')
     
+    # Detectar si la primera carpeta contiene un año
+    año = None
+    offset = 0  # Desplazamiento de índices si hay carpeta de año
+    
+    if len(parts) > 0:
+        potential_year = extract_year_from_path(parts[0])
+        if potential_year:
+            año = potential_year
+            offset = 1  # La estructura empieza en parts[1]
+    
+    # Si no hay año en la carpeta, usar el año actual
+    if not año:
+        año = str(datetime.now().year)
+    
+    # Extraer razón social (con normalización)
+    razon_social_raw = parts[offset] if len(parts) > offset else 'DESCONOCIDO'
+    razon_social = normalize_razon_social(razon_social_raw)
+    
+    # Extraer mes del patrón "03.MARZO", "01.ENERO", etc.
+    mes_raw = parts[offset + 1] if len(parts) > offset + 1 else ''
+    mes_match = re.search(r'(\d{2})\.', mes_raw)
+    mes = mes_match.group(1) if mes_match else '00'
+    
+    # Extraer banco (normalizado a mayúsculas)
+    banco_raw = parts[offset + 2] if len(parts) > offset + 2 else 'GENERAL'
+    # Limpiar subcarpetas dentro del banco: "BBVA/FM2/QNA" → "BBVA"
+    banco = banco_raw.split('/')[0].upper().strip()
+    # Validar que sea un banco conocido
+    if banco not in BANCOS_VALIDOS:
+        # Intentar encontrar banco válido en el path
+        for parte in parts:
+            parte_upper = parte.upper()
+            for banco_valido in BANCOS_VALIDOS:
+                if banco_valido in parte_upper:
+                    banco = banco_valido
+                    break
+    
+    # Extraer tipo de documento
+    tipo_documento_raw = parts[offset + 3] if len(parts) > offset + 3 else 'GENERAL'
+    tipo_documento = tipo_documento_raw.upper().strip()
+    
     return {
-        'razon_social': parts[0] if len(parts) > 0 else 'DESCONOCIDO', # posible uso de regex
-        'mes': re.search(r'(\d{2})\.', parts[1]).group(1) if len(parts) > 1 and re.search(r'(\d{2})\.', parts[1]) else '00',
-        'banco': parts[2] if len(parts) > 2 else 'GENERAL',
-        'tipo_documento': parts[3] if len(parts) > 3 else 'GENERAL',
+        'año': año,
+        'razon_social': razon_social,
+        'mes': mes,
+        'banco': banco,
+        'tipo_documento': tipo_documento,
     }
 
 # ═══════════════════════════════════════════════════
@@ -214,11 +354,83 @@ def get_current_user():
     return jsonify(user.to_dict()), 200
 
 # ═══════════════════════════════════════════════════
+# HEALTH CHECK (para monitoreo de IT/Nginx)
+# ═══════════════════════════════════════════════════
+@app.route('/health')
+def health_check():
+    """Endpoint para verificar que la aplicación está funcionando"""
+    try:
+        # Verificar conexión a PostgreSQL
+        db.session.execute(db.text('SELECT 1'))
+        db_status = 'ok'
+    except Exception as e:
+        db_status = f'error: {str(e)}'
+    
+    try:
+        # Verificar conexión a MinIO
+        minio_client.bucket_exists(BUCKET_NAME)
+        minio_status = 'ok'
+    except Exception as e:
+        minio_status = f'error: {str(e)}'
+    
+    status = 'ok' if db_status == 'ok' and minio_status == 'ok' else 'degraded'
+    
+    return jsonify({
+        'status': status,
+        'timestamp': datetime.utcnow().isoformat(),
+        'services': {
+            'database': db_status,
+            'storage': minio_status
+        }
+    }), 200 if status == 'ok' else 503
+
+# ═══════════════════════════════════════════════════
 # RUTAS DE BÚSQUEDA Y DESCARGA (PROTEGIDAS)
 # ═══════════════════════════════════════════════════
 @app.route('/')
 def index():
     return render_template('search.html')
+
+@app.route('/api/filter-options', methods=['GET'])
+@jwt_required()
+def get_filter_options():
+    """
+    Retorna las opciones disponibles para los filtros de búsqueda.
+    Útil para poblar los selectores del frontend dinámicamente.
+    
+    Response: {
+        "años": ["2024", "2023", "2022", ...],
+        "razones_sociales": ["ALARMAS", "FACILITIES", ...],
+        "bancos": ["BBVA", "BCP", ...],
+        "meses": [{"value": "01", "label": "Enero"}, ...]
+    }
+    """
+    # Generar rango de años desde 2019 hasta el año actual
+    current_year = datetime.now().year
+    años = [str(y) for y in range(current_year, 2018, -1)]  # Orden descendente
+    
+    # Meses con etiquetas
+    meses = [
+        {'value': '01', 'label': 'Enero'},
+        {'value': '02', 'label': 'Febrero'},
+        {'value': '03', 'label': 'Marzo'},
+        {'value': '04', 'label': 'Abril'},
+        {'value': '05', 'label': 'Mayo'},
+        {'value': '06', 'label': 'Junio'},
+        {'value': '07', 'label': 'Julio'},
+        {'value': '08', 'label': 'Agosto'},
+        {'value': '09', 'label': 'Septiembre'},
+        {'value': '10', 'label': 'Octubre'},
+        {'value': '11', 'label': 'Noviembre'},
+        {'value': '12', 'label': 'Diciembre'},
+    ]
+    
+    return jsonify({
+        'años': años,
+        'razones_sociales': RAZONES_SOCIALES_VALIDAS,
+        'bancos': BANCOS_VALIDOS,
+        'meses': meses
+    }), 200
 
 @app.route('/api/search', methods=['POST'])
 @jwt_required()  # ← Requiere autenticación
@@ -229,7 +441,8 @@ def search():
         "codigo_empleado": "12345",
         "banco": "BBVA",
         "mes": "03",
-        "razon_social": "RESGUARDO"
+        "razon_social": "RESGUARDO",
+        "año": "2024"
     }
     """
     # DEBUG: Ver qué usuario está haciendo la búsqueda
@@ -238,6 +451,64 @@ def search():
     
     filters = request.get_json() or {}
     codigo_empleado = filters.get('codigo_empleado')
+    
+    # ═══════════════════════════════════════════════════
+    # VALIDACIÓN DE INPUT
+    # ═══════════════════════════════════════════════════
+    if codigo_empleado:
+        # Limpiar espacios
+        codigo_empleado = str(codigo_empleado).strip()
+        
+        # Validar formato: solo números, entre 4 y 10 dígitos
+        if not re.match(r'^\d{4,10}$', codigo_empleado):
+            return jsonify({
+                'error': 'Código de empleado inválido. Debe contener entre 4 y 10 dígitos numéricos.',
+                'total': 0,
+                'results': []
+            }), 400
+    
+    # Validar banco si se proporciona
+    if filters.get('banco') and filters['banco'] not in BANCOS_VALIDOS:
+        return jsonify({
+            'error': f'Banco inválido. Valores permitidos: {BANCOS_VALIDOS}',
+            'total': 0,
+            'results': []
+        }), 400
+    
+    # Validar mes si se proporciona (01-12)
+    if filters.get('mes') and not re.match(r'^(0[1-9]|1[0-2])$', filters['mes']):
+        return jsonify({
+            'error': 'Mes inválido. Debe ser un valor entre 01 y 12.',
+            'total': 0,
+            'results': []
+        }), 400
+    
+    # Validar año si se proporciona (formato YYYY, entre 2019 y año actual)
+    if filters.get('año'):
+        try:
+            año_filtro = int(filters['año'])
+            current_year = datetime.now().year
+            if año_filtro < 2019 or año_filtro > current_year:
+                return jsonify({
+                    'error': f'Año inválido. Debe ser entre 2019 y {current_year}.',
+                    'total': 0,
+                    'results': []
+                }), 400
+        except ValueError:
+            return jsonify({
+                'error': 'Año inválido. Debe ser un número (ej: 2024).',
+                'total': 0,
+                'results': []
+            }), 400
+    
+    # Validar razón social si se proporciona
+    if filters.get('razon_social') and filters['razon_social'] not in RAZONES_SOCIALES_VALIDAS:
+        return jsonify({
+            'error': f'Razón social inválida. Valores permitidos: {RAZONES_SOCIALES_VALIDAS}',
+            'total': 0,
+            'results': []
+        }), 400
+    
     results = []
     
     try:
@@ -249,7 +520,9 @@ def search():
             
             metadata = extract_metadata(obj.object_name)
             
-            # Aplicar filtros
+            # Aplicar filtros (incluyendo el nuevo filtro de año)
+            if filters.get('año') and metadata['año'] != filters['año']:
+                continue
             if filters.get('banco') and metadata['banco'] != filters['banco']:
                 continue
             if filters.get('mes') and metadata['mes'] != filters['mes']:
