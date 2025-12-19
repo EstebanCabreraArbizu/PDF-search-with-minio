@@ -62,19 +62,17 @@ class PDFIndex(db.Model):
     minio_object_name = db.Column(db.String(500), unique=True, nullable=False, index=True)
     
     # Metadata extraída de la ruta
-    razon_social = db.Column(db.String(100), index=True)
-    banco = db.Column(db.String(50), index=True)
+    razon_social = db.Column(db.String(150), index=True)
+    banco = db.Column(db.String(100), index=True)  # Aumentado para nombres largos
     mes = db.Column(db.String(2), index=True)  # "01" - "12"
     año = db.Column(db.String(4), index=True)  # "2024"
-    tipo_documento = db.Column(db.String(100))
+    tipo_documento = db.Column(db.String(300))  # Aumentado para nombres de archivo largos
     
     # Tamaño del archivo en bytes
     size_bytes = db.Column(db.BigInteger, default=0)
     
-    # Contenido de texto extraído del PDF (para full-text search)
-    contenido_texto = db.Column(db.Text)
-    
     # Códigos de empleado encontrados (separados por coma para búsqueda rápida)
+    # Se extraen durante indexación, permite búsqueda instantánea sin abrir PDFs
     codigos_empleado = db.Column(db.Text)  # "12345,67890,11111"
     
     # Timestamps

@@ -87,15 +87,8 @@ def init_app():
     with app.app_context():
         db.create_all()
         
-        # Crear índices optimizados para búsqueda full-text
+        # Crear índices optimizados para búsqueda
         try:
-            # Índice GIN para búsqueda de texto en contenido del PDF
-            db.session.execute(db.text("""
-                CREATE INDEX IF NOT EXISTS idx_pdf_contenido_fulltext 
-                ON pdf_index 
-                USING GIN(to_tsvector('spanish', COALESCE(contenido_texto, '')))
-            """))
-            
             # Índice para búsqueda rápida de códigos de empleado
             db.session.execute(db.text("""
                 CREATE INDEX IF NOT EXISTS idx_pdf_codigos 
@@ -233,15 +226,19 @@ def extract_year_from_path(path_part):
 # ═══════════════════════════════════════════════════
 def extract_metadata(file_path):
     """
-    Extrae metadata de la ruta jerárquica con soporte para:
+    Extrae metadata de la ruta jerárquica con soporte para múltiples estructuras:
     
-    ESTRUCTURA NUEVA (con carpeta de año):
-    Planillas 2019-2025/1. J & V Resguardo/03.MARZO/BBVA/VACACIONES/planilla.pdf
+    ESTRUCTURA COMPLETA (con banco y tipo en carpetas):
+    Planillas 2025/RESGUARDO/03.MARZO/BBVA/VACACIONES/planilla.pdf
     → {año: '2025', razon_social: 'RESGUARDO', mes: '03', banco: 'BBVA', tipo_documento: 'VACACIONES'}
     
-    ESTRUCTURA ACTUAL (sin carpeta de año):
-    RESGUARDO/03.MARZO/BBVA/VACACIONES/planilla.pdf
-    → {año: '2025' (actual), razon_social: 'RESGUARDO', mes: '03', banco: 'BBVA', tipo_documento: 'VACACIONES'}
+    ESTRUCTURA CON BANCO (sin carpeta de tipo):
+    Planillas 2025/RESGUARDO/03.MARZO/BBVA/REINTEGROS 07102025.pdf
+    → {año: '2025', razon_social: 'RESGUARDO', mes: '03', banco: 'BBVA', tipo_documento: 'REINTEGROS'}
+    
+    ESTRUCTURA SIN BANCO (archivo directo en mes):
+    Planillas 2025/LIDERMAN SERVICIOS/10.OCTUBRE/CUADRE SEP 03102025.pdf
+    → {año: '2025', razon_social: 'LIDERMAN SERVICIOS', mes: '10', banco: 'GENERAL', tipo_documento: 'CUADRE'}
     """
     parts = file_path.split('/')
     
@@ -268,23 +265,68 @@ def extract_metadata(file_path):
     mes_match = re.search(r'(\d{2})\.', mes_raw)
     mes = mes_match.group(1) if mes_match else '00'
     
-    # Extraer banco (normalizado a mayúsculas)
-    banco_raw = parts[offset + 2] if len(parts) > offset + 2 else 'GENERAL'
-    # Limpiar subcarpetas dentro del banco: "BBVA/FM2/QNA" → "BBVA"
-    banco = banco_raw.split('/')[0].upper().strip()
-    # Validar que sea un banco conocido
-    if banco not in BANCOS_VALIDOS:
-        # Intentar encontrar banco válido en el path
+    # Extraer nombre del archivo (último elemento)
+    filename = parts[-1] if parts else ''
+    
+    # Determinar banco y tipo de documento basado en la estructura
+    banco = 'GENERAL'
+    tipo_documento = 'GENERAL'
+    
+    # Posición esperada del banco: offset + 2
+    potential_banco = parts[offset + 2] if len(parts) > offset + 2 else ''
+    potential_banco_upper = potential_banco.upper().strip()
+    
+    # Verificar si potential_banco es un banco válido o un archivo PDF
+    is_pdf_file = potential_banco_upper.endswith('.PDF')
+    is_valid_banco = potential_banco_upper in BANCOS_VALIDOS
+    
+    # Buscar si el nombre contiene un banco válido (ej: "CTS BBVA" contiene "BBVA")
+    detected_banco_in_name = None
+    for banco_valido in BANCOS_VALIDOS:
+        if banco_valido in potential_banco_upper:
+            detected_banco_in_name = banco_valido
+            break
+    
+    if is_valid_banco:
+        # Estructura con banco: Planillas 2025/RAZON/MES/BANCO/...
+        banco = potential_banco_upper
+        
+        # El tipo de documento puede estar en la siguiente carpeta o en el nombre del archivo
+        if len(parts) > offset + 3:
+            potential_tipo = parts[offset + 3]
+            if potential_tipo.upper().endswith('.PDF'):
+                # El archivo está directamente en la carpeta del banco
+                tipo_documento = extract_tipo_from_filename(potential_tipo)
+            else:
+                # Hay carpeta de tipo de documento
+                tipo_documento = potential_tipo.upper().strip()
+        else:
+            tipo_documento = extract_tipo_from_filename(filename)
+    elif is_pdf_file:
+        # Estructura sin banco: archivo directamente en carpeta de mes
+        # Planillas 2025/RAZON/MES/ARCHIVO.pdf
+        banco = 'GENERAL'
+        tipo_documento = extract_tipo_from_filename(potential_banco)
+    elif detected_banco_in_name:
+        # La carpeta contiene el nombre del banco (ej: "CTS BBVA" contiene "BBVA")
+        banco = detected_banco_in_name
+        # El nombre de la carpeta es el tipo de documento
+        tipo_documento = potential_banco_upper
+    else:
+        # Puede ser una subcarpeta antes del archivo, buscar banco en todo el path
         for parte in parts:
-            parte_upper = parte.upper()
+            parte_upper = parte.upper().strip()
+            # Buscar banco exacto o contenido en el nombre
+            if parte_upper in BANCOS_VALIDOS:
+                banco = parte_upper
+                break
             for banco_valido in BANCOS_VALIDOS:
                 if banco_valido in parte_upper:
                     banco = banco_valido
                     break
-    
-    # Extraer tipo de documento
-    tipo_documento_raw = parts[offset + 3] if len(parts) > offset + 3 else 'GENERAL'
-    tipo_documento = tipo_documento_raw.upper().strip()
+            if banco != 'GENERAL':
+                break
+        tipo_documento = extract_tipo_from_filename(filename)
     
     return {
         'año': año,
@@ -293,6 +335,46 @@ def extract_metadata(file_path):
         'banco': banco,
         'tipo_documento': tipo_documento,
     }
+
+
+def extract_tipo_from_filename(filename):
+    """
+    Extrae el tipo de documento del nombre del archivo.
+    
+    Ejemplos:
+    - "REINTEGROS 07102025.pdf" → "REINTEGROS"
+    - "CUADRE SEP 03102025.pdf" → "CUADRE SEP"
+    - "LIQUIDACIONES DESTACADOS 02122025.PDF" → "LIQUIDACIONES DESTACADOS"
+    - "VACACIONES DESTACADOS_18122025.PDF" → "VACACIONES DESTACADOS"
+    - "CTS NOV 14112025.PDF" → "CTS NOV"
+    - "FM DESTACADOS 25072025.PDF" → "FM DESTACADOS"
+    - "FIN DE MES DEST_27062025.PDF" → "FIN DE MES DEST"
+    - "GRATI DEST_12122025" → "GRATI DEST"
+    """
+    if not filename:
+        return 'GENERAL'
+    
+    # Remover extensión .pdf
+    name = re.sub(r'\.pdf$', '', filename, flags=re.IGNORECASE)
+    
+    # Remover fechas con múltiples formatos (6-8 dígitos al final):
+    # - "REINTEGROS 07102025" → "REINTEGROS"
+    # - "FIN DE MES DEST_27062025" → "FIN DE MES DEST"
+    # - "FIN DE MES DESTACADOS_270225" → "FIN DE MES DESTACADOS"
+    # - "CUADRE MAYO_0306205" → "CUADRE MAYO"
+    # - "CUADRE JUL 04082025" → "CUADRE JUL"
+    # El patrón busca: separador opcional + 5-8 dígitos + posible sufijo como (1)
+    name = re.sub(r'[\s_-]?\d{5,8}(\s*\(\d+\))?\s*$', '', name)
+    
+    # Remover guiones bajos y espacios al final
+    name = re.sub(r'[_\s]+$', '', name)
+    
+    # Si queda vacío, usar GENERAL
+    if not name:
+        return 'GENERAL'
+    
+    return name.upper()
+
 
 # ═══════════════════════════════════════════════════
 # FUNCIÓN: Buscar código de empleado en PDF
@@ -503,7 +585,7 @@ def get_filter_options():
     return jsonify({
         'años': años,
         'razones_sociales': RAZONES_SOCIALES_VALIDAS,
-        'bancos': BANCOS_VALIDOS,
+        'bancos': BANCOS_VALIDOS + ['GENERAL'],  # Incluir GENERAL para archivos sin banco específico
         'meses': meses,
         'index_stats': {
             'total': 0,
@@ -556,10 +638,10 @@ def search():
                 'results': []
             }), 400
     
-    # Validar banco si se proporciona
-    if filters.get('banco') and filters['banco'] not in BANCOS_VALIDOS:
+    # Validar banco si se proporciona (BANCOS_VALIDOS + 'GENERAL')
+    if filters.get('banco') and filters['banco'] not in BANCOS_VALIDOS + ['GENERAL']:
         return jsonify({
-            'error': f'Banco inválido. Valores permitidos: {BANCOS_VALIDOS}',
+            'error': f'Banco inválido. Valores permitidos: {BANCOS_VALIDOS + ["GENERAL"]}',
             'total': 0,
             'results': []
         }), 400
@@ -594,6 +676,19 @@ def search():
     if filters.get('razon_social') and filters['razon_social'] not in RAZONES_SOCIALES_VALIDAS:
         return jsonify({
             'error': f'Razón social inválida. Valores permitidos: {RAZONES_SOCIALES_VALIDAS}',
+            'total': 0,
+            'results': []
+        }), 400
+    
+    # ═══════════════════════════════════════════════════
+    # VALIDACIÓN: Código de empleado es OBLIGATORIO
+    # ═══════════════════════════════════════════════════
+    # Sin código de empleado, la búsqueda retornaría demasiados resultados
+    # y no tendría sentido para el caso de uso (buscar planillas de un empleado)
+    if not codigo_empleado:
+        return jsonify({
+            'error': 'El código de empleado es obligatorio para realizar la búsqueda.',
+            'hint': 'Los filtros adicionales (banco, mes, año, razon_social) son opcionales y ayudan a reducir resultados.',
             'total': 0,
             'results': []
         }), 400
@@ -854,7 +949,6 @@ def index_single_pdf(obj):
         existing.año = metadata['año']
         existing.tipo_documento = metadata['tipo_documento']
         existing.size_bytes = obj.size
-        existing.contenido_texto = texto
         existing.codigos_empleado = ','.join(codigos) if codigos else None
         existing.last_modified = obj.last_modified
         existing.indexed_at = datetime.utcnow()
@@ -871,7 +965,6 @@ def index_single_pdf(obj):
             año=metadata['año'],
             tipo_documento=metadata['tipo_documento'],
             size_bytes=obj.size,
-            contenido_texto=texto,
             codigos_empleado=','.join(codigos) if codigos else None,
             last_modified=obj.last_modified,
             is_indexed=texto is not None,
