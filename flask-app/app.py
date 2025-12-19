@@ -9,7 +9,7 @@ from minio.error import S3Error
 import fitz  # PyMuPDF
 import os
 import re
-from models import db, User, DownloadLog
+from models import db, User, DownloadLog, PDFIndex
 
 app = Flask(__name__)
 # ═══════════════════════════════════════════════════
@@ -86,6 +86,34 @@ def init_app():
     """Inicializa base de datos y MinIO"""
     with app.app_context():
         db.create_all()
+        
+        # Crear índices optimizados para búsqueda full-text
+        try:
+            # Índice GIN para búsqueda de texto en contenido del PDF
+            db.session.execute(db.text("""
+                CREATE INDEX IF NOT EXISTS idx_pdf_contenido_fulltext 
+                ON pdf_index 
+                USING GIN(to_tsvector('spanish', COALESCE(contenido_texto, '')))
+            """))
+            
+            # Índice para búsqueda rápida de códigos de empleado
+            db.session.execute(db.text("""
+                CREATE INDEX IF NOT EXISTS idx_pdf_codigos 
+                ON pdf_index 
+                USING GIN(to_tsvector('simple', COALESCE(codigos_empleado, '')))
+            """))
+            
+            # Índice compuesto para filtros comunes
+            db.session.execute(db.text("""
+                CREATE INDEX IF NOT EXISTS idx_pdf_filtros 
+                ON pdf_index(año, razon_social, banco, mes)
+            """))
+            
+            db.session.commit()
+            app.logger.info("✓ Índices GIN creados para búsqueda full-text")
+        except Exception as e:
+            app.logger.warning(f"⚠️ No se pudieron crear índices GIN (puede que ya existan): {e}")
+            db.session.rollback()
 
         if not User.query.filter_by(username = "admin").first():
             admin = User(
@@ -396,20 +424,19 @@ def index():
 def get_filter_options():
     """
     Retorna las opciones disponibles para los filtros de búsqueda.
-    Útil para poblar los selectores del frontend dinámicamente.
+    Combina opciones estáticas con datos reales del índice.
     
     Response: {
         "años": ["2024", "2023", "2022", ...],
         "razones_sociales": ["ALARMAS", "FACILITIES", ...],
         "bancos": ["BBVA", "BCP", ...],
-        "meses": [{"value": "01", "label": "Enero"}, ...]
+        "meses": [{"value": "01", "label": "Enero"}, ...],
+        "index_stats": {"total": 1500, "indexed": true}
     }
     """
-    # Generar rango de años desde 2019 hasta el año actual
-    current_year = datetime.now().year
-    años = [str(y) for y in range(current_year, 2018, -1)]  # Orden descendente
+    from sqlalchemy import func
     
-    # Meses con etiquetas
+    # Meses con etiquetas (estático)
     meses = [
         {'value': '01', 'label': 'Enero'},
         {'value': '02', 'label': 'Febrero'},
@@ -425,32 +452,94 @@ def get_filter_options():
         {'value': '12', 'label': 'Diciembre'},
     ]
     
+    # Intentar obtener opciones dinámicas del índice
+    try:
+        total_indexed = PDFIndex.query.count()
+        
+        if total_indexed > 0:
+            # Años reales del índice (ordenados descendente)
+            años_db = db.session.query(PDFIndex.año)\
+                .distinct()\
+                .filter(PDFIndex.año.isnot(None))\
+                .order_by(PDFIndex.año.desc())\
+                .all()
+            años = [a[0] for a in años_db if a[0]]
+            
+            # Razones sociales reales del índice
+            razones_db = db.session.query(PDFIndex.razon_social)\
+                .distinct()\
+                .filter(PDFIndex.razon_social.isnot(None))\
+                .order_by(PDFIndex.razon_social)\
+                .all()
+            razones_sociales = [r[0] for r in razones_db if r[0]]
+            
+            # Bancos reales del índice
+            bancos_db = db.session.query(PDFIndex.banco)\
+                .distinct()\
+                .filter(PDFIndex.banco.isnot(None))\
+                .order_by(PDFIndex.banco)\
+                .all()
+            bancos = [b[0] for b in bancos_db if b[0]]
+            
+            return jsonify({
+                'años': años,
+                'razones_sociales': razones_sociales,
+                'bancos': bancos,
+                'meses': meses,
+                'index_stats': {
+                    'total': total_indexed,
+                    'indexed': True,
+                    'source': 'postgresql_index'
+                }
+            }), 200
+    
+    except Exception as e:
+        app.logger.warning(f"⚠️ No se pudo leer índice, usando valores estáticos: {e}")
+    
+    # Fallback: usar valores estáticos
+    current_year = datetime.now().year
+    años = [str(y) for y in range(current_year, 2018, -1)]
+    
     return jsonify({
         'años': años,
         'razones_sociales': RAZONES_SOCIALES_VALIDAS,
         'bancos': BANCOS_VALIDOS,
-        'meses': meses
+        'meses': meses,
+        'index_stats': {
+            'total': 0,
+            'indexed': False,
+            'source': 'static_config'
+        }
     }), 200
 
 @app.route('/api/search', methods=['POST'])
 @jwt_required()  # ← Requiere autenticación
 def search():
     """
-    Búsqueda de PDFs (protegida)
+    Búsqueda de PDFs (protegida) - OPTIMIZADA CON ÍNDICE PostgreSQL
+    
     Body: {
         "codigo_empleado": "12345",
         "banco": "BBVA",
         "mes": "03",
         "razon_social": "RESGUARDO",
-        "año": "2024"
+        "año": "2024",
+        "use_index": true  // opcional, default true
     }
+    
+    Si use_index=true (default): Busca en PostgreSQL (rápido, ~20ms)
+    Si use_index=false: Busca en MinIO directamente (lento, legacy)
     """
+    import time
+    start_time = time.time()
+    
     # DEBUG: Ver qué usuario está haciendo la búsqueda
     user_id = int(get_jwt_identity())  # ← Convertir de string a int
     app.logger.info(f"✓ Búsqueda iniciada por user_id: {user_id}")
     
     filters = request.get_json() or {}
     codigo_empleado = filters.get('codigo_empleado')
+    use_index = filters.get('use_index', True)  # Por defecto usa índice
     
     # ═══════════════════════════════════════════════════
     # VALIDACIÓN DE INPUT
@@ -509,6 +598,52 @@ def search():
             'results': []
         }), 400
     
+    # ═══════════════════════════════════════════════════
+    # BÚSQUEDA CON ÍNDICE (PostgreSQL) - RÁPIDA
+    # ═══════════════════════════════════════════════════
+    if use_index:
+        try:
+            # Construir query dinámico
+            query = PDFIndex.query.filter(PDFIndex.is_indexed == True)
+            
+            # Aplicar filtros
+            if filters.get('año'):
+                query = query.filter(PDFIndex.año == filters['año'])
+            if filters.get('banco'):
+                query = query.filter(PDFIndex.banco == filters['banco'])
+            if filters.get('mes'):
+                query = query.filter(PDFIndex.mes == filters['mes'])
+            if filters.get('razon_social'):
+                query = query.filter(PDFIndex.razon_social == filters['razon_social'])
+            
+            # Búsqueda por código de empleado (en campo indexado)
+            if codigo_empleado:
+                # Buscar en el campo codigos_empleado (contiene códigos separados por coma)
+                query = query.filter(PDFIndex.codigos_empleado.contains(codigo_empleado))
+            
+            # Ejecutar query
+            pdfs = query.limit(500).all()  # Límite de seguridad
+            
+            results = [pdf.to_dict() for pdf in pdfs]
+            
+            elapsed = round((time.time() - start_time) * 1000, 2)  # ms
+            app.logger.info(f"✓ Búsqueda indexada: {len(results)} resultados en {elapsed}ms")
+            
+            return jsonify({
+                'total': len(results),
+                'results': results,
+                'search_time_ms': elapsed,
+                'source': 'postgresql_index'
+            })
+            
+        except Exception as e:
+            app.logger.warning(f"⚠️ Error en búsqueda indexada, fallback a MinIO: {e}")
+            # Si falla el índice, hacer fallback a búsqueda directa
+            use_index = False
+    
+    # ═══════════════════════════════════════════════════
+    # BÚSQUEDA DIRECTA (MinIO) - LEGACY/FALLBACK
+    # ═══════════════════════════════════════════════════
     results = []
     
     try:
@@ -549,7 +684,15 @@ def search():
     except Exception as e:
         return jsonify({'error': f'Error inesperado: {str(e)}', 'total': 0, 'results': []}), 500
     
-    return jsonify({'total': len(results), 'results': results})
+    elapsed = round((time.time() - start_time) * 1000, 2)
+    app.logger.info(f"✓ Búsqueda MinIO: {len(results)} resultados en {elapsed}ms")
+    
+    return jsonify({
+        'total': len(results),
+        'results': results,
+        'search_time_ms': elapsed,
+        'source': 'minio_direct'
+    })
 
 @app.route('/api/download/<path:filename>', methods=['GET'])
 @jwt_required()  # ← Requiere autenticación
@@ -642,6 +785,361 @@ def get_download_logs():
         'downloaded_at': log.downloaded_at.isoformat(),
         'ip_address': log.ip_address
     } for log in logs]), 200
+
+
+# ═══════════════════════════════════════════════════
+# INDEXACIÓN DE PDFs (PostgreSQL)
+# ═══════════════════════════════════════════════════
+def extract_text_from_pdf(object_name):
+    """
+    Extrae todo el texto de un PDF almacenado en MinIO.
+    También extrae códigos de empleado encontrados.
+    
+    Returns:
+        tuple: (texto_completo, codigos_empleado_lista)
+    """
+    try:
+        response = minio_client.get_object(BUCKET_NAME, object_name)
+        pdf_bytes = response.read()
+        
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        texto_completo = ""
+        codigos_encontrados = set()
+        
+        for page in doc:
+            text = page.get_text()
+            texto_completo += text + "\n"
+            
+            # Buscar patrones de códigos de empleado (4-10 dígitos)
+            # Ajustar el patrón según el formato real de tus códigos
+            codigos = re.findall(r'\b\d{4,10}\b', text)
+            codigos_encontrados.update(codigos)
+        
+        doc.close()
+        return texto_completo, list(codigos_encontrados)
+    
+    except Exception as e:
+        app.logger.error(f"Error extrayendo texto de {object_name}: {e}")
+        return None, []
+
+
+def index_single_pdf(obj):
+    """
+    Indexa un solo PDF de MinIO en PostgreSQL.
+    
+    Args:
+        obj: Objeto MinIO con .object_name, .size, .last_modified
+        
+    Returns:
+        PDFIndex: Registro creado o actualizado
+    """
+    # Verificar si ya existe
+    existing = PDFIndex.query.filter_by(minio_object_name=obj.object_name).first()
+    
+    # Si existe y no ha cambiado, saltar
+    if existing and existing.last_modified == obj.last_modified:
+        return existing
+    
+    # Extraer metadata de la ruta
+    metadata = extract_metadata(obj.object_name)
+    
+    # Extraer texto del PDF (puede ser lento)
+    texto, codigos = extract_text_from_pdf(obj.object_name)
+    
+    if existing:
+        # Actualizar registro existente
+        existing.razon_social = metadata['razon_social']
+        existing.banco = metadata['banco']
+        existing.mes = metadata['mes']
+        existing.año = metadata['año']
+        existing.tipo_documento = metadata['tipo_documento']
+        existing.size_bytes = obj.size
+        existing.contenido_texto = texto
+        existing.codigos_empleado = ','.join(codigos) if codigos else None
+        existing.last_modified = obj.last_modified
+        existing.indexed_at = datetime.utcnow()
+        existing.is_indexed = texto is not None
+        existing.index_error = None if texto else "Error extrayendo texto"
+        return existing
+    else:
+        # Crear nuevo registro
+        pdf_index = PDFIndex(
+            minio_object_name=obj.object_name,
+            razon_social=metadata['razon_social'],
+            banco=metadata['banco'],
+            mes=metadata['mes'],
+            año=metadata['año'],
+            tipo_documento=metadata['tipo_documento'],
+            size_bytes=obj.size,
+            contenido_texto=texto,
+            codigos_empleado=','.join(codigos) if codigos else None,
+            last_modified=obj.last_modified,
+            is_indexed=texto is not None,
+            index_error=None if texto else "Error extrayendo texto"
+        )
+        db.session.add(pdf_index)
+        return pdf_index
+
+
+@app.route('/api/reindex', methods=['POST'])
+@jwt_required()
+def reindex_all():
+    """
+    Reindexar todos los PDFs de MinIO en PostgreSQL.
+    Solo admin puede ejecutar esto.
+    
+    INCLUYE: Eliminación de índices huérfanos (PDFs eliminados de MinIO)
+    
+    Body (opcional): {
+        "clean_orphans": true  // default: true - elimina índices de PDFs eliminados
+    }
+    
+    Response: {
+        "message": "Indexación completada",
+        "total_indexed": 150,
+        "new_indexed": 50,
+        "updated": 10,
+        "orphans_removed": 5,
+        "errors": 3,
+        "time_seconds": 45.2
+    }
+    """
+    from flask_jwt_extended import get_jwt
+    import time
+    
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Permiso denegado. Solo admin puede reindexar.'}), 403
+    
+    data = request.get_json() or {}
+    clean_orphans = data.get('clean_orphans', True)
+    
+    start_time = time.time()
+    indexed_count = 0
+    new_count = 0
+    updated_count = 0
+    error_count = 0
+    orphans_removed = 0
+    
+    try:
+        # Obtener lista de todos los PDFs en MinIO
+        minio_objects = {}
+        objects = minio_client.list_objects(BUCKET_NAME, recursive=True)
+        
+        for obj in objects:
+            if obj.object_name.endswith('.pdf'):
+                minio_objects[obj.object_name] = obj
+        
+        app.logger.info(f"📁 Encontrados {len(minio_objects)} PDFs en MinIO")
+        
+        # ═══════════════════════════════════════════════════
+        # PASO 1: Eliminar índices huérfanos (si está habilitado)
+        # ═══════════════════════════════════════════════════
+        if clean_orphans:
+            # Obtener todos los object_names indexados
+            indexed_names = set(
+                row[0] for row in 
+                db.session.query(PDFIndex.minio_object_name).all()
+            )
+            
+            # Encontrar huérfanos (indexados pero no en MinIO)
+            orphan_names = indexed_names - set(minio_objects.keys())
+            
+            if orphan_names:
+                PDFIndex.query.filter(
+                    PDFIndex.minio_object_name.in_(orphan_names)
+                ).delete(synchronize_session=False)
+                orphans_removed = len(orphan_names)
+                db.session.commit()
+                app.logger.info(f"🗑️ Eliminados {orphans_removed} índices huérfanos")
+        
+        # ═══════════════════════════════════════════════════
+        # PASO 2: Indexar PDFs nuevos o actualizados
+        # ═══════════════════════════════════════════════════
+        for object_name, obj in minio_objects.items():
+            try:
+                existing = PDFIndex.query.filter_by(minio_object_name=object_name).first()
+                
+                # Si existe y no ha cambiado, saltar
+                if existing and existing.last_modified == obj.last_modified:
+                    indexed_count += 1
+                    continue
+                
+                # Indexar (nuevo o actualizado)
+                index_single_pdf(obj)
+                indexed_count += 1
+                
+                if existing:
+                    updated_count += 1
+                else:
+                    new_count += 1
+                
+                # Commit cada 50 documentos
+                if indexed_count % 50 == 0:
+                    db.session.commit()
+                    app.logger.info(f"✓ Procesados {indexed_count} PDFs...")
+                    
+            except Exception as e:
+                error_count += 1
+                app.logger.error(f"✗ Error indexando {object_name}: {e}")
+        
+        # Commit final
+        db.session.commit()
+        
+        elapsed = round(time.time() - start_time, 2)
+        app.logger.info(f"✓ Indexación completada: {indexed_count} PDFs en {elapsed}s")
+        
+        return jsonify({
+            'message': 'Indexación completada',
+            'total_in_minio': len(minio_objects),
+            'total_indexed': indexed_count,
+            'new_indexed': new_count,
+            'updated': updated_count,
+            'orphans_removed': orphans_removed,
+            'errors': error_count,
+            'time_seconds': elapsed
+        }), 200
+        
+    except S3Error as e:
+        return jsonify({'error': f'Error de MinIO: {str(e)}'}), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error inesperado: {str(e)}'}), 500
+
+
+@app.route('/api/index/sync', methods=['POST'])
+@jwt_required()
+def sync_index():
+    """
+    Sincronización RÁPIDA del índice.
+    Solo procesa cambios (nuevos, eliminados) sin re-extraer texto de PDFs existentes.
+    
+    Mucho más rápido que /api/reindex para uso frecuente.
+    
+    Response: {
+        "new_files": 5,
+        "removed_orphans": 2,
+        "time_seconds": 1.2
+    }
+    """
+    from flask_jwt_extended import get_jwt
+    import time
+    
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Permiso denegado. Solo admin puede sincronizar.'}), 403
+    
+    start_time = time.time()
+    new_files = 0
+    removed_orphans = 0
+    
+    try:
+        # Obtener lista de MinIO (solo nombres y metadata básica)
+        minio_names = set()
+        minio_objects = {}
+        
+        for obj in minio_client.list_objects(BUCKET_NAME, recursive=True):
+            if obj.object_name.endswith('.pdf'):
+                minio_names.add(obj.object_name)
+                minio_objects[obj.object_name] = obj
+        
+        # Obtener lista de indexados
+        indexed_names = set(
+            row[0] for row in 
+            db.session.query(PDFIndex.minio_object_name).all()
+        )
+        
+        # Encontrar nuevos (en MinIO pero no indexados)
+        new_names = minio_names - indexed_names
+        
+        # Encontrar huérfanos (indexados pero no en MinIO)
+        orphan_names = indexed_names - minio_names
+        
+        # Eliminar huérfanos
+        if orphan_names:
+            PDFIndex.query.filter(
+                PDFIndex.minio_object_name.in_(orphan_names)
+            ).delete(synchronize_session=False)
+            removed_orphans = len(orphan_names)
+        
+        # Indexar nuevos
+        for name in new_names:
+            try:
+                index_single_pdf(minio_objects[name])
+                new_files += 1
+            except Exception as e:
+                app.logger.error(f"✗ Error indexando {name}: {e}")
+        
+        db.session.commit()
+        
+        elapsed = round(time.time() - start_time, 2)
+        
+        return jsonify({
+            'message': 'Sincronización completada',
+            'total_in_minio': len(minio_names),
+            'total_indexed': len(indexed_names) - removed_orphans + new_files,
+            'new_files': new_files,
+            'removed_orphans': removed_orphans,
+            'time_seconds': elapsed
+        }), 200
+        
+    except S3Error as e:
+        return jsonify({'error': f'Error de MinIO: {str(e)}'}), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error inesperado: {str(e)}'}), 500
+
+
+@app.route('/api/index/stats', methods=['GET'])
+@jwt_required()
+def get_index_stats():
+    """
+    Estadísticas del índice de PDFs.
+    
+    Response: {
+        "total_indexed": 1500,
+        "total_size_gb": 45.2,
+        "by_year": {"2024": 500, "2023": 400, ...},
+        "by_razon_social": {"RESGUARDO": 300, ...},
+        "last_indexed": "2024-12-19T10:30:00"
+    }
+    """
+    from sqlalchemy import func
+    
+    total = PDFIndex.query.count()
+    total_size = db.session.query(func.sum(PDFIndex.size_bytes)).scalar() or 0
+    
+    # Agrupar por año
+    by_year = dict(
+        db.session.query(PDFIndex.año, func.count(PDFIndex.id))
+        .group_by(PDFIndex.año)
+        .all()
+    )
+    
+    # Agrupar por razón social
+    by_razon = dict(
+        db.session.query(PDFIndex.razon_social, func.count(PDFIndex.id))
+        .group_by(PDFIndex.razon_social)
+        .all()
+    )
+    
+    # Último indexado
+    last = PDFIndex.query.order_by(PDFIndex.indexed_at.desc()).first()
+    
+    return jsonify({
+        'total_indexed': total,
+        'total_size_gb': round(total_size / (1024**3), 2),
+        'by_year': by_year,
+        'by_razon_social': by_razon,
+        'by_banco': dict(
+            db.session.query(PDFIndex.banco, func.count(PDFIndex.id))
+            .group_by(PDFIndex.banco)
+            .all()
+        ),
+        'last_indexed': last.indexed_at.isoformat() if last else None,
+        'indexed_successfully': PDFIndex.query.filter_by(is_indexed=True).count(),
+        'with_errors': PDFIndex.query.filter_by(is_indexed=False).count()
+    }), 200
 
 if __name__ == '__main__':
     init_app()
