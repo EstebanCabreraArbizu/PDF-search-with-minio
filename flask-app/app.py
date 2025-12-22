@@ -298,8 +298,8 @@ def extract_metadata(file_path):
                 # El archivo está directamente en la carpeta del banco
                 tipo_documento = extract_tipo_from_filename(potential_tipo)
             else:
-                # Hay carpeta de tipo de documento
-                tipo_documento = potential_tipo.upper().strip()
+                # Hay carpeta de tipo de documento - limpiar números finales
+                tipo_documento = clean_tipo_documento(potential_tipo)
         else:
             tipo_documento = extract_tipo_from_filename(filename)
     elif is_pdf_file:
@@ -310,8 +310,8 @@ def extract_metadata(file_path):
     elif detected_banco_in_name:
         # La carpeta contiene el nombre del banco (ej: "CTS BBVA" contiene "BBVA")
         banco = detected_banco_in_name
-        # El nombre de la carpeta es el tipo de documento
-        tipo_documento = potential_banco_upper
+        # El nombre de la carpeta es el tipo de documento - limpiar números finales
+        tipo_documento = clean_tipo_documento(potential_banco)
     else:
         # Puede ser una subcarpeta antes del archivo, buscar banco en todo el path
         for parte in parts:
@@ -337,9 +337,46 @@ def extract_metadata(file_path):
     }
 
 
+def clean_tipo_documento(name):
+    """
+    Limpia el nombre de un tipo de documento (de carpeta o archivo).
+    Remueve fechas numéricas (6-8 dígitos) en cualquier posición.
+    
+    Ejemplos:
+    - "CTS NOV 2024 SOLES - II_15052025" → "CTS NOV 2024 SOLES - II"
+    - "FIN DE MES DEST_27062025" → "FIN DE MES DEST"
+    - "GRATI DEST_12122025 CONSOLIDADO" → "GRATI DEST CONSOLIDADO"
+    - "011025 REINTEGROS 631." → "REINTEGROS 631."
+    - "INTERES LEGAL_02042025 BBVA" → "INTERES LEGAL BBVA"
+    - "VACACIONES" → "VACACIONES"
+    """
+    if not name:
+        return 'GENERAL'
+    
+    name = name.upper().strip()
+    
+    # Remover fechas de 6-8 dígitos en CUALQUIER posición (con separador opcional)
+    # Esto captura: _15052025, 07102025, _12122025, 02042025, etc.
+    name = re.sub(r'[\s_-]*\d{6,8}', '', name)
+    
+    # Remover posibles (1), (2) o paréntesis sueltos
+    name = re.sub(r'\s*\(\d*\)\s*', '', name)  # (1), (2), ()
+    name = re.sub(r'\s*\(\s*$', '', name)       # Paréntesis abierto al final
+    
+    # Remover guiones bajos, espacios y guiones duplicados
+    name = re.sub(r'[_\s-]+', ' ', name)  # Reemplazar múltiples separadores por espacio
+    name = name.strip()
+    
+    if not name:
+        return 'GENERAL'
+    
+    return name
+
+
 def extract_tipo_from_filename(filename):
     """
     Extrae el tipo de documento del nombre del archivo.
+    Remueve la extensión .pdf y cualquier dato numérico al final (fechas).
     
     Ejemplos:
     - "REINTEGROS 07102025.pdf" → "REINTEGROS"
@@ -350,6 +387,7 @@ def extract_tipo_from_filename(filename):
     - "FM DESTACADOS 25072025.PDF" → "FM DESTACADOS"
     - "FIN DE MES DEST_27062025.PDF" → "FIN DE MES DEST"
     - "GRATI DEST_12122025" → "GRATI DEST"
+    - "CUADRE MAYO_0306205" → "CUADRE MAYO"
     """
     if not filename:
         return 'GENERAL'
@@ -357,23 +395,8 @@ def extract_tipo_from_filename(filename):
     # Remover extensión .pdf
     name = re.sub(r'\.pdf$', '', filename, flags=re.IGNORECASE)
     
-    # Remover fechas con múltiples formatos (6-8 dígitos al final):
-    # - "REINTEGROS 07102025" → "REINTEGROS"
-    # - "FIN DE MES DEST_27062025" → "FIN DE MES DEST"
-    # - "FIN DE MES DESTACADOS_270225" → "FIN DE MES DESTACADOS"
-    # - "CUADRE MAYO_0306205" → "CUADRE MAYO"
-    # - "CUADRE JUL 04082025" → "CUADRE JUL"
-    # El patrón busca: separador opcional + 5-8 dígitos + posible sufijo como (1)
-    name = re.sub(r'[\s_-]?\d{5,8}(\s*\(\d+\))?\s*$', '', name)
-    
-    # Remover guiones bajos y espacios al final
-    name = re.sub(r'[_\s]+$', '', name)
-    
-    # Si queda vacío, usar GENERAL
-    if not name:
-        return 'GENERAL'
-    
-    return name.upper()
+    # Usar la función de limpieza común
+    return clean_tipo_documento(name)
 
 
 # ═══════════════════════════════════════════════════
