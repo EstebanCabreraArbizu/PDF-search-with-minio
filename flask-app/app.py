@@ -10,7 +10,9 @@ import fitz  # PyMuPDF
 import os
 import re
 from models import db, User, DownloadLog, PDFIndex
+from dotenv import load_dotenv
 
+load_dotenv(".env")
 app = Flask(__name__)
 # ═══════════════════════════════════════════════════
 # CONFIGURACIÓN
@@ -1308,6 +1310,7 @@ def list_files():
     mes = request.args.get('mes', '').strip()
     banco = request.args.get('banco', '').strip()
     razon_social = request.args.get('razon_social', '').strip()
+    tipo_documento = request.args.get('tipo_documento', '').strip()
     
     # Parámetros de paginación y ordenamiento
     page = int(request.args.get('page', 1))
@@ -1336,6 +1339,9 @@ def list_files():
             query = query.filter_by(banco=banco)
         if razon_social:
             query = query.filter_by(razon_social=razon_social)
+        if tipo_documento:
+            # Búsqueda parcial (ILIKE) para tipos similares
+            query = query.filter(PDFIndex.tipo_documento.ilike(f"%{tipo_documento}%"))
         
         # Ordenamiento
         if sort_field == 'indexed_at':
@@ -1404,6 +1410,104 @@ def list_files():
     except Exception as e:
         app.logger.error(f"✗ Error listando archivos: {e}")
         return jsonify({'error': f'Error al listar archivos: {str(e)}'}), 500
+
+
+# ═══════════════════════════════════════════════════
+# LISTAR CARPETAS (para selector de ubicación) - OPTIMIZADO CON POSTGRESQL
+# ═══════════════════════════════════════════════════
+@app.route('/api/folders', methods=['GET'])
+@jwt_required()
+def list_folders():
+    """
+    Lista carpetas disponibles usando el índice de PostgreSQL (INSTANTÁNEO).
+    Extrae las carpetas únicas del campo minio_object_name.
+    
+    Query params:
+        parent: Carpeta padre para listar (opcional, default: raíz)
+    
+    Response: {
+        "folders": [
+            {"name": "Planillas 2025", "path": "Planillas 2025/", "count": 150},
+            {"name": "RESGUARDO", "path": "Planillas 2025/RESGUARDO/", "count": 50}
+        ],
+        "current_path": "",
+        "breadcrumb": []
+    }
+    """
+    from sqlalchemy import func, distinct
+    import time
+    
+    start_time = time.time()
+    parent = request.args.get('parent', '').strip()
+    
+    # Normalizar parent (asegurar que termine en / si no está vacío)
+    if parent and not parent.endswith('/'):
+        parent += '/'
+    
+    try:
+        # Obtener todos los paths únicos que empiezan con el parent
+        if parent:
+            # Buscar paths que empiezan con el parent
+            paths_query = db.session.query(
+                PDFIndex.minio_object_name
+            ).filter(
+                PDFIndex.minio_object_name.like(f'{parent}%')
+            ).all()
+        else:
+            # Todos los paths
+            paths_query = db.session.query(
+                PDFIndex.minio_object_name
+            ).all()
+        
+        # Extraer carpetas únicas del nivel actual
+        folders = {}
+        parent_depth = len(parent.rstrip('/').split('/')) if parent else 0
+        
+        for (path,) in paths_query:
+            # Obtener la parte relativa al parent
+            relative_path = path[len(parent):] if parent else path
+            parts = relative_path.split('/')
+            
+            # Si hay al menos 2 partes (carpeta + archivo), hay una subcarpeta
+            if len(parts) > 1:
+                folder_name = parts[0]
+                folder_path = parent + folder_name + '/'
+                
+                if folder_path not in folders:
+                    folders[folder_path] = {
+                        'name': folder_name,
+                        'path': folder_path,
+                        'is_folder': True,
+                        'count': 0
+                    }
+                folders[folder_path]['count'] += 1
+        
+        # Construir breadcrumb
+        breadcrumb = []
+        if parent:
+            parts = parent.rstrip('/').split('/')
+            accumulated = ''
+            for part in parts:
+                accumulated += part + '/'
+                breadcrumb.append({
+                    'name': part,
+                    'path': accumulated
+                })
+        
+        elapsed = round((time.time() - start_time) * 1000, 2)
+        app.logger.info(f"✓ Carpetas listadas en {elapsed}ms: {len(folders)} carpetas en '{parent}'")
+        
+        return jsonify({
+            'folders': sorted(folders.values(), key=lambda x: x['name'].lower()),
+            'current_path': parent,
+            'breadcrumb': breadcrumb,
+            'parent_path': '/'.join(parent.rstrip('/').split('/')[:-1]) + '/' if parent and '/' in parent.rstrip('/') else '',
+            'time_ms': elapsed
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"✗ Error listando carpetas: {e}")
+        return jsonify({'error': f'Error al listar carpetas: {str(e)}'}), 500
 
 
 @app.route('/api/files/upload', methods=['POST'])

@@ -312,13 +312,19 @@
                                 <h5 class="mb-0">📤 Subir Archivos PDF</h5>
                             </div>
                             <div class="card-body">
-                                <!-- Selector de carpeta -->
+                                <!-- Selector de carpeta con botón de explorar -->
                                 <div class="mb-3">
-                                    <label class="form-label">Carpeta de destino</label>
-                                    <input type="text" class="form-control" id="uploadFolder" 
-                                           placeholder="Ej: Planillas 2025/" 
-                                           value="Planillas 2025/">
-                                    <small class="text-muted">Puedes crear una nueva carpeta escribiendo su nombre</small>
+                                    <label class="form-label">📁 Carpeta de destino</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="uploadFolder" 
+                                               placeholder="Ej: Planillas 2025/" 
+                                               value="Planillas 2025/">
+                                        <button class="btn btn-outline-secondary" type="button" 
+                                                onclick="openFolderBrowser()" title="Explorar carpetas">
+                                            📂 Explorar
+                                        </button>
+                                    </div>
+                                    <small class="text-muted">Haz clic en "Explorar" para navegar las carpetas existentes o escribe una nueva</small>
                                 </div>
                                 
                                 <!-- Drag & Drop Zone -->
@@ -385,6 +391,12 @@
                                     <select class="form-select" id="filterRazonSocial">
                                         <option value="">Todas</option>
                                     </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Tipo Documento</label>
+                                    <input type="text" class="form-control" id="filterTipoDocumento" 
+                                           list="filterTiposDocumentoList" placeholder="Ej: CUADRE">
+                                    <datalist id="filterTiposDocumentoList"></datalist>
                                 </div>
                                 <div class="col-md-2">
                                     <button class="btn btn-primary w-100" onclick="loadFilesList()">
@@ -1172,6 +1184,15 @@
                     filterRazonSocial.innerHTML += `<option value="${rs}">${rs}</option>`;
                 });
             }
+            
+            // Poblar datalist de Tipos de Documento (gestión de archivos)
+            const filterTiposDocumentoList = document.getElementById('filterTiposDocumentoList');
+            if (filterTiposDocumentoList && filterOptions.tipos_documento) {
+                filterTiposDocumentoList.innerHTML = '';
+                filterOptions.tipos_documento.forEach(tipo => {
+                    filterTiposDocumentoList.innerHTML += `<option value="${tipo}">`;
+                });
+            }
         }
 
         function clearFileFilters() {
@@ -1180,6 +1201,7 @@
             document.getElementById('filterMes').value = '';
             document.getElementById('filterBanco').value = '';
             document.getElementById('filterRazonSocial').value = '';
+            document.getElementById('filterTipoDocumento').value = '';
             currentFilesPage = 1;
             loadFilesList();
         }
@@ -1191,6 +1213,7 @@
             const mes = document.getElementById('filterMes')?.value || '';
             const razonSocial = document.getElementById('filterRazonSocial')?.value || '';
             const banco = document.getElementById('filterBanco')?.value || '';
+            const tipoDocumento = document.getElementById('filterTipoDocumento')?.value || '';
             
             currentFilesPage = page;
             
@@ -1213,6 +1236,7 @@
                 if (mes) params.append('mes', mes);
                 if (banco) params.append('banco', banco);
                 if (razonSocial) params.append('razon_social', razonSocial);
+                if (tipoDocumento) params.append('tipo_documento', tipoDocumento);
                 
                 const url = `/api/files/list?${params.toString()}`;
                 const response = await fetch(url, {
@@ -1382,6 +1406,204 @@
                 alert('Error eliminando archivo: ' + error);
             }
         }
+
+        // ========================================
+        // EXPLORADOR DE CARPETAS (Modal)
+        // ========================================
+        let currentBrowserPath = '';
+        
+        function openFolderBrowser() {
+            currentBrowserPath = '';
+            loadFolderBrowser('');
+            const modal = new bootstrap.Modal(document.getElementById('folderBrowserModal'));
+            modal.show();
+        }
+        
+        async function loadFolderBrowser(path) {
+            currentBrowserPath = path;
+            const listContainer = document.getElementById('folderBrowserList');
+            const breadcrumb = document.getElementById('folderBreadcrumb');
+            const currentPathDisplay = document.getElementById('currentFolderPath');
+            
+            listContainer.innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2">Cargando carpetas...</p>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch(`/api/folders?parent=${encodeURIComponent(path)}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Error cargando carpetas');
+                }
+                
+                // Actualizar breadcrumb
+                breadcrumb.innerHTML = `
+                    <li class="breadcrumb-item">
+                        <a href="#" onclick="loadFolderBrowser(''); return false;">🏠 Raíz</a>
+                    </li>
+                `;
+                data.breadcrumb.forEach((item, index) => {
+                    const isLast = index === data.breadcrumb.length - 1;
+                    if (isLast) {
+                        breadcrumb.innerHTML += `<li class="breadcrumb-item active">${item.name}</li>`;
+                    } else {
+                        breadcrumb.innerHTML += `
+                            <li class="breadcrumb-item">
+                                <a href="#" onclick="loadFolderBrowser('${item.path}'); return false;">${item.name}</a>
+                            </li>
+                        `;
+                    }
+                });
+                
+                // Actualizar path actual
+                currentPathDisplay.value = path || '(raíz del bucket)';
+                
+                // Renderizar lista de carpetas
+                const timeInfo = data.time_ms ? `<small class="text-success ms-2">⚡ ${data.time_ms}ms</small>` : '';
+                
+                if (data.folders.length === 0) {
+                    listContainer.innerHTML = `
+                        <div class="text-center py-4 text-muted">
+                            <p>📁 No hay subcarpetas aquí ${timeInfo}</p>
+                            <small>Puedes usar esta ubicación o crear una nueva subcarpeta</small>
+                        </div>
+                    `;
+                } else {
+                    listContainer.innerHTML = `
+                        <div class="small text-muted mb-2">${data.folders.length} carpeta(s) encontrada(s) ${timeInfo}</div>
+                    ` + data.folders.map(folder => `
+                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                             style="cursor: pointer;"
+                             onclick="loadFolderBrowser('${folder.path}')">
+                            <div>
+                                <span class="me-2">📁</span>
+                                <strong>${folder.name}</strong>
+                            </div>
+                            <div>
+                                <span class="badge bg-secondary me-2">${folder.count} PDF(s)</span>
+                                <button class="btn btn-sm btn-success" 
+                                        onclick="event.stopPropagation(); selectFolder('${folder.path}');"
+                                        title="Seleccionar esta carpeta">
+                                    ✓ Usar
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                
+            } catch (error) {
+                listContainer.innerHTML = `
+                    <div class="alert alert-danger">
+                        Error: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        function selectFolder(path) {
+            document.getElementById('uploadFolder').value = path;
+            bootstrap.Modal.getInstance(document.getElementById('folderBrowserModal')).hide();
+        }
+        
+        function selectCurrentFolder() {
+            document.getElementById('uploadFolder').value = currentBrowserPath;
+            bootstrap.Modal.getInstance(document.getElementById('folderBrowserModal')).hide();
+        }
+        
+        function createNewSubfolder() {
+            const folderName = document.getElementById('newSubfolderName').value.trim();
+            if (!folderName) {
+                alert('Ingresa un nombre para la nueva carpeta');
+                return;
+            }
+            
+            // Sanitizar nombre de carpeta
+            const safeName = folderName.replace(/[<>:"/\\|?*]/g, '').trim();
+            if (!safeName) {
+                alert('Nombre de carpeta inválido');
+                return;
+            }
+            
+            const newPath = currentBrowserPath + safeName + '/';
+            document.getElementById('uploadFolder').value = newPath;
+            document.getElementById('newSubfolderName').value = '';
+            bootstrap.Modal.getInstance(document.getElementById('folderBrowserModal')).hide();
+        }
+        
+        function goUpFolder() {
+            if (!currentBrowserPath) return;
+            
+            const parts = currentBrowserPath.replace(/\/$/, '').split('/');
+            parts.pop();
+            const parentPath = parts.length > 0 ? parts.join('/') + '/' : '';
+            loadFolderBrowser(parentPath);
+        }
     </script>
+    
+    <!-- Modal: Explorador de Carpetas -->
+    <div class="modal fade" id="folderBrowserModal" tabindex="-1" aria-labelledby="folderBrowserModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="folderBrowserModalLabel">📂 Explorador de Carpetas</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Breadcrumb de navegación -->
+                    <nav aria-label="breadcrumb" class="mb-3">
+                        <ol class="breadcrumb" id="folderBreadcrumb">
+                            <li class="breadcrumb-item active">🏠 Raíz</li>
+                        </ol>
+                    </nav>
+                    
+                    <!-- Barra de herramientas -->
+                    <div class="d-flex gap-2 mb-3">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="goUpFolder()" title="Subir un nivel">
+                            ⬆️ Subir
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="loadFolderBrowser(currentBrowserPath)" title="Refrescar">
+                            🔄 Refrescar
+                        </button>
+                        <div class="flex-grow-1">
+                            <input type="text" class="form-control form-control-sm" id="currentFolderPath" 
+                                   readonly placeholder="Ubicación actual">
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de carpetas -->
+                    <div id="folderBrowserList" class="list-group mb-3" style="max-height: 300px; overflow-y: auto;">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                    
+                    <!-- Crear nueva subcarpeta -->
+                    <div class="card bg-light">
+                        <div class="card-body py-2">
+                            <label class="form-label small mb-1">➕ Crear nueva subcarpeta aquí:</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" id="newSubfolderName" 
+                                       placeholder="Nombre de la nueva carpeta">
+                                <button class="btn btn-success" type="button" onclick="createNewSubfolder()">
+                                    Crear y Usar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="selectCurrentFolder()">
+                        ✓ Usar ubicación actual
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
