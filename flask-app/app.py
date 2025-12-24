@@ -586,10 +586,19 @@ def get_filter_options():
                 .all()
             bancos = [b[0] for b in bancos_db if b[0]]
             
+            # Tipos de documento reales del índice
+            tipos_db = db.session.query(PDFIndex.tipo_documento)\
+                .distinct()\
+                .filter(PDFIndex.tipo_documento.isnot(None))\
+                .order_by(PDFIndex.tipo_documento)\
+                .all()
+            tipos_documento = [t[0] for t in tipos_db if t[0]]
+            
             return jsonify({
                 'años': años,
                 'razones_sociales': razones_sociales,
                 'bancos': bancos,
+                'tipos_documento': tipos_documento,
                 'meses': meses,
                 'index_stats': {
                     'total': total_indexed,
@@ -733,6 +742,9 @@ def search():
                 query = query.filter(PDFIndex.mes == filters['mes'])
             if filters.get('razon_social'):
                 query = query.filter(PDFIndex.razon_social == filters['razon_social'])
+            if filters.get('tipo_documento'):
+                # Búsqueda parcial (ILIKE) para encontrar tipos similares
+                query = query.filter(PDFIndex.tipo_documento.ilike(f"%{filters['tipo_documento']}%"))
             
             # Búsqueda por código de empleado (en campo indexado)
             if codigo_empleado:
@@ -1625,6 +1637,7 @@ def bulk_search():
     mes = data.get('mes', '').strip()
     banco = data.get('banco', '').strip()
     razon_social = data.get('razon_social', '').strip()
+    tipo_documento = data.get('tipo_documento', '').strip()
     
     try:
         # Construir query base con filtros
@@ -1639,6 +1652,9 @@ def bulk_search():
             query = query.filter(PDFIndex.banco == banco)
         if razon_social:
             query = query.filter(PDFIndex.razon_social == razon_social)
+        if tipo_documento:
+            # Búsqueda parcial (ILIKE) para encontrar tipos similares
+            query = query.filter(PDFIndex.tipo_documento.ilike(f"%{tipo_documento}%"))
         
         # Construir condiciones OR para todos los códigos en UNA sola consulta
         # Usando ILIKE para cada código

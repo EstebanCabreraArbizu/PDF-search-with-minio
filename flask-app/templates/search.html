@@ -152,12 +152,21 @@
                                             </div>
                                             
                                             <!-- Razón Social -->
-                                            <div class="col-md-4">
+                                            <div class="col-md-2">
                                                 <label class="form-label">Razón Social 🏢</label>
                                                 <select class="form-select" name="razon_social" id="selectRazonSocial">
                                                     <option value="">Todas</option>
                                                     <!-- Opciones cargadas dinámicamente -->
                                                 </select>
+                                            </div>
+                                            
+                                            <!-- Tipo de Documento (Autocompletado) -->
+                                            <div class="col-md-2">
+                                                <label class="form-label">Tipo Documento 📄</label>
+                                                <input type="text" class="form-control" name="tipo_documento" 
+                                                       id="inputTipoDocumento" list="tiposDocumentoList"
+                                                       placeholder="Ej: CUADRE" autocomplete="off">
+                                                <datalist id="tiposDocumentoList"></datalist>
                                             </div>
                                         </div>
                                         
@@ -221,6 +230,13 @@
                                                         <select class="form-select" name="razon_social" id="bulkRazonSocial">
                                                             <option value="">Todas</option>
                                                         </select>
+                                                    </div>
+                                                    <div class="col-12">
+                                                        <label class="form-label">Tipo Documento 📄</label>
+                                                        <input type="text" class="form-control" name="tipo_documento" 
+                                                               id="bulkTipoDocumento" list="bulkTiposDocumentoList"
+                                                               placeholder="Ej: CUADRE" autocomplete="off">
+                                                        <datalist id="bulkTiposDocumentoList"></datalist>
                                                     </div>
                                                 </div>
                                             </div>
@@ -502,6 +518,15 @@
                     selectRazonSocial.innerHTML += `<option value="${rs}">${rs}</option>`;
                 });
                 
+                // Poblar datalist de Tipos de Documento (autocompletado)
+                const tiposDocumentoList = document.getElementById('tiposDocumentoList');
+                tiposDocumentoList.innerHTML = '';
+                if (filterOptions.tipos_documento) {
+                    filterOptions.tipos_documento.forEach(tipo => {
+                        tiposDocumentoList.innerHTML += `<option value="${tipo}">`;
+                    });
+                }
+                
                 // ---- BÚSQUEDA MASIVA ----
                 const bulkAño = document.getElementById('bulkAño');
                 bulkAño.innerHTML = '<option value="">Todos</option>';
@@ -527,6 +552,18 @@
                     bulkRazonSocial.innerHTML += `<option value="${rs}">${rs}</option>`;
                 });
                 
+                // Poblar datalist de Tipos de Documento (Masiva - autocompletado)
+                const bulkTiposDocumentoList = document.getElementById('bulkTiposDocumentoList');
+                bulkTiposDocumentoList.innerHTML = '';
+                if (filterOptions.tipos_documento) {
+                    filterOptions.tipos_documento.forEach(tipo => {
+                        bulkTiposDocumentoList.innerHTML += `<option value="${tipo}">`;
+                    });
+                }
+                
+                // Configurar autocompletado dinámico para tipos de documento
+                setupTipoDocumentoAutocomplete();
+                
                 // ---- GESTIÓN DE ARCHIVOS ----
                 populateFileFilters();
                 
@@ -534,6 +571,56 @@
             } catch (error) {
                 console.error('Error cargando opciones:', error);
             }
+        }
+
+        // ========================================
+        // AUTOCOMPLETADO TIPO DOCUMENTO (estilo Google)
+        // ========================================
+        function setupTipoDocumentoAutocomplete() {
+            const inputs = [
+                { input: 'inputTipoDocumento', datalist: 'tiposDocumentoList' },
+                { input: 'bulkTipoDocumento', datalist: 'bulkTiposDocumentoList' }
+            ];
+            
+            inputs.forEach(({ input, datalist }) => {
+                const inputEl = document.getElementById(input);
+                const datalistEl = document.getElementById(datalist);
+                
+                if (!inputEl || !datalistEl || !filterOptions?.tipos_documento) return;
+                
+                inputEl.addEventListener('input', function() {
+                    const searchTerm = this.value.toLowerCase().trim();
+                    
+                    // Limpiar datalist
+                    datalistEl.innerHTML = '';
+                    
+                    if (!searchTerm) {
+                        // Si está vacío, mostrar todos
+                        filterOptions.tipos_documento.forEach(tipo => {
+                            datalistEl.innerHTML += `<option value="${tipo}">`;
+                        });
+                    } else {
+                        // Filtrar tipos que contengan el término de búsqueda
+                        const matches = filterOptions.tipos_documento.filter(tipo => 
+                            tipo.toLowerCase().includes(searchTerm)
+                        );
+                        
+                        // Ordenar: primero los que empiezan con el término, luego el resto
+                        matches.sort((a, b) => {
+                            const aStarts = a.toLowerCase().startsWith(searchTerm);
+                            const bStarts = b.toLowerCase().startsWith(searchTerm);
+                            if (aStarts && !bStarts) return -1;
+                            if (!aStarts && bStarts) return 1;
+                            return a.localeCompare(b);
+                        });
+                        
+                        // Mostrar máximo 15 sugerencias
+                        matches.slice(0, 15).forEach(tipo => {
+                            datalistEl.innerHTML += `<option value="${tipo}">`;
+                        });
+                    }
+                });
+            });
         }
 
         // ========================================
@@ -717,6 +804,7 @@
             const mes = document.getElementById('bulkMes').value;
             const banco = document.getElementById('bulkBanco').value;
             const razonSocial = document.getElementById('bulkRazonSocial').value;
+            const tipoDocumento = document.getElementById('bulkTipoDocumento').value;
             
             if (!codigos.trim()) {
                 alert('Ingresa al menos un código de empleado o DNI');
@@ -737,7 +825,8 @@
                         año: año,
                         mes: mes,
                         banco: banco,
-                        razon_social: razonSocial
+                        razon_social: razonSocial,
+                        tipo_documento: tipoDocumento
                     })
                 });
                 
@@ -777,6 +866,7 @@
                 if (mes) activeFilters.push(`Mes: ${getMesNombre(mes)}`);
                 if (banco) activeFilters.push(`Banco: ${banco}`);
                 if (razonSocial) activeFilters.push(`Razón Social: ${razonSocial}`);
+                if (tipoDocumento) activeFilters.push(`Tipo: ${tipoDocumento}`);
                 
                 document.getElementById('activeFilters').textContent = 
                     activeFilters.length > 0 
