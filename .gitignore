@@ -2,6 +2,7 @@ minio/data/*
 venv/
 postgres-data/*
 __pycache__/
+*.playwright-mcp
 *.pyc
 *.pyo
 *.pyd
@@ -11,3 +12,4 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+*test-*

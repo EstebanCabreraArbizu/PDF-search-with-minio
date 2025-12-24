@@ -59,88 +59,344 @@
         <!-- ========================================= -->
         <div id="searchScreen" class="d-none">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>🔍 Búsqueda de Planillas</h2>
+                <h2>🔍 Sistema de Planillas</h2>
                 <div>
                     <span id="username" class="me-3"></span>
                     <button class="btn btn-sm btn-outline-danger" onclick="logout()">Cerrar Sesión</button>
                 </div>
             </div>
             
-            <div class="card mb-4">
-                <div class="card-body">
-                    <form id="searchForm">
-                        <div class="row g-3">
-                            <!-- Código de Empleado -->
-                            <div class="col-md-2">
-                                <label class="form-label">Código Empleado</label>
-                                <input type="text" class="form-control" name="codigo_empleado" 
-                                       placeholder="Ej: 12345" pattern="\d{4,10}"
-                                       title="Debe contener entre 4 y 10 dígitos">
-                            </div>
-                            
-                            <!-- Año (NUEVO) -->
-                            <div class="col-md-2">
-                                <label class="form-label">Año 📅</label>
-                                <select class="form-select" name="año" id="selectAño">
-                                    <option value="">Todos</option>
-                                    <!-- Opciones cargadas dinámicamente -->
-                                </select>
-                            </div>
-                            
-                            <!-- Mes -->
-                            <div class="col-md-2">
-                                <label class="form-label">Mes</label>
-                                <select class="form-select" name="mes" id="selectMes">
-                                    <option value="">Todos</option>
-                                    <!-- Opciones cargadas dinámicamente -->
-                                </select>
-                            </div>
-                            
-                            <!-- Banco -->
-                            <div class="col-md-2">
-                                <label class="form-label">Banco 🏦</label>
-                                <select class="form-select" name="banco" id="selectBanco">
-                                    <option value="">Todos</option>
-                                    <!-- Opciones cargadas dinámicamente -->
-                                </select>
-                            </div>
-                            
-                            <!-- Razón Social -->
-                            <div class="col-md-4">
-                                <label class="form-label">Razón Social 🏢</label>
-                                <select class="form-select" name="razon_social" id="selectRazonSocial">
-                                    <option value="">Todas</option>
-                                    <!-- Opciones cargadas dinámicamente -->
-                                </select>
+            <!-- ========================================= -->
+            <!-- NAVEGACIÓN POR PESTAÑAS                   -->
+            <!-- ========================================= -->
+            <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="search-tab" data-bs-toggle="tab" 
+                            data-bs-target="#search-panel" type="button" role="tab">
+                        🔍 Búsqueda
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="files-tab" data-bs-toggle="tab" 
+                            data-bs-target="#files-panel" type="button" role="tab"
+                            onclick="loadFilesList()">
+                        📁 Gestión de Archivos
+                    </button>
+                </li>
+            </ul>
+
+            <!-- ========================================= -->
+            <!-- CONTENIDO DE LAS PESTAÑAS                 -->
+            <!-- ========================================= -->
+            <div class="tab-content" id="mainTabsContent">
+                
+                <!-- ============ PESTAÑA: BÚSQUEDA ============ -->
+                <div class="tab-pane fade show active" id="search-panel" role="tabpanel">
+                    
+                    <!-- Sub-tabs: Búsqueda Simple y Masiva -->
+                    <ul class="nav nav-pills mb-3" id="searchSubTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="simple-search-tab" data-bs-toggle="pill" 
+                                    data-bs-target="#simple-search-panel" type="button" role="tab">
+                                🔍 Búsqueda Simple
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="bulk-search-tab" data-bs-toggle="pill" 
+                                    data-bs-target="#bulk-search-panel" type="button" role="tab">
+                                📋 Búsqueda Masiva (DNI/Códigos)
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content" id="searchSubTabsContent">
+                        <!-- Búsqueda Simple -->
+                        <div class="tab-pane fade show active" id="simple-search-panel" role="tabpanel">
+                            <div class="card mb-4">
+                                <div class="card-body">
+                                    <form id="searchForm">
+                                        <div class="row g-3">
+                                            <!-- Código de Empleado -->
+                                            <div class="col-md-2">
+                                                <label class="form-label">Código Empleado</label>
+                                                <input type="text" class="form-control" name="codigo_empleado" 
+                                                       placeholder="Ej: 12345" pattern="\d{4,10}"
+                                                       title="Debe contener entre 4 y 10 dígitos">
+                                            </div>
+                                            
+                                            <!-- Año (NUEVO) -->
+                                            <div class="col-md-2">
+                                                <label class="form-label">Año 📅</label>
+                                                <select class="form-select" name="año" id="selectAño">
+                                                    <option value="">Todos</option>
+                                                    <!-- Opciones cargadas dinámicamente -->
+                                                </select>
+                                            </div>
+                                            
+                                            <!-- Mes -->
+                                            <div class="col-md-2">
+                                                <label class="form-label">Mes</label>
+                                                <select class="form-select" name="mes" id="selectMes">
+                                                    <option value="">Todos</option>
+                                                    <!-- Opciones cargadas dinámicamente -->
+                                                </select>
+                                            </div>
+                                            
+                                            <!-- Banco -->
+                                            <div class="col-md-2">
+                                                <label class="form-label">Banco 🏦</label>
+                                                <select class="form-select" name="banco" id="selectBanco">
+                                                    <option value="">Todos</option>
+                                                    <!-- Opciones cargadas dinámicamente -->
+                                                </select>
+                                            </div>
+                                            
+                                            <!-- Razón Social -->
+                                            <div class="col-md-4">
+                                                <label class="form-label">Razón Social 🏢</label>
+                                                <select class="form-select" name="razon_social" id="selectRazonSocial">
+                                                    <option value="">Todas</option>
+                                                    <!-- Opciones cargadas dinámicamente -->
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mt-3 d-flex gap-2">
+                                            <button type="submit" class="btn btn-primary">
+                                                <span id="searchBtn">🔍 Buscar</span>
+                                                <span id="loadingBtn" class="d-none">
+                                                    <span class="spinner-border spinner-border-sm"></span> Buscando...
+                                                </span>
+                                            </button>
+                                            <button type="reset" class="btn btn-outline-secondary" onclick="clearFilters()">
+                                                🗑️ Limpiar Filtros
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="mt-3 d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">
-                                <span id="searchBtn">🔍 Buscar</span>
-                                <span id="loadingBtn" class="d-none">
-                                    <span class="spinner-border spinner-border-sm"></span> Buscando...
-                                </span>
-                            </button>
-                            <button type="reset" class="btn btn-outline-secondary" onclick="clearFilters()">
-                                🗑️ Limpiar Filtros
-                            </button>
+                        <!-- Búsqueda Masiva -->
+                        <div class="tab-pane fade" id="bulk-search-panel" role="tabpanel">
+                            <div class="card mb-4">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">📋 Búsqueda Masiva por DNI/Código de Empleado</h5>
+                                    <small>Ingresa múltiples códigos separados por comas, espacios o uno por línea</small>
+                                </div>
+                                <div class="card-body">
+                                    <form id="bulkSearchForm">
+                                        <div class="row g-3">
+                                            <!-- Textarea para códigos -->
+                                            <div class="col-md-6">
+                                                <label class="form-label">Códigos de Empleado / DNI</label>
+                                                <textarea class="form-control" id="bulkCodigos" name="codigos" rows="5"
+                                                          placeholder="12345678&#10;87654321&#10;11223344&#10;..."></textarea>
+                                                <small class="text-muted">Separa por comas, espacios o nueva línea</small>
+                                            </div>
+                                            
+                                            <!-- Filtros adicionales -->
+                                            <div class="col-md-6">
+                                                <div class="row g-2">
+                                                    <div class="col-6">
+                                                        <label class="form-label">Año 📅</label>
+                                                        <select class="form-select" name="año" id="bulkAño">
+                                                            <option value="">Todos</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label">Mes</label>
+                                                        <select class="form-select" name="mes" id="bulkMes">
+                                                            <option value="">Todos</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label">Banco 🏦</label>
+                                                        <select class="form-select" name="banco" id="bulkBanco">
+                                                            <option value="">Todos</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label">Razón Social 🏢</label>
+                                                        <select class="form-select" name="razon_social" id="bulkRazonSocial">
+                                                            <option value="">Todas</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mt-3 d-flex gap-2">
+                                            <button type="submit" class="btn btn-info">
+                                                <span id="bulkSearchBtn">🔍 Buscar Masivamente</span>
+                                                <span id="bulkLoadingBtn" class="d-none">
+                                                    <span class="spinner-border spinner-border-sm"></span> Buscando...
+                                                </span>
+                                            </button>
+                                            <button type="reset" class="btn btn-outline-secondary">
+                                                🗑️ Limpiar
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
                         </div>
-                    </form>
+                    </div>
+                    
+                    <!-- Resultados de Búsqueda (compartido para ambos tipos) -->
+                    <div id="resultsContainer" class="d-none">
+                        <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div>
+                                <strong id="totalResults"></strong>
+                                <span id="activeFilters" class="text-muted small ms-2"></span>
+                            </div>
+                            <div id="mergeButtonContainer" class="d-none">
+                                <button class="btn btn-success btn-sm" onclick="mergeAndDownload()">
+                                    <span id="mergeBtn">📑 Descargar TODO en 1 PDF</span>
+                                    <span id="mergingBtn" class="d-none">
+                                        <span class="spinner-border spinner-border-sm"></span> Fusionando...
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Resumen de búsqueda masiva -->
+                        <div id="bulkSearchSummary" class="d-none mb-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card border-success">
+                                        <div class="card-body py-2">
+                                            <small class="text-success">✓ Códigos encontrados:</small>
+                                            <div id="codigosEncontrados" class="small"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-danger">
+                                        <div class="card-body py-2">
+                                            <small class="text-danger">✗ Códigos sin resultados:</small>
+                                            <div id="codigosNoEncontrados" class="small"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="results" class="row"></div>
+                    </div>
                 </div>
-            </div>
-            
-            <!-- Resultados -->
-            <div id="resultsContainer" class="d-none">
-                <div class="alert alert-info d-flex justify-content-between align-items-center">
-                    <strong id="totalResults"></strong>
-                    <span id="activeFilters" class="text-muted small"></span>
+                
+                <!-- ============ PESTAÑA: GESTIÓN DE ARCHIVOS ============ -->
+                <div class="tab-pane fade" id="files-panel" role="tabpanel">
+                    
+                    <!-- Zona de Upload (solo admin) -->
+                    <div id="uploadSection" class="d-none mb-4">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0">📤 Subir Archivos PDF</h5>
+                            </div>
+                            <div class="card-body">
+                                <!-- Selector de carpeta -->
+                                <div class="mb-3">
+                                    <label class="form-label">Carpeta de destino</label>
+                                    <input type="text" class="form-control" id="uploadFolder" 
+                                           placeholder="Ej: Planillas 2025/" 
+                                           value="Planillas 2025/">
+                                    <small class="text-muted">Puedes crear una nueva carpeta escribiendo su nombre</small>
+                                </div>
+                                
+                                <!-- Drag & Drop Zone -->
+                                <div id="dropZone" class="border border-2 border-dashed rounded p-5 text-center"
+                                     style="cursor: pointer; background-color: #f8f9fa; transition: all 0.3s;">
+                                    <div class="mb-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" class="bi bi-cloud-upload text-primary" viewBox="0 0 16 16">
+                                            <path fill-rule="evenodd" d="M4.406 1.342A5.53 5.53 0 0 1 8 0c2.69 0 4.923 2 5.166 4.579C14.758 4.804 16 6.137 16 7.773 16 9.569 14.502 11 12.687 11H10a.5.5 0 0 1 0-1h2.688C13.979 10 15 8.988 15 7.773c0-1.216-1.02-2.228-2.313-2.228h-.5v-.5C12.188 2.825 10.328 1 8 1a4.53 4.53 0 0 0-2.941 1.1c-.757.652-1.153 1.438-1.153 2.055v.448l-.445.049C2.064 4.805 1 5.952 1 7.318 1 8.785 2.23 10 3.781 10H6a.5.5 0 0 1 0 1H3.781C1.708 11 0 9.366 0 7.318c0-1.763 1.266-3.223 2.942-3.593.143-.863.698-1.723 1.464-2.383z"/>
+                                            <path fill-rule="evenodd" d="M7.646 4.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 5.707V14.5a.5.5 0 0 1-1 0V5.707L5.354 7.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                                        </svg>
+                                    </div>
+                                    <h5>Arrastra archivos PDF aquí</h5>
+                                    <p class="text-muted mb-2">o haz clic para seleccionar</p>
+                                    <input type="file" id="fileInput" multiple accept=".pdf" class="d-none">
+                                    <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('fileInput').click()">
+                                        Seleccionar archivos
+                                    </button>
+                                </div>
+                                
+                                <!-- Lista de archivos seleccionados -->
+                                <div id="selectedFiles" class="mt-3 d-none">
+                                    <h6>Archivos seleccionados:</h6>
+                                    <ul id="filesList" class="list-group mb-3"></ul>
+                                    <button type="button" class="btn btn-success w-100" onclick="uploadFiles()">
+                                        <span id="uploadBtn">📤 Subir e Indexar</span>
+                                        <span id="uploadingBtn" class="d-none">
+                                            <span class="spinner-border spinner-border-sm"></span> Subiendo...
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Filtros y búsqueda de archivos -->
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-2">
+                                    <label class="form-label">Buscar archivo</label>
+                                    <input type="text" class="form-control" id="searchFileName" 
+                                           placeholder="Nombre del archivo...">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Año</label>
+                                    <select class="form-select" id="filterAño">
+                                        <option value="">Todos</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Mes</label>
+                                    <select class="form-select" id="filterMes">
+                                        <option value="">Todos</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Banco</label>
+                                    <select class="form-select" id="filterBanco">
+                                        <option value="">Todos</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Razón Social</label>
+                                    <select class="form-select" id="filterRazonSocial">
+                                        <option value="">Todas</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-primary w-100" onclick="loadFilesList()">
+                                        🔍 Buscar
+                                    </button>
+                                    <button class="btn btn-outline-secondary w-100 mt-1" onclick="clearFileFilters()">
+                                        🗑️ Limpiar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de archivos -->
+                    <div id="filesListContainer">
+                        <div class="d-flex justify-content-center p-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div id="results" class="row"></div>
+                
             </div>
         </div>
     </div>
     
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Token JWT almacenado en memoria (más seguro que localStorage)
         let authToken = null;
@@ -180,6 +436,14 @@
                     document.getElementById('searchScreen').classList.remove('d-none');
                     document.getElementById('username').textContent = `👤 ${currentUser.full_name || currentUser.username}`;
                     
+                    // Mostrar sección de upload solo para admin
+                    if (currentUser.role === 'admin') {
+                        document.getElementById('uploadSection').classList.remove('d-none');
+                    }
+                    
+                    // Poblar filtros de archivos con las mismas opciones
+                    populateFileFilters();
+                    
                     // Cargar opciones de filtros después del login
                     await loadFilterOptions();
                 } else {
@@ -209,6 +473,7 @@
                 
                 filterOptions = await response.json();
                 
+                // ---- BÚSQUEDA SIMPLE ----
                 // Poblar selector de Años
                 const selectAño = document.getElementById('selectAño');
                 selectAño.innerHTML = '<option value="">Todos</option>';
@@ -237,6 +502,34 @@
                     selectRazonSocial.innerHTML += `<option value="${rs}">${rs}</option>`;
                 });
                 
+                // ---- BÚSQUEDA MASIVA ----
+                const bulkAño = document.getElementById('bulkAño');
+                bulkAño.innerHTML = '<option value="">Todos</option>';
+                filterOptions.años.forEach(año => {
+                    bulkAño.innerHTML += `<option value="${año}">${año}</option>`;
+                });
+                
+                const bulkMes = document.getElementById('bulkMes');
+                bulkMes.innerHTML = '<option value="">Todos</option>';
+                filterOptions.meses.forEach(mes => {
+                    bulkMes.innerHTML += `<option value="${mes.value}">${mes.label}</option>`;
+                });
+                
+                const bulkBanco = document.getElementById('bulkBanco');
+                bulkBanco.innerHTML = '<option value="">Todos</option>';
+                filterOptions.bancos.forEach(banco => {
+                    bulkBanco.innerHTML += `<option value="${banco}">${banco}</option>`;
+                });
+                
+                const bulkRazonSocial = document.getElementById('bulkRazonSocial');
+                bulkRazonSocial.innerHTML = '<option value="">Todas</option>';
+                filterOptions.razones_sociales.forEach(rs => {
+                    bulkRazonSocial.innerHTML += `<option value="${rs}">${rs}</option>`;
+                });
+                
+                // ---- GESTIÓN DE ARCHIVOS ----
+                populateFileFilters();
+                
                 console.log('✓ Opciones de filtros cargadas');
             } catch (error) {
                 console.error('Error cargando opciones:', error);
@@ -250,6 +543,7 @@
             authToken = null;
             currentUser = null;
             filterOptions = null;
+            currentSearchResults = [];
             document.getElementById('loginScreen').classList.remove('d-none');
             document.getElementById('searchScreen').classList.add('d-none');
             document.getElementById('loginForm').reset();
@@ -262,16 +556,23 @@
         function clearFilters() {
             document.getElementById('searchForm').reset();
             document.getElementById('resultsContainer').classList.add('d-none');
+            document.getElementById('bulkSearchSummary').classList.add('d-none');
+            document.getElementById('mergeButtonContainer').classList.add('d-none');
+            currentSearchResults = [];
         }
 
+        // Variable global para almacenar resultados (para merge)
+        let currentSearchResults = [];
+
         // ========================================
-        // BÚSQUEDA
+        // BÚSQUEDA SIMPLE
         // ========================================
         document.getElementById('searchForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
             document.getElementById('searchBtn').classList.add('d-none');
             document.getElementById('loadingBtn').classList.remove('d-none');
+            document.getElementById('bulkSearchSummary').classList.add('d-none');
             
             const formData = new FormData(e.target);
             const filters = {};
@@ -311,11 +612,22 @@
                     alert('Error: ' + data.error);
                     document.getElementById('resultsContainer').classList.add('d-none');
                 } else {
+                    // Guardar resultados para merge
+                    currentSearchResults = data.results || [];
+                    
                     // Mostrar filtros activos
                     document.getElementById('activeFilters').textContent = 
                         activeFiltersList.length > 0 
                             ? `Filtros: ${activeFiltersList.join(' | ')}` 
                             : 'Sin filtros aplicados';
+                    
+                    // Mostrar botón merge si hay múltiples resultados
+                    if (currentSearchResults.length > 1) {
+                        document.getElementById('mergeButtonContainer').classList.remove('d-none');
+                    } else {
+                        document.getElementById('mergeButtonContainer').classList.add('d-none');
+                    }
+                    
                     displayResults(data);
                 }
             } catch (error) {
@@ -392,6 +704,172 @@
         }
 
         // ========================================
+        // BÚSQUEDA MASIVA (DNI/Códigos)
+        // ========================================
+        document.getElementById('bulkSearchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            document.getElementById('bulkSearchBtn').classList.add('d-none');
+            document.getElementById('bulkLoadingBtn').classList.remove('d-none');
+            
+            const codigos = document.getElementById('bulkCodigos').value;
+            const año = document.getElementById('bulkAño').value;
+            const mes = document.getElementById('bulkMes').value;
+            const banco = document.getElementById('bulkBanco').value;
+            const razonSocial = document.getElementById('bulkRazonSocial').value;
+            
+            if (!codigos.trim()) {
+                alert('Ingresa al menos un código de empleado o DNI');
+                document.getElementById('bulkSearchBtn').classList.remove('d-none');
+                document.getElementById('bulkLoadingBtn').classList.add('d-none');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/search/bulk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        codigos: codigos,
+                        año: año,
+                        mes: mes,
+                        banco: banco,
+                        razon_social: razonSocial
+                    })
+                });
+                
+                if (response.status === 401) {
+                    alert('Sesión expirada');
+                    logout();
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                // Guardar resultados para merge
+                currentSearchResults = data.results || [];
+                
+                // Mostrar resumen de búsqueda masiva
+                const summaryDiv = document.getElementById('bulkSearchSummary');
+                summaryDiv.classList.remove('d-none');
+                
+                document.getElementById('codigosEncontrados').innerHTML = 
+                    data.codigos_encontrados.length > 0 
+                        ? data.codigos_encontrados.map(c => `<span class="badge bg-success me-1">${c}</span>`).join('')
+                        : '<span class="text-muted">Ninguno</span>';
+                
+                document.getElementById('codigosNoEncontrados').innerHTML = 
+                    data.codigos_no_encontrados.length > 0 
+                        ? data.codigos_no_encontrados.map(c => `<span class="badge bg-danger me-1">${c}</span>`).join('')
+                        : '<span class="text-muted">Ninguno</span>';
+                
+                // Mostrar filtros activos
+                const activeFilters = [];
+                if (año) activeFilters.push(`Año: ${año}`);
+                if (mes) activeFilters.push(`Mes: ${getMesNombre(mes)}`);
+                if (banco) activeFilters.push(`Banco: ${banco}`);
+                if (razonSocial) activeFilters.push(`Razón Social: ${razonSocial}`);
+                
+                document.getElementById('activeFilters').textContent = 
+                    activeFilters.length > 0 
+                        ? `Filtros: ${activeFilters.join(' | ')}`
+                        : `Búsqueda: ${data.codigos_buscados.length} código(s)`;
+                
+                // Mostrar botón merge si hay múltiples resultados
+                if (data.can_merge && currentSearchResults.length > 1) {
+                    document.getElementById('mergeButtonContainer').classList.remove('d-none');
+                } else {
+                    document.getElementById('mergeButtonContainer').classList.add('d-none');
+                }
+                
+                displayResults(data);
+                
+            } catch (error) {
+                alert('Error en búsqueda masiva: ' + error);
+            } finally {
+                document.getElementById('bulkSearchBtn').classList.remove('d-none');
+                document.getElementById('bulkLoadingBtn').classList.add('d-none');
+            }
+        });
+
+        // ========================================
+        // FUSIONAR Y DESCARGAR PDFs
+        // ========================================
+        async function mergeAndDownload() {
+            if (!currentSearchResults || currentSearchResults.length === 0) {
+                alert('No hay resultados para fusionar');
+                return;
+            }
+            
+            if (currentSearchResults.length > 100) {
+                alert('Máximo 100 archivos por fusión. Aplica más filtros para reducir los resultados.');
+                return;
+            }
+            
+            document.getElementById('mergeBtn').classList.add('d-none');
+            document.getElementById('mergingBtn').classList.remove('d-none');
+            
+            const paths = currentSearchResults.map(r => r.filename);
+            
+            try {
+                const response = await fetch('/api/merge-pdfs', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        paths: paths,
+                        output_name: `documentos_${currentSearchResults.length}_archivos`
+                    })
+                });
+                
+                if (response.status === 401) {
+                    alert('Sesión expirada');
+                    logout();
+                    return;
+                }
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    alert('Error: ' + (error.error || 'No se pudo fusionar los archivos'));
+                    return;
+                }
+                
+                // Descargar el PDF combinado
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = `documentos_combinados_${currentSearchResults.length}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(downloadUrl);
+                
+                // Mostrar info de merge
+                const filesMerged = response.headers.get('X-Files-Merged') || currentSearchResults.length;
+                const mergeErrors = response.headers.get('X-Merge-Errors') || '0';
+                
+                alert(`✓ PDF combinado descargado:\n- ${filesMerged} archivo(s) fusionados\n- ${mergeErrors} error(es)`);
+                
+            } catch (error) {
+                alert('Error fusionando archivos: ' + error);
+            } finally {
+                document.getElementById('mergeBtn').classList.remove('d-none');
+                document.getElementById('mergingBtn').classList.add('d-none');
+            }
+        }
+
+        // ========================================
         // DESCARGA (con JWT)
         // ========================================
         async function downloadFile(url) {
@@ -425,6 +903,393 @@
                 window.URL.revokeObjectURL(downloadUrl);
             } catch (error) {
                 alert('Error descargando archivo: ' + error);
+            }
+        }
+
+        // ========================================
+        // GESTIÓN DE ARCHIVOS - DRAG & DROP
+        // ========================================
+        let selectedFilesArray = [];
+
+        // Configurar drag & drop
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.backgroundColor = '#e7f3ff';
+            dropZone.style.borderColor = '#0d6efd';
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.backgroundColor = '#f8f9fa';
+            dropZone.style.borderColor = '#dee2e6';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.backgroundColor = '#f8f9fa';
+            dropZone.style.borderColor = '#dee2e6';
+            
+            const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+            if (files.length > 0) {
+                handleFileSelection(files);
+            } else {
+                alert('Solo se permiten archivos PDF');
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            handleFileSelection(files);
+        });
+
+        function handleFileSelection(files) {
+            selectedFilesArray = files;
+            displaySelectedFiles();
+        }
+
+        function displaySelectedFiles() {
+            const filesList = document.getElementById('filesList');
+            const selectedFilesDiv = document.getElementById('selectedFiles');
+            
+            if (selectedFilesArray.length === 0) {
+                selectedFilesDiv.classList.add('d-none');
+                return;
+            }
+            
+            selectedFilesDiv.classList.remove('d-none');
+            filesList.innerHTML = selectedFilesArray.map((file, idx) => {
+                const sizeKB = (file.size / 1024).toFixed(1);
+                return `
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>${file.name}</strong>
+                            <br><small class="text-muted">${sizeKB} KB</small>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger" 
+                                onclick="removeFile(${idx})">
+                            🗑️
+                        </button>
+                    </li>
+                `;
+            }).join('');
+        }
+
+        function removeFile(index) {
+            selectedFilesArray.splice(index, 1);
+            displaySelectedFiles();
+        }
+
+        // ========================================
+        // SUBIR ARCHIVOS
+        // ========================================
+        async function uploadFiles() {
+            if (selectedFilesArray.length === 0) {
+                alert('Selecciona al menos un archivo');
+                return;
+            }
+            
+            const folder = document.getElementById('uploadFolder').value;
+            
+            document.getElementById('uploadBtn').classList.add('d-none');
+            document.getElementById('uploadingBtn').classList.remove('d-none');
+            
+            const formData = new FormData();
+            selectedFilesArray.forEach(file => {
+                formData.append('files[]', file);
+            });
+            formData.append('folder', folder);
+            
+            try {
+                const response = await fetch('/api/files/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    alert(`✓ Archivos subidos e indexados correctamente:\n` +
+                          `- Subidos: ${data.total_uploaded}\n` +
+                          `- Indexados: ${data.total_indexed}\n` +
+                          `- Errores: ${data.total_errors}`);
+                    
+                    // Limpiar selección
+                    selectedFilesArray = [];
+                    fileInput.value = '';
+                    displaySelectedFiles();
+                    
+                    // Recargar lista de archivos
+                    loadFilesList();
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudieron subir los archivos'));
+                }
+            } catch (error) {
+                alert('Error subiendo archivos: ' + error);
+            } finally {
+                document.getElementById('uploadBtn').classList.remove('d-none');
+                document.getElementById('uploadingBtn').classList.add('d-none');
+            }
+        }
+
+        // ========================================
+        // LISTAR ARCHIVOS
+        // ========================================
+        let currentFilesPage = 1;
+        const filesPerPage = 100;
+
+        function populateFileFilters() {
+            if (!filterOptions) return;
+            
+            // Poblar Año
+            const filterAño = document.getElementById('filterAño');
+            if (filterAño) {
+                filterAño.innerHTML = '<option value="">Todos</option>';
+                filterOptions.años.forEach(año => {
+                    filterAño.innerHTML += `<option value="${año}">${año}</option>`;
+                });
+            }
+            
+            // Poblar Mes
+            const filterMes = document.getElementById('filterMes');
+            if (filterMes) {
+                filterMes.innerHTML = '<option value="">Todos</option>';
+                filterOptions.meses.forEach(mes => {
+                    filterMes.innerHTML += `<option value="${mes.value}">${mes.label}</option>`;
+                });
+            }
+            
+            // Poblar Banco
+            const filterBanco = document.getElementById('filterBanco');
+            if (filterBanco) {
+                filterBanco.innerHTML = '<option value="">Todos</option>';
+                filterOptions.bancos.forEach(banco => {
+                    filterBanco.innerHTML += `<option value="${banco}">${banco}</option>`;
+                });
+            }
+            
+            // Poblar Razón Social
+            const filterRazonSocial = document.getElementById('filterRazonSocial');
+            if (filterRazonSocial) {
+                filterRazonSocial.innerHTML = '<option value="">Todas</option>';
+                filterOptions.razones_sociales.forEach(rs => {
+                    filterRazonSocial.innerHTML += `<option value="${rs}">${rs}</option>`;
+                });
+            }
+        }
+
+        function clearFileFilters() {
+            document.getElementById('searchFileName').value = '';
+            document.getElementById('filterAño').value = '';
+            document.getElementById('filterMes').value = '';
+            document.getElementById('filterBanco').value = '';
+            document.getElementById('filterRazonSocial').value = '';
+            currentFilesPage = 1;
+            loadFilesList();
+        }
+
+        async function loadFilesList(page = 1) {
+            const container = document.getElementById('filesListContainer');
+            const searchName = document.getElementById('searchFileName')?.value || '';
+            const año = document.getElementById('filterAño')?.value || '';
+            const mes = document.getElementById('filterMes')?.value || '';
+            const razonSocial = document.getElementById('filterRazonSocial')?.value || '';
+            const banco = document.getElementById('filterBanco')?.value || '';
+            
+            currentFilesPage = page;
+            
+            container.innerHTML = `
+                <div class="d-flex justify-content-center p-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                </div>
+            `;
+            
+            try {
+                const params = new URLSearchParams({
+                    page: page,
+                    per_page: filesPerPage
+                });
+                
+                if (searchName) params.append('search', searchName);
+                if (año) params.append('año', año);
+                if (mes) params.append('mes', mes);
+                if (banco) params.append('banco', banco);
+                if (razonSocial) params.append('razon_social', razonSocial);
+                
+                const url = `/api/files/list?${params.toString()}`;
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.status === 401) {
+                    alert('Sesión expirada');
+                    logout();
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.files && data.files.length > 0) {
+                    displayFilesList(data);
+                } else {
+                    container.innerHTML = `
+                        <div class="alert alert-info text-center">
+                            📂 No se encontraron archivos con los filtros aplicados
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        ✗ Error cargando archivos: ${error}
+                    </div>
+                `;
+            }
+        }
+
+        function displayFilesList(data) {
+            const container = document.getElementById('filesListContainer');
+            const isAdmin = currentUser && currentUser.role === 'admin';
+            
+            // Construir paginación
+            let pagination = '';
+            if (data.total_pages > 1) {
+                pagination = '<nav><ul class="pagination justify-content-center mb-0">';
+                
+                // Botón anterior
+                pagination += `<li class="page-item ${!data.has_prev ? 'disabled' : ''}">
+                    <a class="page-link" href="#" onclick="loadFilesList(${currentFilesPage - 1}); return false;">‹ Anterior</a>
+                </li>`;
+                
+                // Páginas
+                const maxButtons = 5;
+                let startPage = Math.max(1, currentFilesPage - 2);
+                let endPage = Math.min(data.total_pages, startPage + maxButtons - 1);
+                
+                if (endPage - startPage < maxButtons - 1) {
+                    startPage = Math.max(1, endPage - maxButtons + 1);
+                }
+                
+                for (let i = startPage; i <= endPage; i++) {
+                    pagination += `<li class="page-item ${i === currentFilesPage ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="loadFilesList(${i}); return false;">${i}</a>
+                    </li>`;
+                }
+                
+                // Botón siguiente
+                pagination += `<li class="page-item ${!data.has_next ? 'disabled' : ''}">
+                    <a class="page-link" href="#" onclick="loadFilesList(${currentFilesPage + 1}); return false;">Siguiente ›</a>
+                </li>`;
+                
+                pagination += '</ul></nav>';
+            }
+            
+            container.innerHTML = `
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>📄 ${data.total.toLocaleString()} archivo(s) encontrado(s)</strong>
+                        <span class="text-muted">Página ${data.page} de ${data.total_pages}</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Archivo</th>
+                                    <th>Banco</th>
+                                    <th>Año/Mes</th>
+                                    <th>Razón Social</th>
+                                    <th>Tamaño</th>
+                                    <th>Indexado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.files.map(file => {
+                                    const mesNombre = file.mes ? getMesNombre(file.mes) : 'N/A';
+                                    return `
+                                    <tr>
+                                        <td>
+                                            <div>
+                                                <strong>${file.name}</strong>
+                                                <br><small class="text-muted" style="font-size: 0.75rem;">${file.folder || '(raíz)'}</small>
+                                            </div>
+                                        </td>
+                                        <td><span class="badge bg-info text-dark">${file.banco || 'N/A'}</span></td>
+                                        <td>
+                                            <span class="badge bg-primary">${file.año || 'N/A'}</span>
+                                            <span class="badge bg-secondary">${mesNombre}</span>
+                                        </td>
+                                        <td><small>${file.razon_social || 'N/A'}</small></td>
+                                        <td>${file.size_human}</td>
+                                        <td>
+                                            ${file.indexed 
+                                                ? '<span class="badge bg-success">✓</span>' 
+                                                : '<span class="badge bg-warning">⏳</span>'}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-primary" 
+                                                        onclick="downloadFile('${file.download_url}')"
+                                                        title="Descargar">
+                                                    📥
+                                                </button>
+                                                ${isAdmin ? `
+                                                    <button class="btn btn-danger" 
+                                                            onclick="deleteFile('${file.path.replace(/'/g, "\\'")}')"
+                                                            title="Eliminar">
+                                                        🗑️
+                                                    </button>
+                                                ` : ''}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `;}).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    ${pagination ? `<div class="card-footer">${pagination}</div>` : ''}
+                </div>
+            `;
+        }
+
+        // ========================================
+        // ELIMINAR ARCHIVO
+        // ========================================
+        async function deleteFile(path) {
+            if (!confirm(`¿Estás seguro de eliminar este archivo?\n\n${path}\n\nEsta acción no se puede deshacer.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/files/delete', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ path: path })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    alert('✓ Archivo eliminado correctamente');
+                    loadFilesList();
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudo eliminar el archivo'));
+                }
+            } catch (error) {
+                alert('Error eliminando archivo: ' + error);
             }
         }
     </script>

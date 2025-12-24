@@ -1027,7 +1027,8 @@ def reindex_all():
     if claims.get('role') != 'admin':
         return jsonify({'error': 'Permiso denegado. Solo admin puede reindexar.'}), 403
     
-    data = request.get_json() or {}
+    # silent=True evita errores si el body está vacío
+    data = request.get_json(silent=True) or {}
     clean_orphans = data.get('clean_orphans', True)
     
     start_time = time.time()
@@ -1256,6 +1257,571 @@ def get_index_stats():
         'indexed_successfully': PDFIndex.query.filter_by(is_indexed=True).count(),
         'with_errors': PDFIndex.query.filter_by(is_indexed=False).count()
     }), 200
+
+
+# ═══════════════════════════════════════════════════
+# GESTIÓN DE ARCHIVOS - ESTILO GOOGLE DRIVE
+# ═══════════════════════════════════════════════════
+
+@app.route('/api/files/list', methods=['GET'])
+@jwt_required()
+def list_files():
+    """
+    Listar PDFs indexados desde PostgreSQL (mucho más rápido que MinIO).
+    
+    Query params:
+        folder: Filtrar por carpeta (ej: "Planillas 2025/")
+        search: Buscar por nombre de archivo
+        año: Filtrar por año
+        mes: Filtrar por mes
+        banco: Filtrar por banco
+        razon_social: Filtrar por razón social
+        page: Página (default: 1)
+        per_page: Resultados por página (default: 100)
+        sort: Campo de ordenamiento (default: "indexed_at")
+        order: Orden asc/desc (default: "desc")
+    
+    Response: {
+        "files": [...],
+        "total": 5234,
+        "page": 1,
+        "per_page": 100,
+        "total_pages": 53
+    }
+    """
+    # Parámetros de filtrado
+    folder_filter = request.args.get('folder', '').strip()
+    search_query = request.args.get('search', '').strip()
+    año = request.args.get('año', '').strip()
+    mes = request.args.get('mes', '').strip()
+    banco = request.args.get('banco', '').strip()
+    razon_social = request.args.get('razon_social', '').strip()
+    
+    # Parámetros de paginación y ordenamiento
+    page = int(request.args.get('page', 1))
+    per_page = min(int(request.args.get('per_page', 100)), 500)  # Máximo 500 por página
+    sort_field = request.args.get('sort', 'indexed_at')
+    order = request.args.get('order', 'desc')
+    
+    try:
+        # Construir query con filtros
+        query = PDFIndex.query.filter_by(is_indexed=True)
+        
+        # Filtro por carpeta (buscar en el path)
+        if folder_filter:
+            query = query.filter(PDFIndex.minio_object_name.like(f"{folder_filter}%"))
+        
+        # Búsqueda por nombre de archivo
+        if search_query:
+            query = query.filter(PDFIndex.minio_object_name.ilike(f"%{search_query}%"))
+        
+        # Filtros de metadatos
+        if año:
+            query = query.filter_by(año=año)
+        if mes:
+            query = query.filter_by(mes=mes)
+        if banco:
+            query = query.filter_by(banco=banco)
+        if razon_social:
+            query = query.filter_by(razon_social=razon_social)
+        
+        # Ordenamiento
+        if sort_field == 'indexed_at':
+            order_by = PDFIndex.indexed_at.desc() if order == 'desc' else PDFIndex.indexed_at.asc()
+        elif sort_field == 'last_modified':
+            order_by = PDFIndex.last_modified.desc() if order == 'desc' else PDFIndex.last_modified.asc()
+        elif sort_field == 'size':
+            order_by = PDFIndex.size_bytes.desc() if order == 'desc' else PDFIndex.size_bytes.asc()
+        elif sort_field == 'filename':
+            order_by = PDFIndex.minio_object_name.asc() if order == 'asc' else PDFIndex.minio_object_name.desc()
+        else:
+            order_by = PDFIndex.indexed_at.desc()
+        
+        query = query.order_by(order_by)
+        
+        # Contar total antes de paginar
+        total = query.count()
+        
+        # Aplicar paginación
+        paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        # Construir respuesta
+        files = []
+        for record in paginated.items:
+            # Calcular tamaño legible
+            size_bytes = record.size_bytes or 0
+            if size_bytes < 1024:
+                size_human = f"{size_bytes} B"
+            elif size_bytes < 1024 * 1024:
+                size_human = f"{size_bytes / 1024:.1f} KB"
+            else:
+                size_human = f"{size_bytes / (1024 * 1024):.1f} MB"
+            
+            # Extraer nombre y carpeta
+            parts = record.minio_object_name.split('/')
+            file_name = parts[-1]
+            folder_name = '/'.join(parts[:-1]) if len(parts) > 1 else ''
+            
+            files.append({
+                'name': file_name,
+                'path': record.minio_object_name,
+                'folder': folder_name,
+                'size_bytes': size_bytes,
+                'size_human': size_human,
+                'last_modified': record.last_modified.isoformat() if record.last_modified else None,
+                'indexed_at': record.indexed_at.isoformat() if record.indexed_at else None,
+                'indexed': record.is_indexed,
+                'año': record.año,
+                'mes': record.mes,
+                'banco': record.banco,
+                'razon_social': record.razon_social,
+                'tipo_documento': record.tipo_documento,
+                'download_url': f'/api/download/{record.minio_object_name}'
+            })
+        
+        return jsonify({
+            'files': files,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': paginated.pages,
+            'has_next': paginated.has_next,
+            'has_prev': paginated.has_prev
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"✗ Error listando archivos: {e}")
+        return jsonify({'error': f'Error al listar archivos: {str(e)}'}), 500
+
+
+@app.route('/api/files/upload', methods=['POST'])
+@jwt_required()
+def upload_file():
+    """
+    Subir uno o varios PDFs a MinIO y auto-indexarlos.
+    
+    Multipart form-data:
+        files[]: Uno o más archivos PDF
+        folder: Carpeta destino (opcional, ej: "Planillas 2025/")
+    
+    Response: {
+        "success": true,
+        "uploaded": [
+            {
+                "filename": "archivo.pdf",
+                "path": "Planillas 2025/archivo.pdf",
+                "size": 123456,
+                "indexed": true
+            }
+        ],
+        "errors": [],
+        "total_uploaded": 5,
+        "total_indexed": 5,
+        "total_errors": 0
+    }
+    """
+    from flask_jwt_extended import get_jwt
+    
+    # Verificar permisos (solo admin puede subir)
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Solo administradores pueden subir archivos.'}), 403
+    
+    # Obtener archivos y carpeta destino
+    files = request.files.getlist('files[]')
+    folder = request.form.get('folder', '').strip()
+    
+    if not files:
+        return jsonify({'error': 'No se proporcionaron archivos.'}), 400
+    
+    uploaded = []
+    errors = []
+    
+    for file in files:
+        if not file or file.filename == '':
+            continue
+            
+        # Validar extensión
+        if not file.filename.lower().endswith('.pdf'):
+            errors.append({
+                'filename': file.filename,
+                'error': 'Solo se permiten archivos PDF'
+            })
+            continue
+        
+        try:
+            # Construir ruta en MinIO
+            if folder and not folder.endswith('/'):
+                folder += '/'
+            
+            object_name = f"{folder}{file.filename}" if folder else file.filename
+            
+            # Subir a MinIO
+            file.seek(0, os.SEEK_END)
+            file_size = file.tell()
+            file.seek(0)
+            
+            minio_client.put_object(
+                BUCKET_NAME,
+                object_name,
+                file,
+                length=file_size,
+                content_type='application/pdf'
+            )
+            
+            app.logger.info(f"✓ Archivo subido: {object_name}")
+            
+            # Auto-indexar
+            indexed = False
+            try:
+                # Obtener objeto recién subido
+                obj = minio_client.stat_object(BUCKET_NAME, object_name)
+                index_single_pdf(obj)
+                db.session.commit()
+                indexed = True
+                app.logger.info(f"✓ Archivo indexado: {object_name}")
+            except Exception as idx_error:
+                app.logger.error(f"✗ Error indexando {object_name}: {idx_error}")
+            
+            uploaded.append({
+                'filename': file.filename,
+                'path': object_name,
+                'size': file_size,
+                'indexed': indexed
+            })
+            
+        except Exception as e:
+            app.logger.error(f"✗ Error subiendo {file.filename}: {e}")
+            errors.append({
+                'filename': file.filename,
+                'error': str(e)
+            })
+    
+    return jsonify({
+        'success': len(uploaded) > 0,
+        'uploaded': uploaded,
+        'errors': errors,
+        'total_uploaded': len(uploaded),
+        'total_indexed': sum(1 for u in uploaded if u['indexed']),
+        'total_errors': len(errors)
+    }), 200 if len(uploaded) > 0 else 400
+
+
+@app.route('/api/files/delete', methods=['DELETE'])
+@jwt_required()
+def delete_file():
+    """
+    Eliminar un archivo de MinIO y su índice en PostgreSQL.
+    
+    JSON body: {
+        "path": "Planillas 2025/archivo.pdf"
+    }
+    
+    Response: {
+        "success": true,
+        "message": "Archivo eliminado correctamente",
+        "path": "Planillas 2025/archivo.pdf"
+    }
+    """
+    from flask_jwt_extended import get_jwt
+    
+    # Verificar permisos
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Solo administradores pueden eliminar archivos.'}), 403
+    
+    data = request.get_json(silent=True) or {}
+    file_path = data.get('path', '').strip()
+    
+    if not file_path:
+        return jsonify({'error': 'Debe proporcionar la ruta del archivo.'}), 400
+    
+    try:
+        # Eliminar de MinIO
+        minio_client.remove_object(BUCKET_NAME, file_path)
+        app.logger.info(f"✓ Archivo eliminado de MinIO: {file_path}")
+        
+        # Eliminar índice de PostgreSQL
+        PDFIndex.query.filter_by(minio_object_name=file_path).delete()
+        db.session.commit()
+        app.logger.info(f"✓ Índice eliminado de PostgreSQL: {file_path}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Archivo eliminado correctamente',
+            'path': file_path
+        }), 200
+        
+    except S3Error as e:
+        if e.code == 'NoSuchKey':
+            # El archivo no existe en MinIO, pero intentar limpiar el índice
+            PDFIndex.query.filter_by(minio_object_name=file_path).delete()
+            db.session.commit()
+            return jsonify({'error': 'El archivo no existe en MinIO.'}), 404
+        else:
+            app.logger.error(f"✗ Error S3 eliminando {file_path}: {e}")
+            return jsonify({'error': f'Error en MinIO: {str(e)}'}), 500
+    except Exception as e:
+        app.logger.error(f"✗ Error eliminando {file_path}: {e}")
+        return jsonify({'error': f'Error al eliminar: {str(e)}'}), 500
+
+
+# ═══════════════════════════════════════════════════
+# BÚSQUEDA MASIVA POR CÓDIGOS DE EMPLEADO / DNI
+# ═══════════════════════════════════════════════════
+@app.route('/api/search/bulk', methods=['POST'])
+@jwt_required()
+def bulk_search():
+    """
+    Búsqueda masiva por múltiples códigos de empleado o DNI.
+    
+    JSON body: {
+        "codigos": "12345678, 87654321, 11223344" o ["12345678", "87654321"],
+        "año": "2025",
+        "mes": "03",
+        "banco": "BCP",
+        "razon_social": "RESGUARDO"
+    }
+    
+    Response: {
+        "total": 15,
+        "codigos_encontrados": ["12345678", "87654321"],
+        "codigos_no_encontrados": ["11223344"],
+        "results": [...],
+        "can_merge": true
+    }
+    """
+    from sqlalchemy import or_
+    
+    data = request.get_json(silent=True) or {}
+    codigos_input = data.get('codigos', [])
+    
+    # Limpiar y validar códigos
+    if isinstance(codigos_input, str):
+        # Separar por comas, espacios, o nuevas líneas
+        codigos = [c.strip() for c in re.split(r'[,\s\n]+', codigos_input) if c.strip()]
+    else:
+        codigos = [str(c).strip() for c in codigos_input if str(c).strip()]
+    
+    # Eliminar duplicados manteniendo orden
+    codigos = list(dict.fromkeys(codigos))
+    
+    if not codigos:
+        return jsonify({
+            'error': 'Debe proporcionar al menos un código de empleado o DNI.',
+            'total': 0,
+            'results': []
+        }), 400
+    
+    if len(codigos) > 500:
+        return jsonify({
+            'error': 'Máximo 500 códigos por búsqueda.',
+            'total': 0,
+            'results': []
+        }), 400
+    
+    # Filtros adicionales
+    año = data.get('año', '').strip()
+    mes = data.get('mes', '').strip()
+    banco = data.get('banco', '').strip()
+    razon_social = data.get('razon_social', '').strip()
+    
+    try:
+        # Construir query base con filtros
+        query = PDFIndex.query.filter(PDFIndex.is_indexed == True)
+        
+        # Aplicar filtros adicionales primero (reduce el dataset)
+        if año:
+            query = query.filter(PDFIndex.año == año)
+        if mes:
+            query = query.filter(PDFIndex.mes == mes)
+        if banco:
+            query = query.filter(PDFIndex.banco == banco)
+        if razon_social:
+            query = query.filter(PDFIndex.razon_social == razon_social)
+        
+        # Construir condiciones OR para todos los códigos en UNA sola consulta
+        # Usando ILIKE para cada código
+        codigo_conditions = [
+            PDFIndex.codigos_empleado.ilike(f'%{codigo}%') 
+            for codigo in codigos
+        ]
+        
+        # Aplicar OR de todos los códigos
+        query = query.filter(or_(*codigo_conditions))
+        
+        # Ejecutar consulta una sola vez
+        all_records = query.all()
+        
+        app.logger.info(f"Búsqueda masiva: {len(codigos)} códigos → {len(all_records)} registros encontrados")
+        
+        # Procesar resultados y determinar qué códigos se encontraron
+        results = []
+        codigos_encontrados = set()
+        
+        for record in all_records:
+            # Determinar qué códigos de la búsqueda están en este PDF
+            codigos_en_pdf = record.codigos_empleado or ''
+            codigos_match = []
+            
+            for codigo in codigos:
+                # Verificar si el código está en los códigos del empleado
+                if codigo.lower() in codigos_en_pdf.lower():
+                    codigos_match.append(codigo)
+                    codigos_encontrados.add(codigo)
+            
+            if codigos_match:  # Solo añadir si al menos un código coincide
+                results.append({
+                    'id': record.id,
+                    'filename': record.minio_object_name,
+                    'metadata': {
+                        'año': record.año,
+                        'mes': record.mes,
+                        'banco': record.banco,
+                        'razon_social': record.razon_social,
+                        'tipo_documento': record.tipo_documento
+                    },
+                    'size_bytes': record.size_bytes or 0,
+                    'size_kb': round((record.size_bytes or 0) / 1024, 1),
+                    'download_url': f'/api/download/{record.minio_object_name}',
+                    'codigos_match': codigos_match
+                })
+        
+        # Códigos no encontrados
+        codigos_no_encontrados = [c for c in codigos if c not in codigos_encontrados]
+        
+        # Ordenar resultados por año, mes, filename
+        results.sort(key=lambda x: (
+            x['metadata'].get('año', ''), 
+            x['metadata'].get('mes', ''), 
+            x['filename']
+        ))
+        
+        app.logger.info(f"Resultado: {len(codigos_encontrados)} códigos encontrados, {len(codigos_no_encontrados)} no encontrados")
+        
+        return jsonify({
+            'total': len(results),
+            'codigos_buscados': codigos,
+            'codigos_encontrados': list(codigos_encontrados),
+            'codigos_no_encontrados': codigos_no_encontrados,
+            'results': results,
+            'can_merge': len(results) > 1
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"✗ Error en búsqueda masiva: {e}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({
+            'error': f'Error en la búsqueda: {str(e)}',
+            'total': 0,
+            'results': []
+        }), 500
+
+
+# ═══════════════════════════════════════════════════
+# FUSIONAR MÚLTIPLES PDFs EN UNO SOLO
+# ═══════════════════════════════════════════════════
+@app.route('/api/merge-pdfs', methods=['POST'])
+@jwt_required()
+def merge_pdfs():
+    """
+    Combina múltiples PDFs en un único archivo para descargar.
+    
+    JSON body: {
+        "paths": [
+            "Planillas 2025/archivo1.pdf",
+            "Planillas 2025/archivo2.pdf"
+        ],
+        "output_name": "documentos_combinados"  (opcional)
+    }
+    
+    Response: PDF file (application/pdf)
+    """
+    from io import BytesIO
+    
+    data = request.get_json(silent=True) or {}
+    paths = data.get('paths', [])
+    output_name = data.get('output_name', 'documentos_combinados').strip()
+    
+    if not paths or len(paths) < 1:
+        return jsonify({'error': 'Debe proporcionar al menos un archivo PDF.'}), 400
+    
+    if len(paths) > 100:
+        return jsonify({'error': 'Máximo 100 archivos por fusión.'}), 400
+    
+    try:
+        # Crear documento PDF combinado
+        merged_pdf = fitz.open()
+        files_merged = []
+        errors = []
+        
+        for path in paths:
+            try:
+                # Descargar PDF de MinIO
+                response = minio_client.get_object(BUCKET_NAME, path)
+                pdf_bytes = response.read()
+                response.close()
+                response.release_conn()
+                
+                # Abrir y añadir al documento combinado
+                src_pdf = fitz.open(stream=pdf_bytes, filetype="pdf")
+                merged_pdf.insert_pdf(src_pdf)
+                src_pdf.close()
+                
+                files_merged.append(path)
+                app.logger.info(f"✓ Añadido al merge: {path}")
+                
+            except S3Error as e:
+                app.logger.error(f"✗ Error descargando {path}: {e}")
+                errors.append({'path': path, 'error': str(e)})
+            except Exception as e:
+                app.logger.error(f"✗ Error procesando {path}: {e}")
+                errors.append({'path': path, 'error': str(e)})
+        
+        if not files_merged:
+            return jsonify({
+                'error': 'No se pudo procesar ningún archivo.',
+                'errors': errors
+            }), 400
+        
+        # Exportar PDF combinado a bytes
+        output = BytesIO()
+        merged_pdf.save(output)
+        merged_pdf.close()
+        output.seek(0)
+        
+        # Sanitizar nombre de archivo
+        safe_name = re.sub(r'[^\w\s\-]', '', output_name)[:50]
+        if not safe_name:
+            safe_name = 'documentos_combinados'
+        
+        # Registrar descarga
+        current_user_id = get_jwt_identity()
+        log_entry = DownloadLog(
+            user_id=current_user_id,
+            filename=f"MERGED:{len(files_merged)}_archivos_{safe_name}.pdf",
+            ip_address=request.remote_addr
+        )
+        db.session.add(log_entry)
+        db.session.commit()
+        
+        app.logger.info(f"✓ PDF combinado generado: {len(files_merged)} archivos, {len(errors)} errores")
+        
+        return Response(
+            output.read(),
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename="{safe_name}.pdf"',
+                'X-Files-Merged': str(len(files_merged)),
+                'X-Merge-Errors': str(len(errors))
+            }
+        )
+        
+    except Exception as e:
+        app.logger.error(f"✗ Error fusionando PDFs: {e}")
+        return jsonify({'error': f'Error al fusionar PDFs: {str(e)}'}), 500
+
 
 if __name__ == '__main__':
     init_app()
