@@ -1012,6 +1012,8 @@
         // GESTIÓN DE ARCHIVOS - DRAG & DROP
         // ========================================
         let selectedFilesArray = [];
+        const MAX_UPLOAD_FILES = 100; // límite razonable UX
+        const UPLOAD_CHUNK_SIZE = 20; // enviar en lotes de 20 archivos por petición
 
         // Configurar drag & drop
         const dropZone = document.getElementById('dropZone');
@@ -1049,35 +1051,63 @@
         });
 
         function handleFileSelection(files) {
-            selectedFilesArray = files;
-            displaySelectedFiles();
+            // Filtrar solo PDFs
+            const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+
+            const accepted = pdfs.slice(0, MAX_UPLOAD_FILES);
+            const rejected = pdfs.slice(MAX_UPLOAD_FILES);
+
+            selectedFilesArray = accepted;
+            displaySelectedFiles(rejected.length);
+
+            if (rejected.length > 0) {
+                alert(`Has seleccionado ${pdfs.length} PDFs. Se aceptan máximo ${MAX_UPLOAD_FILES}; ${rejected.length} serán ignorados.`);
+            }
         }
 
-        function displaySelectedFiles() {
+        function displaySelectedFiles(rejectedCount = 0) {
             const filesList = document.getElementById('filesList');
             const selectedFilesDiv = document.getElementById('selectedFiles');
-            
+
             if (selectedFilesArray.length === 0) {
                 selectedFilesDiv.classList.add('d-none');
                 return;
             }
-            
+
             selectedFilesDiv.classList.remove('d-none');
-            filesList.innerHTML = selectedFilesArray.map((file, idx) => {
+
+            // Header resumen
+            const summary = `<li class="list-group-item bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>${selectedFilesArray.length} archivo(s) listos para subir</strong>
+                            ${rejectedCount ? `<br><small class="text-muted">${rejectedCount} archivo(s) ignorados por exceder el límite (${MAX_UPLOAD_FILES})</small>` : ''}
+                        </div>
+                        <div>
+                            <small class="text-muted">Máx por petición: ${UPLOAD_CHUNK_SIZE}</small>
+                        </div>
+                    </div>
+                </li>`;
+
+            const items = selectedFilesArray.map((file, idx) => {
                 const sizeKB = (file.size / 1024).toFixed(1);
                 return `
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <li id="file-item-${idx}" class="list-group-item d-flex justify-content-between align-items-center">
                         <div>
                             <strong>${file.name}</strong>
                             <br><small class="text-muted">${sizeKB} KB</small>
+                            <div id="progress-${idx}" class="mt-1" style="display:none;">
+                                <div class="progress" style="height:8px;"><div class="progress-bar" role="progressbar" style="width: 0%;"></div></div>
+                            </div>
                         </div>
-                        <button type="button" class="btn btn-sm btn-outline-danger" 
-                                onclick="removeFile(${idx})">
-                            🗑️
-                        </button>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile(${idx})">🗑️</button>
+                        </div>
                     </li>
                 `;
             }).join('');
+
+            filesList.innerHTML = summary + items;
         }
 
         function removeFile(index) {
@@ -1093,47 +1123,92 @@
                 alert('Selecciona al menos un archivo');
                 return;
             }
-            
+
             const folder = document.getElementById('uploadFolder').value;
-            
+
             document.getElementById('uploadBtn').classList.add('d-none');
             document.getElementById('uploadingBtn').classList.remove('d-none');
-            
-            const formData = new FormData();
-            selectedFilesArray.forEach(file => {
-                formData.append('files[]', file);
-            });
-            formData.append('folder', folder);
-            
+
+            let totalUploaded = 0;
+            let totalIndexed = 0;
+            let totalErrors = 0;
+
+            // Disable UI while uploading
+            const chunks = [];
+            for (let i = 0; i < selectedFilesArray.length; i += UPLOAD_CHUNK_SIZE) {
+                chunks.push(selectedFilesArray.slice(i, i + UPLOAD_CHUNK_SIZE));
+            }
+
             try {
-                const response = await fetch('/api/files/upload', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok && data.success) {
-                    alert(`✓ Archivos subidos e indexados correctamente:\n` +
-                          `- Subidos: ${data.total_uploaded}\n` +
-                          `- Indexados: ${data.total_indexed}\n` +
-                          `- Errores: ${data.total_errors}`);
-                    
-                    // Limpiar selección
-                    selectedFilesArray = [];
-                    fileInput.value = '';
-                    displaySelectedFiles();
-                    
-                    // Recargar lista de archivos
-                    loadFilesList();
-                } else {
-                    alert('Error: ' + (data.error || 'No se pudieron subir los archivos'));
+                for (let c = 0; c < chunks.length; c++) {
+                    const chunk = chunks[c];
+
+                    // Show per-file progress bars
+                    chunk.forEach((file, idx) => {
+                        const globalIdx = c * UPLOAD_CHUNK_SIZE + idx;
+                        const progressEl = document.getElementById(`progress-${globalIdx}`);
+                        if (progressEl) progressEl.style.display = 'block';
+                    });
+
+                    const formData = new FormData();
+                    chunk.forEach(file => formData.append('files[]', file));
+                    formData.append('folder', folder);
+
+                    const xhr = new XMLHttpRequest();
+                    const uploadPromise = new Promise((resolve, reject) => {
+                        xhr.open('POST', '/api/files/upload');
+                        xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+
+                        xhr.onload = () => {
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                resolve(JSON.parse(xhr.responseText));
+                            } else {
+                                try { resolve(JSON.parse(xhr.responseText)); } catch(e) { reject(xhr.statusText); }
+                            }
+                        };
+
+                        xhr.onerror = () => reject(xhr.statusText);
+
+                        // track progress for the whole request and distribute roughly across files
+                        xhr.upload.onprogress = (event) => {
+                            if (!event.lengthComputable) return;
+                            const percent = Math.round((event.loaded / event.total) * 100);
+                            // Update each file progress bar in the chunk
+                            chunk.forEach((file, idx) => {
+                                const globalIdx = c * UPLOAD_CHUNK_SIZE + idx;
+                                const bar = document.querySelector(`#file-item-${globalIdx} .progress-bar`);
+                                if (bar) bar.style.width = percent + '%';
+                            });
+                        };
+
+                        xhr.send(formData);
+                    });
+
+                    const data = await uploadPromise;
+
+                    if (data && Array.isArray(data.uploaded)) {
+                        totalUploaded += data.uploaded.length;
+                        totalIndexed += data.uploaded.filter(u => u.indexed).length;
+                    }
+                    if (data && Array.isArray(data.errors)) {
+                        totalErrors += data.errors.length;
+                    }
+
+                    // small delay to let UI update
+                    await new Promise(r => setTimeout(r, 200));
                 }
+
+                alert(`✓ Proceso completado:\n- Subidos: ${totalUploaded}\n- Indexados: ${totalIndexed}\n- Errores: ${totalErrors}`);
+
+                // Limpiar selección
+                selectedFilesArray = [];
+                fileInput.value = '';
+                displaySelectedFiles();
+
+                // Recargar lista de archivos
+                loadFilesList();
             } catch (error) {
-                alert('Error subiendo archivos: ' + error);
+                alert('Error durante la subida: ' + error);
             } finally {
                 document.getElementById('uploadBtn').classList.remove('d-none');
                 document.getElementById('uploadingBtn').classList.add('d-none');
@@ -1530,11 +1605,35 @@
                 alert('Nombre de carpeta inválido');
                 return;
             }
-            
             const newPath = currentBrowserPath + safeName + '/';
-            document.getElementById('uploadFolder').value = newPath;
-            document.getElementById('newSubfolderName').value = '';
-            bootstrap.Modal.getInstance(document.getElementById('folderBrowserModal')).hide();
+
+            // Llamar al backend para crear la carpeta (placeholder)
+            try {
+                fetch('/api/files/create-folder', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ path: newPath })
+                }).then(async res => {
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok) {
+                        document.getElementById('uploadFolder').value = newPath;
+                        document.getElementById('newSubfolderName').value = '';
+                        bootstrap.Modal.getInstance(document.getElementById('folderBrowserModal')).hide();
+                        alert('✓ Carpeta creada: ' + newPath);
+                        // refrescar navegador de carpetas
+                        loadFolderBrowser(newPath);
+                    } else {
+                        alert('Error creando carpeta: ' + (data.error || res.statusText));
+                    }
+                }).catch(err => {
+                    alert('Error creando carpeta: ' + err);
+                });
+            } catch (err) {
+                alert('Error creando carpeta: ' + err);
+            }
         }
         
         function goUpFolder() {

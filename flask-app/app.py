@@ -1627,6 +1627,46 @@ def upload_file():
     }), 200 if len(uploaded) > 0 else 400
 
 
+@app.route('/api/files/create-folder', methods=['POST'])
+@jwt_required()
+def create_folder():
+    """
+    Crea una 'carpeta' en MinIO creando un objeto placeholder (0 bytes).
+    Body JSON: {"path": "Planillas 2025/NUEVA/"}
+    """
+    from flask_jwt_extended import get_jwt
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Solo administradores pueden crear carpetas.'}), 403
+
+    data = request.get_json(silent=True) or {}
+    path = data.get('path', '').strip()
+    if not path:
+        return jsonify({'error': 'Debe proporcionar la ruta de la carpeta.'}), 400
+
+    # Asegurar que termine en '/'
+    if not path.endswith('/'):
+        path = path + '/'
+
+    # Sanitizar caracteres inválidos básicos
+    safe_path = re.sub(r'[<>:"\\|?*]', '', path)
+
+    # Crear un objeto placeholder (archivo oculto) para representar la carpeta
+    placeholder_name = safe_path + '.placeholder'
+    try:
+        from io import BytesIO
+        bio = BytesIO(b'')
+        minio_client.put_object(BUCKET_NAME, placeholder_name, bio, length=0, content_type='application/octet-stream')
+        app.logger.info(f"✓ Carpeta creada en MinIO (placeholder): {placeholder_name}")
+        return jsonify({'success': True, 'path': safe_path}), 201
+    except S3Error as e:
+        app.logger.error(f"✗ Error creando carpeta {safe_path}: {e}")
+        return jsonify({'error': f'Error en MinIO: {str(e)}'}), 500
+    except Exception as e:
+        app.logger.error(f"✗ Error creando carpeta {safe_path}: {e}")
+        return jsonify({'error': f'Error: {str(e)}'}), 500
+
+
 @app.route('/api/files/delete', methods=['DELETE'])
 @jwt_required()
 def delete_file():
