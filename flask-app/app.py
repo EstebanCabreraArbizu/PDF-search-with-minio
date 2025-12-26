@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 from models import db, User, DownloadLog, PDFIndex
 from dotenv import load_dotenv
+from email.utils import parsedate_to_datetime
 
 # Cargar .env desde el directorio padre del proyecto
 env_path = Path(__file__).resolve().parent.parent / '.env'
@@ -37,7 +38,7 @@ MINIO_ENDPOINT = os.getenv('MINIO_ENDPOINT', 'minio:9000')
 MINIO_PUBLIC_ENDPOINT = os.getenv('MINIO_PUBLIC_ENDPOINT', 'localhost:9000')
 MINIO_ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY', 'admin')
 MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY', 'password123')
-BUCKET_NAME = 'planillas-pdfs'
+BUCKET_NAME = os.getenv('MINIO_BUCKET_NAME', 'planillas-pdfs')
 
 # Inicializar extensiones
 db.init_app(app)
@@ -82,9 +83,14 @@ minio_client = Minio(
     MINIO_ENDPOINT,
     access_key=MINIO_ACCESS_KEY,
     secret_key=MINIO_SECRET_KEY,
-    secure=False  # True en producción con HTTPS
+    secure=True  # True en producción con HTTPS
 )
-
+app.logger.info(f"MinIO conf: endpoint={MINIO_ENDPOINT} bucket={BUCKET_NAME} secure={minio_client._Minio__is_secure if hasattr(minio_client, '_Minio__is_secure') else 'unknown'} access_key_prefix={MINIO_ACCESS_KEY[:4]}")
+try:
+    app.logger.info("bucket_exists: %s", minio_client.bucket_exists(BUCKET_NAME))
+except Exception as e:
+    app.logger.error("bucket_exists error: %s", e)
+    
 # ════════════════════════════════════════════════
 # INICIALIZACIÓN: Crear bucket si no existe
 # ═══════════════════════════════════════════════════
@@ -1594,12 +1600,31 @@ def upload_file():
             # Auto-indexar
             indexed = False
             try:
-                # Obtener objeto recién subido
-                obj = minio_client.stat_object(BUCKET_NAME, object_name)
-                index_single_pdf(obj)
-                db.session.commit()
-                indexed = True
-                app.logger.info(f"✓ Archivo indexado: {object_name}")
+                # REEMPLAZO: Usamos get_object en lugar de stat_object
+                # y creamos una clase al vuelo para imitar la estructura que espera el indexador
+                response = minio_client.get_object(BUCKET_NAME, object_name)
+                try:
+                    class MockMinioObject:
+                        def __init__(self, name, resp):
+                            self.object_name = name
+                            # Extraemos el tamaño del header Content-Length
+                            self.size = int(resp.headers.get('Content-Length', 0))
+                            # Convertimos la fecha del header Last-Modified a objeto datetime
+                            self.last_modified = parsedate_to_datetime(resp.headers.get('Last-Modified'))
+
+                    # Creamos el objeto compatible
+                    obj = MockMinioObject(object_name, response)
+                    
+                    # Llamamos a la función de indexación original
+                    index_single_pdf(obj)
+                    db.session.commit()
+                    indexed = True
+                    app.logger.info(f"✓ Archivo indexado: {object_name}")
+                finally:
+                    # IMPORTANTE: Cerrar la conexión siempre con get_object
+                    response.close()
+                    response.release_conn()
+                    
             except Exception as idx_error:
                 app.logger.error(f"✗ Error indexando {object_name}: {idx_error}")
             

@@ -456,8 +456,8 @@
                     authToken = data.access_token;
                     currentUser = data.user;
                     
-                    console.log('✓ Token recibido:', authToken ? authToken.substring(0, 20) + '...' : 'NULL');
-                    console.log('✓ Usuario:', currentUser);
+                    // console.log('✓ Token recibido:', authToken ? authToken.substring(0, 10) + '...' : 'NULL');
+                    // console.log('✓ Usuario:', currentUser);
                     
                     // Mostrar pantalla de búsqueda
                     document.getElementById('loginScreen').classList.add('d-none');
@@ -579,7 +579,7 @@
                 // ---- GESTIÓN DE ARCHIVOS ----
                 populateFileFilters();
                 
-                console.log('✓ Opciones de filtros cargadas');
+                // console.log('✓ Opciones de filtros cargadas');
             } catch (error) {
                 console.error('Error cargando opciones:', error);
             }
@@ -686,7 +686,7 @@
             }
             
             try {
-                console.log('Enviando búsqueda con filtros:', filters);
+                // console.log('Enviando búsqueda con filtros:', filters);
                 
                 const response = await fetch('/api/search', {
                     method: 'POST',
@@ -697,7 +697,7 @@
                     body: JSON.stringify(filters)
                 });
                 
-                console.log('Respuesta del servidor:', response.status);
+                // console.log('Respuesta del servidor:', response.status);
                 
                 if (response.status === 401) {
                     alert('Sesión expirada. Por favor inicia sesión nuevamente.');
@@ -1075,7 +1075,9 @@
             }
 
             selectedFilesDiv.classList.remove('d-none');
-
+            // console.log('🔍 DEBUG: Token presente?', !!authToken);
+            // console.log('🔍 DEBUG: Archivos seleccionados:', selectedFilesArray.length);
+            // console.log('🔍 DEBUG: Carpeta destino:', document.getElementById('uploadFolder').value);
             // Header resumen
             const summary = `<li class="list-group-item bg-light">
                     <div class="d-flex justify-content-between align-items-center">
