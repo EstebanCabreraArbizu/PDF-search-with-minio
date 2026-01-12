@@ -11,6 +11,8 @@ Sistema web completo para gestión, búsqueda y descarga masiva de documentos PD
 - [Arquitectura del Sistema](#-arquitectura-del-sistema)
 - [Instalación y Configuración](#-instalación-y-configuración)
 - [Uso de la Aplicación](#-uso-de-la-aplicación)
+- [Manual de Usuario](file:///c:/Proyecto%20-%20b%C3%BAsqueda%20inteligente%20con%20minio/MANUAL_USUARIO.md)
+- [Reporte de Costos AWS](file:///c:/Proyecto%20-%20b%C3%BAsqueda%20inteligente%20con%20minio/COSTOS_AWS.md)
 - [API Endpoints](#-api-endpoints)
 - [Estructura del Proyecto](#-estructura-del-proyecto)
 - [Optimizaciones Implementadas](#-optimizaciones-implementadas)
@@ -106,50 +108,62 @@ Sistema web completo para gestión, búsqueda y descarga masiva de documentos PD
 
 ## 🏗️ Arquitectura del Sistema
 
-```
-┌─────────────┐
-│   Cliente   │
-│  (Browser)  │
-└──────┬──────┘
-       │ HTTP/JWT
-       ▼
-┌─────────────────────────────────────┐
-│         Flask App (Gunicorn)        │
-│  ┌────────────────────────────┐    │
-│  │   Endpoints API REST       │    │
-│  │  - /api/search             │    │
-│  │  - /api/search/bulk        │    │
-│  │  - /api/merge-pdfs         │    │
-│  │  - /api/files/list         │    │
-│  │  - /api/folders            │    │
-│  │  - /api/reindex            │    │
-│  └────────────────────────────┘    │
-└───┬──────────────────┬─────────────┘
-    │                  │
-    ▼                  ▼
-┌─────────────┐   ┌──────────────┐
-│ PostgreSQL  │   │    MinIO     │
-│             │   │  (S3-like)   │
-│ PDFIndex    │   │              │
-│ User        │   │ planillas-   │
-│ DownloadLog │   │ pdfs/        │
-└─────────────┘   └──────────────┘
+```mermaid
+graph TD
+    subgraph "Nivel Usuario"
+        Client["💻 Cliente (Browser)"]
+    end
+
+    subgraph "Nivel Aplicación (AWS EC2 / App Runner)"
+        subgraph "Contenedor Flask"
+            API["🔥 API Flask (Gunicorn)"]
+            Auth["🔐 Auth (JWT)"]
+            OCR["📄 Motor OCR (Tesseract/FitZ)"]
+        end
+    end
+
+    subgraph "Nivel Persistencia"
+        Postgres[("🐘 PostgreSQL 17 (RDS)")]
+        MinIO[("📦 MinIO / AWS S3")]
+    end
+
+    Client -- "HTTP/JWT" --> API
+    API -- "CRUD Index" --> Postgres
+    API -- "Stream PDF" --> MinIO
+    API -- "Valida" --> Auth
+    API -- "Procesa" --> OCR
 ```
 
 ### Flujo de Indexación
-```
-PDF en MinIO → Descarga → PyMuPDF/Tesseract → Extrae:
-  - Texto completo
-  - Códigos de empleado (regex)
-  - Metadatos (año, mes, banco, razón social, tipo)
-→ Guarda en PDFIndex (PostgreSQL)
+```mermaid
+sequenceDiagram
+    participant AD as Administrador
+    participant FL as Flask API
+    participant MN as MinIO (S3)
+    participant DB as PostgreSQL
+    participant OCR as Motor OCR
+
+    AD->>FL: Solicitar Sincronización / Reindex
+    FL->>MN: Listar objetos en Bucket
+    loop Para cada archivo nuevo/modificado
+        FL->>MN: Descargar PDF temporal
+        FL->>OCR: Extraer texto y códigos de empleado
+        OCR-->>FL: Datos extraídos
+        FL->>DB: Guardar metadatos e índices
+    end
+    FL-->>AD: Reporte de finalización
 ```
 
 ### Flujo de Búsqueda
-```
-Usuario → Input códigos + filtros → PostgreSQL query con ILIKE
-→ Resultados instantáneos (~20-50ms) → Vista de PDFs
-→ [Opcional] Fusionar → PyMuPDF merge → Descarga
+```mermaid
+graph LR
+    U["👤 Usuario"] --> S["🔍 Input: Código + Filtros"]
+    S --> API["🔥 Flask API"]
+    API --> DB["🐘 Query PostgreSQL (ILIKE)"]
+    DB --> R["📄 Lista de Resultados"]
+    R --> D["⬇️ Opción: Descarga / Fusionar"]
+    D --> S3["📦 Stream desde MinIO/S3"]
+    S3 --> PDF["📥 PDF Final"]
 ```
 
 ---
@@ -206,6 +220,13 @@ Como admin:
 1. Ir a pestaña **"🔧 Gestión de Archivos"**
 2. Clic en **"🔄 Sincronizar Índice"** o **"📋 Re-indexar Todo"**
 3. Esperar a que termine el proceso
+
+---
+
+## 📚 Documentación Adicional
+
+- 📄 **[Manual de Usuario](file:///c:/Proyecto%20-%20b%C3%BAsqueda%20inteligente%20con%20minio/MANUAL_USUARIO.md)**: Guía detallada para usuarios y administradores.
+- 💰 **[Reporte de Costos AWS](file:///c:/Proyecto%20-%20b%C3%BAsqueda%20inteligente%20con%20minio/COSTOS_AWS.md)**: Estimación de costos para despliegue en la nube.
 
 ---
 

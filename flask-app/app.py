@@ -83,7 +83,7 @@ minio_client = Minio(
     MINIO_ENDPOINT,
     access_key=MINIO_ACCESS_KEY,
     secret_key=MINIO_SECRET_KEY,
-    secure=True  # True en producción con HTTPS
+    secure=False  # True en producción con HTTPS
 )
 app.logger.info(f"MinIO conf: endpoint={MINIO_ENDPOINT} bucket={BUCKET_NAME} secure={minio_client._Minio__is_secure if hasattr(minio_client, '_Minio__is_secure') else 'unknown'} access_key_prefix={MINIO_ACCESS_KEY[:4]}")
 try:
