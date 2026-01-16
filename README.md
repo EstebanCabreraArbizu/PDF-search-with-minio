@@ -11,8 +11,8 @@ Sistema web completo para gestión, búsqueda y descarga masiva de documentos PD
 - [Arquitectura del Sistema](#-arquitectura-del-sistema)
 - [Instalación y Configuración](#-instalación-y-configuración)
 - [Uso de la Aplicación](#-uso-de-la-aplicación)
-- [Manual de Usuario](file:///c:/Proyecto%20-%20b%C3%BAsqueda%20inteligente%20con%20minio/MANUAL_USUARIO.md)
-- [Reporte de Costos AWS](file:///c:/Proyecto%20-%20b%C3%BAsqueda%20inteligente%20con%20minio/COSTOS_AWS.md)
+- [Manual de Usuario](MANUAL_USUARIO.md)
+- [Reporte de Costos AWS](COSTOS_AWS.md)
 - [API Endpoints](#-api-endpoints)
 - [Estructura del Proyecto](#-estructura-del-proyecto)
 - [Optimizaciones Implementadas](#-optimizaciones-implementadas)
@@ -225,8 +225,8 @@ Como admin:
 
 ## 📚 Documentación Adicional
 
-- 📄 **[Manual de Usuario](file:///c:/Proyecto%20-%20b%C3%BAsqueda%20inteligente%20con%20minio/MANUAL_USUARIO.md)**: Guía detallada para usuarios y administradores.
-- 💰 **[Reporte de Costos AWS](file:///c:/Proyecto%20-%20b%C3%BAsqueda%20inteligente%20con%20minio/COSTOS_AWS.md)**: Estimación de costos para despliegue en la nube.
+- 📄 **[Manual de Usuario](MANUAL_USUARIO.md)**: Guía detallada para usuarios y administradores.
+- 💰 **[Reporte de Costos AWS](COSTOS_AWS.md)**: Estimación de costos para despliegue en la nube.
 
 ---
 
@@ -624,7 +624,7 @@ Acción: Buscar su boleta de enero 2025
 
 ### Caso 2: Descarga Masiva de Planillas
 ```
-Usuario: admin
+Usuario: ecabrera
 Acción: Descargar todas las boletas de un área para un mes
 1. Búsqueda Masiva con 200 códigos
 2. Filtro: Mes=Marzo, Razón Social=RESGUARDO

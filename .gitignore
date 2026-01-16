@@ -1,5 +1,6 @@
 minio/data/*
 venv/
+venv*/
 postgres-data/*
 __pycache__/
 *.playwright-mcp

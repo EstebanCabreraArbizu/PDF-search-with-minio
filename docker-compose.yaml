@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  
   # ═══════════════════════════════════════════════════
   # NUEVO: PostgreSQL para usuarios
   # ═══════════════════════════════════════════════════
@@ -69,6 +70,32 @@ services:
         condition: service_healthy #⏳ Espera a que MinIO inicie
     volumes:
       - ./flask-app:/app  # 🔄 Hot-reload: cambios en código se reflejan al instante
+    networks:
+      - pdf-network
+
+  django-app:
+    build: ./django-app
+    container_name: django-api
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_DB=pdf_search
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password123
+      - DJANGO_SECRET_KEY=tu-clave-secreta-aqui
+      - DEBUG=False
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./django-app:/app
     networks:
       - pdf-network
 
