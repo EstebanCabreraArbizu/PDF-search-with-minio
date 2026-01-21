@@ -71,6 +71,9 @@ class PDFIndex(db.Model):
     # Tamaño del archivo en bytes
     size_bytes = db.Column(db.BigInteger, default=0)
     
+    # Hash MD5 del archivo (ETag de MinIO) - permite detectar archivos movidos
+    md5_hash = db.Column(db.String(64), index=True)
+    
     # Códigos de empleado encontrados (separados por coma para búsqueda rápida)
     # Se extraen durante indexación, permite búsqueda instantánea sin abrir PDFs
     codigos_empleado = db.Column(db.Text)  # "12345,67890,11111"
