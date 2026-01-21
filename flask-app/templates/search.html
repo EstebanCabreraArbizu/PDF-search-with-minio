@@ -108,7 +108,7 @@
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" id="bulk-search-tab" data-bs-toggle="pill"
                                 data-bs-target="#bulk-search-panel" type="button" role="tab">
-                                📋 Búsqueda Masiva (DNI/Códigos)
+                                📋 Búsqueda Masiva (DNI)
                             </button>
                         </li>
                     </ul>
@@ -120,9 +120,9 @@
                                 <div class="card-body">
                                     <form id="searchForm">
                                         <div class="row g-3">
-                                            <!-- Código de Empleado -->
+                                            <!-- DNI del Empleado -->
                                             <div class="col-md-2">
-                                                <label class="form-label">Código Empleado</label>
+                                                <label class="form-label">DNI</label>
                                                 <input type="text" class="form-control" name="codigo_empleado"
                                                     placeholder="Ej: 12345" pattern="\d{4,10}"
                                                     title="Debe contener entre 4 y 10 dígitos">
@@ -195,16 +195,16 @@
                         <div class="tab-pane fade" id="bulk-search-panel" role="tabpanel">
                             <div class="card mb-4">
                                 <div class="card-header bg-info text-white">
-                                    <h5 class="mb-0">📋 Búsqueda Masiva por DNI/Código de Empleado</h5>
-                                    <small>Ingresa múltiples códigos separados por comas, espacios o uno por
+                                    <h5 class="mb-0">📋 Búsqueda Masiva por DNI del Empleado</h5>
+                                    <small>Ingresa múltiples DNI separados por comas, espacios o uno por
                                         línea</small>
                                 </div>
                                 <div class="card-body">
                                     <form id="bulkSearchForm">
                                         <div class="row g-3">
-                                            <!-- Textarea para códigos -->
+                                            <!-- Textarea para DNI -->
                                             <div class="col-md-6">
-                                                <label class="form-label">Códigos de Empleado / DNI</label>
+                                                <label class="form-label">DNI del Empleado</label>
                                                 <textarea class="form-control" id="bulkCodigos" name="codigos" rows="5"
                                                     placeholder="12345678&#10;87654321&#10;11223344&#10;..."></textarea>
                                                 <small class="text-muted">Separa por comas, espacios o nueva
@@ -290,7 +290,7 @@
                                 <div class="col-md-6">
                                     <div class="card border-success">
                                         <div class="card-body py-2">
-                                            <small class="text-success">✓ Códigos encontrados:</small>
+                                            <small class="text-success">✓ DNI encontrados:</small>
                                             <div id="codigosEncontrados" class="small"></div>
                                         </div>
                                     </div>
@@ -298,7 +298,7 @@
                                 <div class="col-md-6">
                                     <div class="card border-danger">
                                         <div class="card-body py-2">
-                                            <small class="text-danger">✗ Códigos sin resultados:</small>
+                                            <small class="text-danger">✗ DNI sin resultados:</small>
                                             <div id="codigosNoEncontrados" class="small"></div>
                                         </div>
                                     </div>
@@ -924,7 +924,7 @@
         }
 
         // ========================================
-        // BÚSQUEDA MASIVA (DNI/Códigos)
+        // BÚSQUEDA MASIVA (DNI)
         // ========================================
         document.getElementById('bulkSearchForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -940,7 +940,7 @@
             const tipoDocumento = document.getElementById('bulkTipoDocumento').value;
 
             if (!codigos.trim()) {
-                alert('Ingresa al menos un código de empleado o DNI');
+                alert('Ingresa al menos un DNI');
                 document.getElementById('bulkSearchBtn').classList.remove('d-none');
                 document.getElementById('bulkLoadingBtn').classList.add('d-none');
                 return;
@@ -1004,7 +1004,7 @@
                 document.getElementById('activeFilters').textContent =
                     activeFilters.length > 0
                         ? `Filtros: ${activeFilters.join(' | ')}`
-                        : `Búsqueda: ${data.codigos_buscados.length} código(s)`;
+                        : `Búsqueda: ${data.codigos_buscados.length} DNI(s)`;
 
                 // Mostrar botón merge si hay múltiples resultados
                 if (data.can_merge && currentSearchResults.length > 1) {
@@ -1944,7 +1944,7 @@
                             'Authorization': `Bearer ${authToken}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ batch_size: 500 })
+                        body: JSON.stringify({ batch_size: 1000 })
                     });
 
                     if (response.status === 401) {
