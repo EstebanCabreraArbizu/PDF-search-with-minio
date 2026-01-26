@@ -10,7 +10,8 @@ minio_client = Minio(
     endpoint=settings.MINIO_ENDPOINT.replace('http://', '').replace('https://', ''),
     access_key=settings.MINIO_ACCESS_KEY,
     secret_key=settings.MINIO_SECRET_KEY,
-    secure=False  # Set to True in production if using HTTPS
+    secure=settings.MINIO_USE_SSL,  # Dynamic SSL configuration
+    region=settings.MINIO_REGION      # Optional region for S3
 )
 
 # ═══════════════════════════════════════════════════

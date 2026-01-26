@@ -80,6 +80,9 @@ MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT', 'minio:9000')
 MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY', 'admin')
 MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY', 'password123')
 MINIO_BUCKET = os.environ.get('MINIO_BUCKET', 'planillas-pdfs')
+# New settings for S3/SSL support
+MINIO_USE_SSL = os.environ.get('MINIO_USE_SSL', 'False').lower() == 'true'
+MINIO_REGION = os.environ.get('MINIO_REGION', None) # Optional for MinIO, required for S3
 ROOT_URLCONF = 'pdf_search_project.urls'
 
 TEMPLATES = [
