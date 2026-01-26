@@ -1,0 +1,13 @@
+django==5.0.1
+djangorestframework
+django-cors-headers
+django-csp
+djangorestframework-simplejwt
+psycopg2-binary
+boto3
+minio
+PyMuPDF
+pytesseract
+Pillow
+pdf2image
+python-dotenv

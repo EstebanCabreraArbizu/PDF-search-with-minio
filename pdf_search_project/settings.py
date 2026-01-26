@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,7 +26,7 @@ SECRET_KEY = 'django-insecure-5xn21ka55rrd7mjj!_dg$en%bmblomghfz4jzs)k$p32&ydu@u
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 
@@ -39,15 +40,12 @@ INSTALLED_APPS = [
     'documents',
     'rest_framework',
     'rest_framework_simplejwt',
+    'corsheaders',
+    # 'csp', # Uncomment when ready to enforce CSP
 ]
 
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-}
-
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware', # CORS must be first
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -55,7 +53,29 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'csp.middleware.CSPMiddleware', # Content Security Policy
 ]
+
+# CORS Configuration
+CORS_ALLOW_ALL_ORIGINS = True # For development, restrict in production
+
+# REST Framework Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
+
+# CSP Configuration (Basic)
+CSP_DEFAULT_SRC = ("'self'",)
+CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net") # Allow Tailwind/Bootstrap CDNs
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")
+CSP_IMG_SRC = ("'self'", "data:")
+CSP_FONT_SRC = ("'self'", "https://fonts.gstatic.com")
+
 MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT', 'minio:9000')
 MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY', 'admin')
 MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY', 'password123')
@@ -65,7 +85,7 @@ ROOT_URLCONF = 'pdf_search_project.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'documents' / 'templates' / 'documents'], # Point to app templates
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [

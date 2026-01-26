@@ -9,6 +9,7 @@ from minio.error import S3Error
 import fitz  # PyMuPDF
 import os
 import re
+import concurrent.futures
 from pathlib import Path
 from models import db, User, DownloadLog, PDFIndex
 from dotenv import load_dotenv
@@ -98,6 +99,30 @@ def init_app():
     """Inicializa base de datos y MinIO"""
     with app.app_context():
         db.create_all()
+        
+        # ═══════════════════════════════════════════════════
+        # MIGRACIÓN: Agregar columna md5_hash si no existe
+        # ═══════════════════════════════════════════════════
+        try:
+            # Verificar si la columna existe
+            result = db.session.execute(db.text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='pdf_index' AND column_name='md5_hash'
+            """))
+            if result.fetchone() is None:
+                # Agregar la columna
+                db.session.execute(db.text("""
+                    ALTER TABLE pdf_index 
+                    ADD COLUMN md5_hash VARCHAR(64)
+                """))
+                db.session.commit()
+                app.logger.info("✓ Migración: columna 'md5_hash' agregada a pdf_index")
+            else:
+                app.logger.info("✓ Columna 'md5_hash' ya existe")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning(f"⚠️ Error en migración md5_hash: {e}")
         
         # Crear índices optimizados para búsqueda
         try:
@@ -970,13 +995,16 @@ def index_single_pdf(obj):
     Indexa un solo PDF de MinIO en PostgreSQL.
     
     Args:
-        obj: Objeto MinIO con .object_name, .size, .last_modified
+        obj: Objeto MinIO con .object_name, .size, .last_modified, .etag
         
     Returns:
         PDFIndex: Registro creado o actualizado
     """
     # Verificar si ya existe
     existing = PDFIndex.query.filter_by(minio_object_name=obj.object_name).first()
+    
+    # Obtener hash MD5 (ETag de MinIO, sin comillas)
+    md5_hash = obj.etag.strip('"') if obj.etag else None
     
     # Si existe y no ha cambiado, saltar
     if existing and existing.last_modified == obj.last_modified:
@@ -996,6 +1024,7 @@ def index_single_pdf(obj):
         existing.año = metadata['año']
         existing.tipo_documento = metadata['tipo_documento']
         existing.size_bytes = obj.size
+        existing.md5_hash = md5_hash
         existing.codigos_empleado = ','.join(codigos) if codigos else None
         existing.last_modified = obj.last_modified
         existing.indexed_at = datetime.utcnow()
@@ -1012,6 +1041,7 @@ def index_single_pdf(obj):
             año=metadata['año'],
             tipo_documento=metadata['tipo_documento'],
             size_bytes=obj.size,
+            md5_hash=md5_hash,
             codigos_empleado=','.join(codigos) if codigos else None,
             last_modified=obj.last_modified,
             is_indexed=texto is not None,
@@ -1095,35 +1125,36 @@ def reindex_all():
                 app.logger.info(f"🗑️ Eliminados {orphans_removed} índices huérfanos")
         
         # ═══════════════════════════════════════════════════
-        # PASO 2: Indexar PDFs nuevos o actualizados
+        # PASO 2: Indexar PDFs nuevos o actualizados (EN PARALELO)
         # ═══════════════════════════════════════════════════
+        to_process = []
         for object_name, obj in minio_objects.items():
-            try:
-                existing = PDFIndex.query.filter_by(minio_object_name=object_name).first()
-                
-                # Si existe y no ha cambiado, saltar
-                if existing and existing.last_modified == obj.last_modified:
-                    indexed_count += 1
-                    continue
-                
-                # Indexar (nuevo o actualizado)
-                index_single_pdf(obj)
-                indexed_count += 1
-                
+            existing = PDFIndex.query.filter_by(minio_object_name=object_name).first()
+            if not existing or existing.last_modified != obj.last_modified:
+                to_process.append(obj)
                 if existing:
                     updated_count += 1
                 else:
                     new_count += 1
-                
-                # Commit cada 50 documentos
-                if indexed_count % 50 == 0:
-                    db.session.commit()
-                    app.logger.info(f"✓ Procesados {indexed_count} PDFs...")
-                    
-            except Exception as e:
-                error_count += 1
-                app.logger.error(f"✗ Error indexando {object_name}: {e}")
+            else:
+                indexed_count += 1
+
+        app.logger.info(f"🚀 Iniciando procesamiento paralelo de {len(to_process)} PDFs...")
         
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_obj = {executor.submit(index_single_pdf, obj): obj for obj in to_process}
+            for future in concurrent.futures.as_completed(future_to_obj):
+                obj = future_to_obj[future]
+                try:
+                    future.result()
+                    indexed_count += 1
+                    # Commit cada 25 para no saturar memoria/transacción
+                    if indexed_count % 25 == 0:
+                        db.session.commit()
+                except Exception as e:
+                    error_count += 1
+                    app.logger.error(f"✗ Error indexando {obj.object_name}: {e}")
+
         # Commit final
         db.session.commit()
         
@@ -1148,18 +1179,169 @@ def reindex_all():
         return jsonify({'error': f'Error inesperado: {str(e)}'}), 500
 
 
+@app.route('/api/index/populate-hashes', methods=['POST'])
+@jwt_required()
+def populate_hashes():
+    """
+    Poblar SOLO los hashes MD5 de registros existentes.
+    
+    Este endpoint es RÁPIDO porque:
+    - NO descarga PDFs
+    - NO extrae texto
+    - Solo lee el ETag de MinIO (ya contiene el MD5)
+    
+    Usar DESPUÉS de agregar el campo md5_hash al modelo,
+    ANTES de usar la sincronización inteligente.
+    
+    Request Body (opcional):
+    {
+        "batch_size": 500  // Registros a procesar por lote
+    }
+    
+    Response: {
+        "updated": 500,
+        "pending": 19500,
+        "has_more": true,
+        "progress_percent": 2.5
+    }
+    """
+    from flask_jwt_extended import get_jwt
+    import time
+    
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Permiso denegado. Solo admin puede ejecutar.'}), 403
+    
+    data = request.get_json() or {}
+    batch_size = min(data.get('batch_size', 500), 2000)  # Max 2000 por seguridad
+    
+    start_time = time.time()
+    updated = 0
+    not_found = 0
+    errors = 0
+    
+    try:
+        # ═══════════════════════════════════════════════════
+        # PASO 1: Obtener mapa de MinIO con ETags
+        # ═══════════════════════════════════════════════════
+        minio_etags = {}
+        for obj in minio_client.list_objects(BUCKET_NAME, recursive=True):
+            if obj.object_name.endswith('.pdf'):
+                md5_hash = obj.etag.strip('"') if obj.etag else None
+                if md5_hash:
+                    minio_etags[obj.object_name] = {
+                        'hash': md5_hash,
+                        'size': obj.size
+                    }
+        
+        # ═══════════════════════════════════════════════════
+        # PASO 2: Buscar registros SIN hash (o con hash NULL)
+        # ═══════════════════════════════════════════════════
+        total_without_hash = PDFIndex.query.filter(
+            (PDFIndex.md5_hash == None) | (PDFIndex.md5_hash == '')
+        ).count()
+        
+        # CASO ESPECIAL: No hay registros que necesiten hash
+        if total_without_hash == 0:
+            total_records = PDFIndex.query.count()
+            elapsed = round(time.time() - start_time, 2)
+            return jsonify({
+                'message': 'No hay registros pendientes de hash' if total_records > 0 else 'No hay PDFs indexados',
+                'updated': 0,
+                'not_found_in_minio': 0,
+                'pending': 0,
+                'has_more': False,
+                'progress_percent': 100,
+                'errors': 0,
+                'time_seconds': elapsed,
+                'batch_size': batch_size,
+                'total_records': total_records
+            }), 200
+        
+        records_without_hash = PDFIndex.query.filter(
+            (PDFIndex.md5_hash == None) | (PDFIndex.md5_hash == '')
+        ).limit(batch_size).all()
+
+        
+        # ═══════════════════════════════════════════════════
+        # PASO 3: Actualizar cada registro con su ETag
+        # ═══════════════════════════════════════════════════
+        for record in records_without_hash:
+            if record.minio_object_name in minio_etags:
+                try:
+                    etag_info = minio_etags[record.minio_object_name]
+                    record.md5_hash = etag_info['hash']
+                    record.size_bytes = etag_info['size']  # También actualizar tamaño
+                    updated += 1
+                except Exception as e:
+                    app.logger.error(f"Error actualizando hash de {record.minio_object_name}: {e}")
+                    errors += 1
+            else:
+                not_found += 1
+        
+        db.session.commit()
+        
+        elapsed = round(time.time() - start_time, 2)
+        
+        pending = total_without_hash - updated
+        has_more = pending > 0
+        total_records = PDFIndex.query.count()
+        if total_records > 0:
+            progress_percent = round(((total_records - pending) / total_records) * 100, 1)
+        else:
+            progress_percent = 100
+        
+        result = {
+            'message': 'Hashes poblados' if not has_more else f'Lote procesado ({updated} de {total_without_hash})',
+            'updated': updated,
+            'not_found_in_minio': not_found,
+            'pending': pending,
+            'has_more': has_more,
+            'progress_percent': progress_percent,
+            'errors': errors,
+            'time_seconds': elapsed,
+            'batch_size': batch_size
+        }
+        
+        app.logger.info(f"✓ Populate hashes: {updated} actualizados, {pending} pendientes en {elapsed}s")
+        
+        return jsonify(result), 200
+        
+    except S3Error as e:
+        return jsonify({'error': f'Error de MinIO: {str(e)}'}), 500
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error inesperado: {str(e)}'}), 500
+
+
 @app.route('/api/index/sync', methods=['POST'])
 @jwt_required()
 def sync_index():
     """
-    Sincronización RÁPIDA del índice.
-    Solo procesa cambios (nuevos, eliminados) sin re-extraer texto de PDFs existentes.
+    Sincronización INTELIGENTE del índice con BATCH PROCESSING.
     
-    Mucho más rápido que /api/reindex para uso frecuente.
+    DETECTA ARCHIVOS MOVIDOS usando tamaño + hash MD5 para:
+    - Conservar códigos de empleado ya extraídos
+    - Solo actualizar la ruta y metadata (sin re-procesar el PDF)
+    
+    BATCH PROCESSING para VPS con rate limiting:
+    - Procesa en lotes configurables (default: 50 archivos nuevos por llamada)
+    - Devuelve has_more=True si quedan archivos por procesar
+    - El frontend puede llamar repetidamente hasta completar
+    
+    Request Body (opcional):
+    {
+        "batch_size": 50,  // Archivos nuevos a indexar por lote
+        "skip_new": false  // Si true, solo procesa movidos y huérfanos
+    }
     
     Response: {
         "new_files": 5,
+        "moved_files": 3,
         "removed_orphans": 2,
+        "pending_new": 100,
+        "has_more": true,
+        "progress_percent": 25,
         "time_seconds": 1.2
     }
     """
@@ -1170,59 +1352,197 @@ def sync_index():
     if claims.get('role') != 'admin':
         return jsonify({'error': 'Permiso denegado. Solo admin puede sincronizar.'}), 403
     
+    # Parámetros de batch
+    data = request.get_json() or {}
+    batch_size = min(data.get('batch_size', 50), 200)  # Max 200 por seguridad
+    skip_new = data.get('skip_new', False)
+    
+    # Identificador persistente para el listado de MinIO (optimización batch)
+    # En un entorno multi-worker esto debería ir a Redis o caché formal
+    global _minio_list_cache
+    if not hasattr(app, '_minio_list_cache'):
+        app._minio_list_cache = {'time': 0, 'data': None}
+    
     start_time = time.time()
     new_files = 0
+    moved_files = 0
     removed_orphans = 0
+    errors = 0
+    moved_details = []
     
     try:
-        # Obtener lista de MinIO (solo nombres y metadata básica)
+        # ═══════════════════════════════════════════════════
+        # PASO 1: Obtener lista de MinIO (CON CACHÉ DE 60s)
+        # ═══════════════════════════════════════════════════
+        now = time.time()
+        if app._minio_list_cache['data'] is None or (now - app._minio_list_cache['time']) > 60:
+            app.logger.info("Listing MinIO (cache expired or empty)...")
+            minio_all = []
+            for obj in minio_client.list_objects(BUCKET_NAME, recursive=True):
+                if obj.object_name.endswith('.pdf'):
+                    minio_all.append(obj)
+            app._minio_list_cache = {'time': now, 'data': minio_all}
+        
+        objects_list = app._minio_list_cache['data']
         minio_names = set()
         minio_objects = {}
+        minio_by_hash = {}
         
-        for obj in minio_client.list_objects(BUCKET_NAME, recursive=True):
-            if obj.object_name.endswith('.pdf'):
-                minio_names.add(obj.object_name)
-                minio_objects[obj.object_name] = obj
+        for obj in objects_list:
+            minio_names.add(obj.object_name)
+            minio_objects[obj.object_name] = obj
+            
+            md5_hash = obj.etag.strip('"') if obj.etag else None
+            if md5_hash:
+                key = (obj.size, md5_hash)
+                if key not in minio_by_hash:
+                    minio_by_hash[key] = []
+                minio_by_hash[key].append(obj)
         
-        # Obtener lista de indexados
-        indexed_names = set(
-            row[0] for row in 
-            db.session.query(PDFIndex.minio_object_name).all()
-        )
+        # CASO ESPECIAL: No hay PDFs en MinIO ni en BD
+        indexed_count = PDFIndex.query.count()
+        if len(minio_names) == 0 and indexed_count == 0:
+            elapsed = round(time.time() - start_time, 2)
+            return jsonify({
+                'message': 'No hay PDFs en MinIO ni en el índice',
+                'total_in_minio': 0,
+                'total_indexed': 0,
+                'new_files': 0,
+                'moved_files': 0,
+                'removed_orphans': 0,
+                'pending_new': 0,
+                'has_more': False,
+                'progress_percent': 100,
+                'errors': 0,
+                'time_seconds': elapsed,
+                'batch_size': batch_size
+            }), 200
         
-        # Encontrar nuevos (en MinIO pero no indexados)
-        new_names = minio_names - indexed_names
+        # ═══════════════════════════════════════════════════
+        # PASO 2: Obtener lista de indexados con sus hashes
+        # ═══════════════════════════════════════════════════
+        indexed_records = PDFIndex.query.all()
+        indexed_names = set(r.minio_object_name for r in indexed_records)
+        indexed_by_name = {r.minio_object_name: r for r in indexed_records}
         
-        # Encontrar huérfanos (indexados pero no en MinIO)
+        # Crear índice de huérfanos por tamaño + hash
         orphan_names = indexed_names - minio_names
+        orphan_by_hash = {}
+        for name in orphan_names:
+            record = indexed_by_name[name]
+            if record.md5_hash and record.size_bytes:
+                key = (record.size_bytes, record.md5_hash)
+                if key not in orphan_by_hash:
+                    orphan_by_hash[key] = []
+                orphan_by_hash[key].append(record)
         
-        # Eliminar huérfanos
+        # ═══════════════════════════════════════════════════
+        # PASO 3: Procesar archivos nuevos (detectar movidos)
+        # ═══════════════════════════════════════════════════
+        new_names = minio_names - indexed_names
+        truly_new_names = []
+        
+        for name in new_names:
+            obj = minio_objects[name]
+            md5_hash = obj.etag.strip('"') if obj.etag else None
+            key = (obj.size, md5_hash) if md5_hash else None
+            
+            if key and key in orphan_by_hash and orphan_by_hash[key]:
+                # ¡Archivo MOVIDO detectado!
+                orphan_record = orphan_by_hash[key].pop(0)
+                old_path = orphan_record.minio_object_name
+                
+                try:
+                    new_metadata = extract_metadata(obj.object_name)
+                    
+                    orphan_record.minio_object_name = obj.object_name
+                    orphan_record.razon_social = new_metadata['razon_social']
+                    orphan_record.banco = new_metadata['banco']
+                    orphan_record.mes = new_metadata['mes']
+                    orphan_record.año = new_metadata['año']
+                    orphan_record.tipo_documento = new_metadata['tipo_documento']
+                    orphan_record.size_bytes = obj.size
+                    orphan_record.md5_hash = md5_hash
+                    orphan_record.last_modified = obj.last_modified
+                    orphan_record.indexed_at = datetime.utcnow()
+                    
+                    moved_files += 1
+                    if len(moved_details) < 20:
+                        moved_details.append({
+                            'old_path': old_path,
+                            'new_path': obj.object_name
+                        })
+                    
+                    orphan_names.discard(old_path)
+                    
+                except Exception as e:
+                    app.logger.error(f"✗ Error procesando archivo movido {name}: {e}")
+                    errors += 1
+            else:
+                truly_new_names.append(name)
+        
+        # ═══════════════════════════════════════════════════
+        # PASO 4: Eliminar huérfanos restantes
+        # ═══════════════════════════════════════════════════
         if orphan_names:
             PDFIndex.query.filter(
                 PDFIndex.minio_object_name.in_(orphan_names)
             ).delete(synchronize_session=False)
             removed_orphans = len(orphan_names)
         
-        # Indexar nuevos
-        for name in new_names:
-            try:
-                index_single_pdf(minio_objects[name])
-                new_files += 1
-            except Exception as e:
-                app.logger.error(f"✗ Error indexando {name}: {e}")
+        # ═══════════════════════════════════════════════════
+        # PASO 5: Indexar archivos nuevos EN BATCH
+        # ═══════════════════════════════════════════════════
+        total_truly_new = len(truly_new_names)
+        pending_new = total_truly_new
+        
+        if not skip_new and truly_new_names:
+            # Solo procesar batch_size archivos
+            batch_to_process = truly_new_names[:batch_size]
+            
+            for name in batch_to_process:
+                try:
+                    index_single_pdf(minio_objects[name])
+                    new_files += 1
+                    pending_new -= 1
+                except Exception as e:
+                    app.logger.error(f"✗ Error indexando {name}: {e}")
+                    errors += 1
+                    pending_new -= 1
         
         db.session.commit()
         
         elapsed = round(time.time() - start_time, 2)
         
-        return jsonify({
-            'message': 'Sincronización completada',
+        # Calcular progreso
+        has_more = pending_new > 0 and not skip_new
+        if total_truly_new > 0:
+            progress_percent = round(((total_truly_new - pending_new) / total_truly_new) * 100)
+        else:
+            progress_percent = 100
+        
+        result = {
+            'message': 'Sincronización completada' if not has_more else f'Lote procesado ({new_files} de {total_truly_new})',
             'total_in_minio': len(minio_names),
-            'total_indexed': len(indexed_names) - removed_orphans + new_files,
+            'total_indexed': PDFIndex.query.count(),
             'new_files': new_files,
+            'moved_files': moved_files,
             'removed_orphans': removed_orphans,
-            'time_seconds': elapsed
-        }), 200
+            'pending_new': pending_new,
+            'has_more': has_more,
+            'progress_percent': progress_percent,
+            'errors': errors,
+            'time_seconds': elapsed,
+            'batch_size': batch_size
+        }
+        
+        if moved_details:
+            result['moved_details'] = moved_details
+        
+        status = "parcial" if has_more else "completa"
+        app.logger.info(f"✓ Sincronización {status}: {new_files} nuevos, {moved_files} movidos, {removed_orphans} eliminados, {pending_new} pendientes en {elapsed}s")
+        
+        return jsonify(result), 200
         
     except S3Error as e:
         return jsonify({'error': f'Error de MinIO: {str(e)}'}), 500

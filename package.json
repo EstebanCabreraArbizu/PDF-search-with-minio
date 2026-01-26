@@ -1,0 +1,11 @@
+{
+    "name": "pdf-search-frontend",
+    "version": "1.0.0",
+    "description": "Frontend assets build and obfuscation",
+    "scripts": {
+        "obfuscate": "node tools/obfuscate.js"
+    },
+    "devDependencies": {
+        "javascript-obfuscator": "^4.1.0"
+    }
+}

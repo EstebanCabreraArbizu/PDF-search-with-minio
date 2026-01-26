@@ -20,6 +20,7 @@ class PDFIndex(models.Model):
     año = models.CharField(max_length=4, db_index=True, blank=True)
     tipo_documento = models.CharField(max_length=300, blank=True)
     size_bytes = models.BigIntegerField(default=0)
+    md5_hash = models.CharField(max_length=64, blank=True, null=True) # Hash MD5 for sync
     codigos_empleado = models.TextField(blank=True)  # CSV de códigos
     indexed_at = models.DateTimeField(auto_now_add=True)
     last_modified = models.DateTimeField(auto_now=True)
