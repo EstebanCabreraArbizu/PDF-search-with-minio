@@ -16,17 +16,22 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     };
 
     try {
-        const response = await fetch('/api/login', {
+        const response = await fetch('/api/token/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(credentials)
+            body: JSON.stringify({
+                username: credentials.username,
+                password: credentials.password
+            })
         });
 
         const data = await response.json();
 
         if (response.ok) {
-            authToken = data.access_token;
-            currentUser = data.user;
+            authToken = data.access;
+            // Since Django JWT doesn't return user info by default, we'll simulate it or wait for user to add it.
+            // For now, let's assume a basic user object if not present.
+            currentUser = data.user || { username: credentials.username, role: 'admin' };
 
             // console.log('✓ Token recibido:', authToken ? authToken.substring(0, 10) + '...' : 'NULL');
             // console.log('✓ Usuario:', currentUser);
@@ -78,73 +83,99 @@ async function loadFilterOptions() {
         // ---- BÚSQUEDA SIMPLE ----
         // Poblar selector de Años
         const selectAño = document.getElementById('selectAño');
-        selectAño.innerHTML = '<option value="">Todos</option>';
-        filterOptions.años.forEach(año => {
-            selectAño.innerHTML += `<option value="${año}">${año}</option>`;
-        });
+        if (selectAño) {
+            let añosHtml = '<option value="">Todos</option>';
+            filterOptions.años.forEach(año => {
+                añosHtml += `<option value="${año}">${año}</option>`;
+            });
+            selectAño.innerHTML = añosHtml;
+        }
 
         // Poblar selector de Meses
         const selectMes = document.getElementById('selectMes');
-        selectMes.innerHTML = '<option value="">Todos</option>';
-        filterOptions.meses.forEach(mes => {
-            selectMes.innerHTML += `<option value="${mes.value}">${mes.label}</option>`;
-        });
+        if (selectMes) {
+            let mesesHtml = '<option value="">Todos</option>';
+            filterOptions.meses.forEach(mes => {
+                mesesHtml += `<option value="${mes.value}">${mes.label}</option>`;
+            });
+            selectMes.innerHTML = mesesHtml;
+        }
 
         // Poblar selector de Bancos
         const selectBanco = document.getElementById('selectBanco');
-        selectBanco.innerHTML = '<option value="">Todos</option>';
-        filterOptions.bancos.forEach(banco => {
-            selectBanco.innerHTML += `<option value="${banco}">${banco}</option>`;
-        });
+        if (selectBanco) {
+            let bancosHtml = '<option value="">Todos</option>';
+            filterOptions.bancos.forEach(banco => {
+                bancosHtml += `<option value="${banco}">${banco}</option>`;
+            });
+            selectBanco.innerHTML = bancosHtml;
+        }
 
         // Poblar selector de Razones Sociales
         const selectRazonSocial = document.getElementById('selectRazonSocial');
-        selectRazonSocial.innerHTML = '<option value="">Todas</option>';
-        filterOptions.razones_sociales.forEach(rs => {
-            selectRazonSocial.innerHTML += `<option value="${rs}">${rs}</option>`;
-        });
+        if (selectRazonSocial) {
+            let razonesHtml = '<option value="">Todas</option>';
+            filterOptions.razones_sociales.forEach(rs => {
+                razonesHtml += `<option value="${rs}">${rs}</option>`;
+            });
+            selectRazonSocial.innerHTML = razonesHtml;
+        }
 
         // Poblar datalist de Tipos de Documento (autocompletado)
         const tiposDocumentoList = document.getElementById('tiposDocumentoList');
-        tiposDocumentoList.innerHTML = '';
-        if (filterOptions.tipos_documento) {
+        if (tiposDocumentoList && filterOptions.tipos_documento) {
+            let tiposHtml = '';
             filterOptions.tipos_documento.forEach(tipo => {
-                tiposDocumentoList.innerHTML += `<option value="${tipo}">`;
+                tiposHtml += `<option value="${tipo}">`;
             });
+            tiposDocumentoList.innerHTML = tiposHtml;
         }
 
         // ---- BÚSQUEDA MASIVA ----
         const bulkAño = document.getElementById('bulkAño');
-        bulkAño.innerHTML = '<option value="">Todos</option>';
-        filterOptions.años.forEach(año => {
-            bulkAño.innerHTML += `<option value="${año}">${año}</option>`;
-        });
+        if (bulkAño) {
+            let bulkAñosHtml = '<option value="">Todos</option>';
+            filterOptions.años.forEach(año => {
+                bulkAñosHtml += `<option value="${año}">${año}</option>`;
+            });
+            bulkAño.innerHTML = bulkAñosHtml;
+        }
 
         const bulkMes = document.getElementById('bulkMes');
-        bulkMes.innerHTML = '<option value="">Todos</option>';
-        filterOptions.meses.forEach(mes => {
-            bulkMes.innerHTML += `<option value="${mes.value}">${mes.label}</option>`;
-        });
+        if (bulkMes) {
+            let bulkMesesHtml = '<option value="">Todos</option>';
+            filterOptions.meses.forEach(mes => {
+                bulkMesesHtml += `<option value="${mes.value}">${mes.label}</option>`;
+            });
+            bulkMes.innerHTML = bulkMesesHtml;
+        }
 
         const bulkBanco = document.getElementById('bulkBanco');
-        bulkBanco.innerHTML = '<option value="">Todos</option>';
-        filterOptions.bancos.forEach(banco => {
-            bulkBanco.innerHTML += `<option value="${banco}">${banco}</option>`;
-        });
+        if (bulkBanco) {
+            let bulkBancosHtml = '<option value="">Todos</option>';
+            filterOptions.bancos.forEach(banco => {
+                bulkBancosHtml += `<option value="${banco}">${banco}</option>`;
+            });
+            bulkBanco.innerHTML = bulkBancosHtml;
+        }
 
         const bulkRazonSocial = document.getElementById('bulkRazonSocial');
-        bulkRazonSocial.innerHTML = '<option value="">Todas</option>';
-        filterOptions.razones_sociales.forEach(rs => {
-            bulkRazonSocial.innerHTML += `<option value="${rs}">${rs}</option>`;
-        });
+        if (bulkRazonSocial) {
+            let bulkRazonesHtml = '<option value="">Todas</option>';
+            filterOptions.razones_sociales.forEach(rs => {
+                bulkRazonesHtml += `<option value="${rs}">${rs}</option>`;
+            });
+            bulkRazonSocial.innerHTML = bulkRazonesHtml;
+        }
 
         // Poblar datalist de Tipos de Documento (Masiva - autocompletado)
         const bulkTiposDocumentoList = document.getElementById('bulkTiposDocumentoList');
-        bulkTiposDocumentoList.innerHTML = '';
-        if (filterOptions.tipos_documento) {
+        if (bulkTiposDocumentoList && filterOptions.tipos_documento) {
+            let bulkTiposHtml = '';
             filterOptions.tipos_documento.forEach(tipo => {
-                bulkTiposDocumentoList.innerHTML += `<option value="${tipo}">`;
+                bulkTiposHtml += `<option value="${tipo}">`;
             });
+            bulkTiposDocumentoList.innerHTML = bulkTiposHtml;
         }
 
         // Configurar autocompletado dinámico para tipos de documento
@@ -181,10 +212,13 @@ function setupTipoDocumentoAutocomplete() {
             datalistEl.innerHTML = '';
 
             if (!searchTerm) {
-                // Si está vacío, mostrar todos
-                filterOptions.tipos_documento.forEach(tipo => {
-                    datalistEl.innerHTML += `<option value="${tipo}">`;
+                // Si está vacío, mostrar máximo 50
+                const initial = filterOptions.tipos_documento.slice(0, 50);
+                let html = '';
+                initial.forEach(tipo => {
+                    html += `<option value="${tipo}">`;
                 });
+                datalistEl.innerHTML = html;
             } else {
                 // Filtrar tipos que contengan el término de búsqueda
                 const matches = filterOptions.tipos_documento.filter(tipo =>
@@ -201,9 +235,11 @@ function setupTipoDocumentoAutocomplete() {
                 });
 
                 // Mostrar máximo 15 sugerencias
+                let html = '';
                 matches.slice(0, 15).forEach(tipo => {
-                    datalistEl.innerHTML += `<option value="${tipo}">`;
+                    html += `<option value="${tipo}">`;
                 });
+                datalistEl.innerHTML = html;
             }
         });
     });
@@ -803,46 +839,51 @@ function populateFileFilters() {
     // Poblar Año
     const filterAño = document.getElementById('filterAño');
     if (filterAño) {
-        filterAño.innerHTML = '<option value="">Todos</option>';
+        let añosHtml = '<option value="">Todos</option>';
         filterOptions.años.forEach(año => {
-            filterAño.innerHTML += `<option value="${año}">${año}</option>`;
+            añosHtml += `<option value="${año}">${año}</option>`;
         });
+        filterAño.innerHTML = añosHtml;
     }
 
     // Poblar Mes
     const filterMes = document.getElementById('filterMes');
     if (filterMes) {
-        filterMes.innerHTML = '<option value="">Todos</option>';
+        let mesesHtml = '<option value="">Todos</option>';
         filterOptions.meses.forEach(mes => {
-            filterMes.innerHTML += `<option value="${mes.value}">${mes.label}</option>`;
+            mesesHtml += `<option value="${mes.value}">${mes.label}</option>`;
         });
+        filterMes.innerHTML = mesesHtml;
     }
 
     // Poblar Banco
     const filterBanco = document.getElementById('filterBanco');
     if (filterBanco) {
-        filterBanco.innerHTML = '<option value="">Todos</option>';
+        let bancosHtml = '<option value="">Todos</option>';
         filterOptions.bancos.forEach(banco => {
-            filterBanco.innerHTML += `<option value="${banco}">${banco}</option>`;
+            bancosHtml += `<option value="${banco}">${banco}</option>`;
         });
+        filterBanco.innerHTML = bancosHtml;
     }
 
     // Poblar Razón Social
     const filterRazonSocial = document.getElementById('filterRazonSocial');
     if (filterRazonSocial) {
-        filterRazonSocial.innerHTML = '<option value="">Todas</option>';
+        let razonesHtml = '<option value="">Todas</option>';
         filterOptions.razones_sociales.forEach(rs => {
-            filterRazonSocial.innerHTML += `<option value="${rs}">${rs}</option>`;
+            razonesHtml += `<option value="${rs}">${rs}</option>`;
         });
+        filterRazonSocial.innerHTML = razonesHtml;
     }
 
     // Poblar datalist de Tipos de Documento (gestión de archivos)
     const filterTiposDocumentoList = document.getElementById('filterTiposDocumentoList');
     if (filterTiposDocumentoList && filterOptions.tipos_documento) {
-        filterTiposDocumentoList.innerHTML = '';
+        let tiposHtml = '';
         filterOptions.tipos_documento.forEach(tipo => {
-            filterTiposDocumentoList.innerHTML += `<option value="${tipo}">`;
+            tiposHtml += `<option value="${tipo}">`;
         });
+        filterTiposDocumentoList.innerHTML = tiposHtml;
     }
 }
 

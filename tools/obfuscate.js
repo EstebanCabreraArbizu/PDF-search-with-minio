@@ -5,15 +5,15 @@ const JavaScriptObfuscator = require('javascript-obfuscator');
 // Configuration: List files to obfuscate here
 // Currently pointing to a placeholder. Once you extract JS from search.html to 'static/js/app.js', update this.
 const FILES_TO_OBFUSCATE = [
-    // './documents/static/documents/js/app.js' 
+    './documents/static/documents/js/app.js'
 ];
 
 const OUTPUT_DIR = './documents/static/documents/js/dist';
 
 // Ensure output directory exists
-// if (!fs.existsSync(OUTPUT_DIR)){
-//     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-// }
+if (!fs.existsSync(OUTPUT_DIR)) {
+    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+}
 
 console.log('Starting obfuscation...');
 

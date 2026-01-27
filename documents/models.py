@@ -10,6 +10,9 @@ class CustomUser(AbstractUser):
 
     class Meta:
         db_table = 'users'
+    
+    def __str__(self):
+        return f"Usuario {self.full_name}"
 
 # Índice de PDFs
 class PDFIndex(models.Model):
@@ -28,6 +31,8 @@ class PDFIndex(models.Model):
 
     class Meta:
         db_table = 'pdf_index'
+    def __str__(self):
+        return f"PDF {self.minio_object_name} - {self.last_modified} - {self.is_indexed} - {self.indexed_at}"
 
 # Log de descargas
 class DownloadLog(models.Model):
@@ -38,3 +43,7 @@ class DownloadLog(models.Model):
 
     class Meta:
         db_table = 'download_log'
+    
+    def __str__(self):
+        user_name = self.user.full_name if self.user else '(Usuario eliminado)'
+        return f"{self.filename} - {user_name} - {self.downloaded_at} - {self.ip_address}"
