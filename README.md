@@ -11,8 +11,9 @@ Sistema web completo para gestión, búsqueda y descarga masiva de documentos PD
 - [Arquitectura del Sistema](#-arquitectura-del-sistema)
 - [Instalación y Configuración](#-instalación-y-configuración)
 - [Uso de la Aplicación](#-uso-de-la-aplicación)
-- [Manual de Usuario](MANUAL_USUARIO.md)
-- [Reporte de Costos AWS](COSTOS_AWS.md)
+- [Guía de Migración Django](docs/GUIA_MIGRACION_DJANGO.md)
+- [Manual de Usuario](docs/MANUAL_USUARIO.md)
+- [Reporte de Costos AWS](docs/COSTOS_AWS.md)
 - [API Endpoints](#-api-endpoints)
 - [Estructura del Proyecto](#-estructura-del-proyecto)
 - [Optimizaciones Implementadas](#-optimizaciones-implementadas)
@@ -74,7 +75,8 @@ Sistema web completo para gestión, búsqueda y descarga masiva de documentos PD
   - **Admin**: `admin` / `admin123` (acceso completo)
   - **Usuario**: `ecabrera` / `password123` (solo búsqueda y descarga)
 - Sesiones persistentes
-- Protección de endpoints con decorador `@jwt_required()`
+- Protección de endpoints con decoradores de Django y DRF (`IsAuthenticated`)
+- **Panel de Administración**: Acceso a `/admin` para gestión de base de datos
 
 ### 6. **Auditoría y Registro**
 - Log de descargas (usuario, archivo, IP, timestamp)
@@ -86,14 +88,15 @@ Sistema web completo para gestión, búsqueda y descarga masiva de documentos PD
 ## 🛠️ Tecnologías Utilizadas
 
 ### Backend
-- **Flask 5.3.0** - Framework web Python
+- **Django 5.0.1** - Framework web robusto
+- **Django REST Framework (DRF)** - Para la API REST
 - **PostgreSQL 17** - Base de datos relacional
 - **MinIO** - Almacenamiento de objetos S3-compatible
-- **SQLAlchemy** - ORM para PostgreSQL
-- **Flask-JWT-Extended** - Autenticación JWT
+- **SimpleJWT** - Autenticación JWT para Django
 - **PyMuPDF (fitz)** - Extracción y fusión de PDFs
 - **Pytesseract** - OCR para texto escaneado
 - **pdf2image** - Conversión PDF a imagen para OCR
+- **Whitenoise** - Servido de archivos estáticos
 
 ### Frontend
 - **Bootstrap 5.3.0** - Framework CSS
@@ -115,9 +118,9 @@ graph TD
     end
 
     subgraph "Nivel Aplicación (AWS EC2 / App Runner)"
-        subgraph "Contenedor Flask"
-            API["🔥 API Flask (Gunicorn)"]
-            Auth["🔐 Auth (JWT)"]
+        subgraph "Contenedor Django"
+            API["🔥 Django API (Gunicorn)"]
+            Auth["🔐 Auth (SimpleJWT)"]
             OCR["📄 Motor OCR (Tesseract/FitZ)"]
         end
     end
@@ -128,7 +131,7 @@ graph TD
     end
 
     Client -- "HTTP/JWT" --> API
-    API -- "CRUD Index" --> Postgres
+    API -- "Django ORM" --> Postgres
     API -- "Stream PDF" --> MinIO
     API -- "Valida" --> Auth
     API -- "Procesa" --> OCR
@@ -138,28 +141,28 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant AD as Administrador
-    participant FL as Flask API
+    participant DJ as Django API
     participant MN as MinIO (S3)
     participant DB as PostgreSQL
     participant OCR as Motor OCR
 
-    AD->>FL: Solicitar Sincronización / Reindex
-    FL->>MN: Listar objetos en Bucket
+    AD->>DJ: Solicitar Sincronización / Reindex
+    DJ->>MN: Listar objetos en Bucket
     loop Para cada archivo nuevo/modificado
-        FL->>MN: Descargar PDF temporal
-        FL->>OCR: Extraer texto y códigos de empleado
-        OCR-->>FL: Datos extraídos
-        FL->>DB: Guardar metadatos e índices
+        DJ->>MN: Descargar PDF temporal
+        DJ->>OCR: Extraer texto y códigos de empleado
+        OCR-->>DJ: Datos extraídos
+        DJ->>DB: Guardar metadatos e índices
     end
-    FL-->>AD: Reporte de finalización
+    DJ-->>AD: Reporte de finalización
 ```
 
 ### Flujo de Búsqueda
 ```mermaid
 graph LR
     U["👤 Usuario"] --> S["🔍 Input: Código + Filtros"]
-    S --> API["🔥 Flask API"]
-    API --> DB["🐘 Query PostgreSQL (ILIKE)"]
+    S --> API["🔥 Django API"]
+    API --> DB["🐘 Query Django ORM (icontains)"]
     DB --> R["📄 Lista de Resultados"]
     R --> D["⬇️ Opción: Descarga / Fusionar"]
     D --> S3["📦 Stream desde MinIO/S3"]
@@ -198,21 +201,22 @@ docker compose up -d
 ```
 
 Esto iniciará:
-- **Flask App** → `http://localhost:5000`
-- **MinIO Console** → `http://localhost:9001` (minioadmin/minioadmin)
+- **Django App** → `http://localhost:8000`
+- **MinIO Console** → `http://localhost:9001` (admin/password123)
 - **PostgreSQL** → `localhost:5432`
 
-### 4. Acceder a la Aplicación
+### 4. Preparar la Base de Datos
+```bash
+docker exec -it django-api python manage.py migrate
+docker exec -it django-api python manage.py createsuperuser
 ```
-URL: http://localhost:5000
+
+### 5. Acceder a la Aplicación
+```
+URL: http://localhost:8000
 
 Credenciales Admin:
-- Usuario: admin
-- Password: admin123
-
-Credenciales Usuario:
-- Usuario: ecabrera
-- Password: password123
+- Las creadas con createsuperuser o el admin por defecto configurado.
 ```
 
 ### 5. Indexar PDFs (Primera Vez)
@@ -225,8 +229,10 @@ Como admin:
 
 ## 📚 Documentación Adicional
 
-- 📄 **[Manual de Usuario](MANUAL_USUARIO.md)**: Guía detallada para usuarios y administradores.
-- 💰 **[Reporte de Costos AWS](COSTOS_AWS.md)**: Estimación de costos para despliegue en la nube.
+- 📄 **[Guía de Migración Flask a Django](docs/GUIA_MIGRACION_DJANGO.md)**: Detalle del proceso de refactorización.
+- 🛠️ **[Detalles Técnicos de Migración](docs/MIGRATION_DETAILS.md)**: Cambios en el modelo y lógica de sincronización.
+- 📄 **[Manual de Usuario](docs/MANUAL_USUARIO.md)**: Guía detallada para usuarios y administradores.
+- 💰 **[Reporte de Costos AWS](docs/COSTOS_AWS.md)**: Estimación de costos para despliegue en la nube.
 
 ---
 
@@ -288,25 +294,24 @@ Como admin:
 
 ### Autenticación
 
-#### `POST /api/login`
-Login de usuario
+#### `POST /api/token/`
+Obtener tokens de acceso (JWT)
 ```json
 Request:
 {
   "username": "admin",
-  "password": "admin123"
+  "password": "password123"
 }
 
 Response:
 {
-  "access_token": "eyJ0eXAiOiJKV1...",
-  "user": {
-    "id": 1,
-    "username": "admin",
-    "role": "admin"
-  }
+  "refresh": "eyJ0eXAiOiJKV1...",
+  "access": "eyJ0eXAiOiJKV1..."
 }
 ```
+
+#### `POST /api/token/refresh/`
+Refrescar el token de acceso vencido.
 
 ### Búsqueda
 
@@ -475,8 +480,8 @@ Response:
 }
 ```
 
-#### `POST /api/sync-index` (Admin only)
-Sincronización rápida (solo nuevos/modificados)
+#### `POST /api/index/sync` (Admin only)
+Sincronización rápida (usa hashes MD5 para detectar cambios/movimientos)
 ```json
 Response:
 {
@@ -510,31 +515,29 @@ Response:
 
 ```
 PDF-search-with-minio/
-├── docker-compose.yaml          # Orquestación de servicios
-├── flask-app/
-│   ├── app.py                   # Aplicación Flask principal
-│   ├── models.py                # Modelos SQLAlchemy
-│   ├── requirements.txt         # Dependencias Python
-│   ├── Dockerfile              # Imagen Docker de Flask
-│   ├── templates/
-│   │   └── search.html         # Frontend (HTML + JS)
-│   └── __pycache__/
-├── minio/
-│   └── data/
-│       └── planillas-pdfs/     # Bucket de PDFs
-└── postgres-data/              # Volumen persistente de PostgreSQL
+├── pdf_search_project/      # Configuración central de Django
+├── documents/               # Aplicación principal (Lógica, Modelos, Vistas)
+│   ├── static/              # Archivos estáticos
+│   ├── templates/           # Plantillas HTML
+│   ├── migrations/          # Historial de base de datos
+│   └── utils.py             # Funciones auxiliares (OCR, S3)
+├── flask_project/ [LEGACY]  # Antigua versión en Flask (No funcional, histórica)
+├── docs/                    # Documentación PDF y Markdown
+├── docker-compose.yaml      # Orquestación de servicios (Django, Postgres, MinIO)
+├── Dockerfile               # Imagen Docker para el proyecto Django
+├── manage.py                # Utilidad de administración de Django
+└── requirements.txt         # Dependencias de Python renovadas
 ```
 
 ### Modelos de Base de Datos
 
-#### `User`
+#### `CustomUser` (Capa de Django Auth)
 ```python
 - id: Integer (PK)
-- username: String(80) UNIQUE
-- password_hash: String(255)
-- full_name: String(120)
-- role: String(20) [admin/user]
-- created_at: DateTime
+- username: String UNIQUE
+- password: PasswordHash
+- full_name: String
+- is_staff: Boolean (Define rol admin)
 - is_active: Boolean
 ```
 
@@ -549,6 +552,7 @@ PDF-search-with-minio/
 - tipo_documento: String(300)
 - size_bytes: BigInteger
 - codigos_empleado: Text (CSV)
+- md5_hash: String(32) INDEX (Nuevo para sync inteligente)
 - indexed_at: DateTime
 - last_modified: DateTime
 - is_indexed: Boolean
@@ -582,8 +586,8 @@ PDF-search-with-minio/
 - **Ahora**: Extrae carpetas del campo `minio_object_name`
 - **Mejora**: Instantáneo (~10-30ms)
 
-### 4. **Búsqueda Parcial de Tipo Documento**
-- Usa `ILIKE '%cuadre%'` en lugar de igualdad exacta
+### 4. Búsqueda Parcial de Tipo Documento
+- Usa `icontains` en Django QuerySet
 - Encuentra variantes: CUADRE, CUADRE 2025, PRE-CUADRE, etc.
 - Autocompletado con datalist HTML5
 
@@ -601,12 +605,12 @@ PDF-search-with-minio/
 
 ## 🔐 Seguridad
 
-- JWT con expiración configurable
-- Contraseñas hasheadas con `werkzeug.security`
-- Validación de inputs en todos los endpoints
-- Protección contra inyección SQL (SQLAlchemy ORM)
-- CORS configurado solo para orígenes permitidos
-- Separación de roles (admin/user)
+- SimpleJWT con expiración configurable
+- Contraseñas hasheadas nativamente por Django
+- Validación de inputs con Serializers de DRF
+- Protección contra inyección SQL (Django ORM)
+- Middleware de Seguridad: CSP, X-Frame-Options, HSTS
+- Separación de roles integrada (Staff vs Regular User)
 
 ---
 
@@ -648,12 +652,11 @@ Acción: Subir planillas del mes actual
 ## 🐛 Solución de Problemas
 
 ### PDFs no se encuentran en búsqueda
-- Verificar que estén indexados: `POST /api/sync-index`
+- Verificar que estén indexados: `POST /api/index/sync`
 - Re-indexar si es necesario: `POST /api/reindex`
 
 ### Búsqueda muy lenta
-- Verificar que se está usando `use_index: true` (default)
-- Revisar logs: `docker compose logs flask-app`
+- Revisar logs de Django: `docker compose logs django-app`
 
 ### Error al fusionar PDFs
 - Verificar límite de 100 archivos
