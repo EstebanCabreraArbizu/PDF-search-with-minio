@@ -171,7 +171,7 @@ class FilterOptionsView(APIView):
                     'bancos': [b for b in bancos if b],
                     'tipos_documento': [t for t in tipos if t],
                     'meses': meses,
-                    'index_stats': {'total': total_indexed, 'indexed': True, 'source': 'postgresql_index'}
+                    'index_stats': {'total': total_indexed, 'indexed': True, 'source': 'postgresql_index'},
                     'index_stats': {'total': total_indexed, 'indexed': True, 'source': 'postgresql_index'}
                 })
         except Exception as e:
@@ -182,7 +182,7 @@ class FilterOptionsView(APIView):
             'razones_sociales': RAZONES_SOCIALES_VALIDAS,
             'bancos': BANCOS_VALIDOS + ['GENERAL'],
             'meses': meses,
-            'index_stats': {'total': 0, 'indexed': False, 'source': 'static_config'}
+            'index_stats': {'total': 0, 'indexed': False, 'source': 'static_config'},
             'index_stats': {'total': 0, 'indexed': False, 'source': 'static_config'}
         })
 
@@ -400,15 +400,6 @@ class SearchView(APIView):
             'search_time_ms': elapsed,
             'source': 'minio_direct'
         })
-            return Response({'error': str(e), 'total': 0, 'results': []}, status=500)
-        
-        elapsed = round((time.time() - start_time) * 1000, 2)
-        return Response({
-            'total': len(results),
-            'results': results,
-            'search_time_ms': elapsed,
-            'source': 'minio_direct'
-        })
 
 class DownloadView(APIView):
     permission_classes = [IsAuthenticated]
@@ -473,14 +464,6 @@ class SyncIndexView(APIView):
         removed_orphans = 0
         errors = 0
         
-        try:
-            # ═══════════════════════════════════════════════════
-            # PASO 1: Listar MinIO (con caché de 60s)
-            # ═══════════════════════════════════════════════════
-            now = time.time()
-            if _minio_list_cache['data'] is None or (now - _minio_list_cache['time']) > 60:
-                logger.info("Listing MinIO (cache expired or empty)...")
-                minio_all = []
         try:
             # ═══════════════════════════════════════════════════
             # PASO 1: Listar MinIO (con caché de 60s)
@@ -1092,7 +1075,7 @@ class IndexStatsView(APIView):
             'by_banco': {x['banco']: x['c'] for x in PDFIndex.objects.values('banco').annotate(c=Count('id'))},
             'last_indexed': last.indexed_at.isoformat() if last and last.indexed_at else None,
             'indexed_successfully': PDFIndex.objects.filter(is_indexed=True).count(),
-            'with_errors': PDFIndex.objects.filter(is_indexed=False).count()
+            'with_errors': PDFIndex.objects.filter(is_indexed=False).count(),
             'by_razon_social': {x['razon_social']: x['c'] for x in PDFIndex.objects.values('razon_social').annotate(c=Count('id'))},
             'by_banco': {x['banco']: x['c'] for x in PDFIndex.objects.values('banco').annotate(c=Count('id'))},
             'last_indexed': last.indexed_at.isoformat() if last and last.indexed_at else None,

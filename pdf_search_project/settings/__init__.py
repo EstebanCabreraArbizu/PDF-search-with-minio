@@ -12,6 +12,12 @@ Ejemplo de uso:
 """
 
 import os
+from dotenv import load_dotenv
+
+# IMPORTANTE: Cargar .env ANTES de leer DJANGO_ENV
+# Si no se hace aquí, load_dotenv() se ejecuta en base.py DESPUÉS
+# de que ya se decidió qué entorno usar, y siempre caería en 'development'.
+load_dotenv()
 
 # Lee la variable de entorno DJANGO_ENV
 # Si no existe, usa 'development' como valor por defecto
