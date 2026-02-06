@@ -14,3 +14,6 @@ dist/
 build/
 *test-*
 *.env
+node_modules/
+documents/migrations/*
+staticfiles/*
