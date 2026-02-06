@@ -12,11 +12,11 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
-
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -61,11 +61,41 @@ MIDDLEWARE = [
     'csp.middleware.CSPMiddleware', # Content Security Policy
 ]
 
-# CORS Configuration
-CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'https://search.liderman.net.pe').split(',')
-CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', 'https://search.liderman.net.pe').split(',')
-if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+    },
+}
+
+# CORS and CSRF Configuration
+CORS_ALLOW_ALL_ORIGINS = True # For development, restrict in production
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://search.liderman.net.pe').split(',')
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
 # REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -76,15 +106,16 @@ REST_FRAMEWORK = {
     ],
 }
 
-
 # CSP Configuration (Django-CSP 4.0+)
 CONTENT_SECURITY_POLICY = {
     'DIRECTIVES': {
         'default-src': ("'self'",),
-        'font-src': ("'self'", 'https://fonts.gstatic.com'),
-        'img-src': ("'self'", 'data:'),
+        'font-src': ("'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'),
+        'img-src': ("'self'", 'data:', '*'),
         'script-src': ("'self'", "'unsafe-inline'", "https://static.cloudflareinsights.com", "https://cdn.jsdelivr.net"),
-        'style-src': ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'),
+        'style-src': ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://fonts.googleapis.com'),
+        'connect-src': ("'self'", "https://cdn.jsdelivr.net", "https://search.liderman.net.pe"),
+        'frame-src': ("'self'",),
     }
 }
 
@@ -163,12 +194,16 @@ USE_I18N = True
 
 USE_TZ = True
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Enable Whitenoise storage
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = DEBUG
 
 # Enable Whitenoise storage
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
