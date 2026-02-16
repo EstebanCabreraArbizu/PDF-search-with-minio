@@ -252,9 +252,9 @@ class SecurityHeadersMiddleware:
         return response
 
     def _build_csp(self, is_admin_route):
-        script_src = "'self'"
+        script_src = "'self' https://static.cloudflareinsights.com"
         if is_admin_route:
-            script_src = "'self' 'unsafe-inline' 'unsafe-eval'"
+            script_src = "'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com"
 
         directives = [
             "default-src 'self'",

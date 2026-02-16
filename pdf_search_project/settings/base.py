@@ -15,6 +15,7 @@ Beneficios:
 
 from pathlib import Path
 import os
+import json
 from datetime import timedelta
 from dotenv import load_dotenv
 
@@ -152,7 +153,29 @@ MINIO_REGION = os.environ.get('MINIO_REGION', None)
 # =============================================================================
 ROOT_URLCONF = 'pdf_search_project.urls'
 DJANGO_ADMIN_URL = os.getenv('DJANGO_ADMIN_URL', 'panel-gestion').strip('/')
-ADMIN_ALLOWED_IPS = [ip.strip() for ip in os.getenv('ADMIN_ALLOWED_IPS', '').split(',') if ip.strip()]
+
+
+def parse_admin_allowed_ips(raw_value):
+    raw_value = (raw_value or '').strip()
+    if not raw_value:
+        return []
+
+    normalized = raw_value.lower()
+    if normalized in {'[]', 'none', 'null'}:
+        return []
+
+    if raw_value.startswith('[') and raw_value.endswith(']'):
+        try:
+            parsed = json.loads(raw_value)
+            if isinstance(parsed, list):
+                return [str(ip).strip() for ip in parsed if str(ip).strip()]
+        except json.JSONDecodeError:
+            pass
+
+    return [ip.strip() for ip in raw_value.split(',') if ip.strip()]
+
+
+ADMIN_ALLOWED_IPS = parse_admin_allowed_ips(os.getenv('ADMIN_ALLOWED_IPS', ''))
 
 TEMPLATES = [
     {
