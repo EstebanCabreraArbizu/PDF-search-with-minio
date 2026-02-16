@@ -9,6 +9,7 @@ LoginRateThrottle para limitar intentos de login a 5/minuto.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 from django.contrib import admin
+from django.conf import settings
 from django.urls import path, include
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -28,7 +29,7 @@ class ThrottledTokenObtainPairView(TokenObtainPairView):
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path(f'{settings.DJANGO_ADMIN_URL}/', admin.site.urls),
     path('', include('documents.urls')),
     # 🔒 LOGIN con Rate Limiting (5 intentos/minuto)
     path('api/token/', ThrottledTokenObtainPairView.as_view(), name='token_obtain_pair'),

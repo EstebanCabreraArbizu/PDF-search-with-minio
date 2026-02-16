@@ -58,3 +58,6 @@ CSRF_COOKIE_SECURE = False
 # Permitir cookies sin SameSite estricto
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
+
+
+# CSP se gestiona dinámicamente en documents.middleware.SecurityHeadersMiddleware

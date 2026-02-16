@@ -1,5 +1,4 @@
 from django.urls import path
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     SearchView, ReindexView, FilterOptionsView, 
     DownloadView, SyncIndexView, PopulateHashesView, IndexStatsView, index,
@@ -29,8 +28,4 @@ urlpatterns = [
     path('api/files/create-folder', CreateFolderView.as_view(), name='create_folder'),
     path('api/files/delete', FilesDeleteView.as_view(), name='files_delete'),
     path('api/folders', FoldersListView.as_view(), name='folders_list'),
-    
-    # Auth
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]

@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -25,10 +26,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-5xn21ka55rrd7mjj!_dg$en%bmblomghfz4jzs)k$p32&ydu@u'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    raise RuntimeError(
+        'DJANGO_SECRET_KEY no está configurada. '
+        'Genera una con: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"'
+    )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() == 'true'
+DEBUG = os.environ.get('DJANGO_DEBUG', '0').lower() in ('1', 'true', 'yes')
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost').split(',')
 
@@ -44,8 +50,8 @@ INSTALLED_APPS = [
     'documents',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
-    'csp', # Uncomment when ready to enforce CSP
 ]
 
 MIDDLEWARE = [
@@ -53,12 +59,16 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware', # Add Whitenoise here (after SecurityMiddleware)
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware', # CORS can be here
+    'documents.middleware.IPRateLimitMiddleware',
+    'documents.middleware.RequestSanitizationMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'documents.middleware.AdminIPRestrictionMiddleware',
+    'documents.middleware.AuditLoggingMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'csp.middleware.CSPMiddleware', # Content Security Policy
+    'documents.middleware.SecurityHeadersMiddleware',
 ]
 
 # Logging Configuration
@@ -91,10 +101,21 @@ LOGGING = {
 }
 
 # CORS and CSRF Configuration
-CORS_ALLOW_ALL_ORIGINS = True # For development, restrict in production
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://search.liderman.net.pe').split(',')
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOWED_ORIGINS = [
+    origin.strip() for origin in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()
+]
+if not DEBUG and not CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS = ['https://search.liderman.net.pe']
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip() for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'https://search.liderman.net.pe').split(',') if origin.strip()
+]
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
+
+DJANGO_ADMIN_URL = os.getenv('DJANGO_ADMIN_URL', 'panel-gestion').strip('/')
+ADMIN_ALLOWED_IPS = [ip.strip() for ip in os.getenv('ADMIN_ALLOWED_IPS', '').split(',') if ip.strip()]
 
 # REST Framework Configuration
 REST_FRAMEWORK = {
@@ -104,19 +125,26 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '30/minute',
+        'user': '120/minute',
+        'login': '5/minute',
+        'search': '60/minute',
+        'bulk_search': '10/minute',
+    },
 }
 
-# CSP Configuration (Django-CSP 4.0+)
-CONTENT_SECURITY_POLICY = {
-    'DIRECTIVES': {
-        'default-src': ("'self'",),
-        'font-src': ("'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'),
-        'img-src': ("'self'", 'data:', '*'),
-        'script-src': ("'self'", "'unsafe-inline'", "https://static.cloudflareinsights.com", "https://cdn.jsdelivr.net"),
-        'style-src': ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://fonts.googleapis.com'),
-        'connect-src': ("'self'", "https://cdn.jsdelivr.net", "https://search.liderman.net.pe"),
-        'frame-src': ("'self'",),
-    }
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ALGORITHM': 'HS256',
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT', 'minio:9000')
@@ -173,6 +201,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 10},
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -186,9 +215,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'es-pe'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Lima'
 
 USE_I18N = True
 
@@ -207,3 +236,16 @@ WHITENOISE_AUTOREFRESH = DEBUG
 
 # Enable Whitenoise storage
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Seguridad de transporte / cookies
+SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'true').lower() in ('1', 'true', 'yes')
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+if not DEBUG:
+    SESSION_COOKIE_NAME = '__Host-sessionid'
+    CSRF_COOKIE_NAME = '__Host-csrftoken'

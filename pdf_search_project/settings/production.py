@@ -74,10 +74,12 @@ SECURE_HSTS_PRELOAD = True
 # SECURE: Solo enviar cookies por HTTPS (nunca por HTTP plano)
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_NAME = '__Host-sessionid'
+CSRF_COOKIE_NAME = '__Host-csrftoken'
 
 # HTTPONLY: JavaScript no puede leer estas cookies (previene XSS)
 SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False
 
 # SAMESITE: El navegador solo envía cookies si la petición viene del mismo sitio
 # 'Strict' = Máxima seguridad (puede romper algunos flujos de login con OAuth)
@@ -95,8 +97,8 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 # Evita que el navegador "adivine" el tipo de archivo (MIME sniffing)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
-# X-Frame-Options: SAMEORIGIN (ya configurado por middleware, pero por si acaso)
-X_FRAME_OPTIONS = 'SAMEORIGIN'
+# X-Frame-Options: DENY (protección máxima contra clickjacking)
+X_FRAME_OPTIONS = 'DENY'
 
 # Redirige HTTP a HTTPS automáticamente
 # NOTA: Si usas Cloudflare con "Always Use HTTPS", esto es redundante pero no daña

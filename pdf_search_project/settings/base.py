@@ -15,6 +15,7 @@ Beneficios:
 
 from pathlib import Path
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 
 # Cargar variables de entorno desde .env
@@ -38,8 +39,8 @@ INSTALLED_APPS = [
     'documents',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
-    'csp',
 ]
 
 
@@ -51,13 +52,15 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'documents.middleware.IPRateLimitMiddleware',
+    'documents.middleware.RequestSanitizationMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'documents.middleware.AdminIPRestrictionMiddleware',
+    'documents.middleware.AuditLoggingMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'csp.middleware.CSPMiddleware',
-    # 🆕 Middleware personalizado para headers adicionales (lo crearemos después)
     'documents.middleware.SecurityHeadersMiddleware',
 ]
 
@@ -121,19 +124,15 @@ REST_FRAMEWORK = {
 
 
 # =============================================================================
-# CSP (Content Security Policy)
-# 🎓 LECCIÓN: CSP le dice al navegador qué recursos puede cargar
+# SIMPLE JWT
 # =============================================================================
-CONTENT_SECURITY_POLICY = {
-    'DIRECTIVES': {
-        'default-src': ("'self'",),
-        'font-src': ("'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'),
-        'img-src': ("'self'", 'data:', '*'),
-        'script-src': ("'self'", "'unsafe-inline'", "https://static.cloudflareinsights.com", "https://cdn.jsdelivr.net"),
-        'style-src': ("'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://fonts.googleapis.com'),
-        'connect-src': ("'self'", "https://cdn.jsdelivr.net", "https://search.liderman.net.pe"),
-        'frame-src': ("'self'",),
-    }
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ALGORITHM': 'HS256',
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 
@@ -152,6 +151,8 @@ MINIO_REGION = os.environ.get('MINIO_REGION', None)
 # ROUTING & TEMPLATES
 # =============================================================================
 ROOT_URLCONF = 'pdf_search_project.urls'
+DJANGO_ADMIN_URL = os.getenv('DJANGO_ADMIN_URL', 'panel-gestion').strip('/')
+ADMIN_ALLOWED_IPS = [ip.strip() for ip in os.getenv('ADMIN_ALLOWED_IPS', '').split(',') if ip.strip()]
 
 TEMPLATES = [
     {

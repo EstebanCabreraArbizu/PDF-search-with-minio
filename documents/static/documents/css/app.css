@@ -1,0 +1,47 @@
+.filter-badge {
+    font-size: 0.75rem;
+    margin-left: 0.25rem;
+}
+
+.result-card:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.2s;
+}
+
+.metadata-item {
+    display: inline-block;
+    margin-right: 1rem;
+    font-size: 0.875rem;
+}
+
+.metadata-label {
+    font-weight: 600;
+    color: #6c757d;
+}
+
+.drop-zone {
+    cursor: pointer;
+    background-color: #f8f9fa;
+    transition: all 0.3s;
+}
+
+.sync-batch-size {
+    width: 120px;
+}
+
+.progress-height-25 {
+    height: 25px;
+}
+
+.progress-height-20 {
+    height: 20px;
+}
+
+.progress-width-0 {
+    width: 0%;
+}
+
+.folder-browser-list {
+    max-height: 300px;
+    overflow-y: auto;
+}

@@ -6,6 +6,7 @@ from django.db.models import Q, Sum, Count
 from django.http import StreamingHttpResponse
 from .models import PDFIndex, DownloadLog
 from .serializers import PDFIndexSerializer
+from .throttling import SearchRateThrottle, BulkSearchRateThrottle
 from .utils import (
     minio_client, extract_metadata, search_in_pdf, 
     extract_text_from_pdf, BANCOS_VALIDOS, RAZONES_SOCIALES_VALIDAS
@@ -196,6 +197,7 @@ class SearchView(APIView):
     POST /api/search
     """
     permission_classes = [IsAuthenticated]
+    throttle_classes = [SearchRateThrottle]
 
     def post(self, request):
         from datetime import datetime
@@ -1573,6 +1575,7 @@ class BulkSearchView(APIView):
     }
     """
     permission_classes = [IsAuthenticated]
+    throttle_classes = [BulkSearchRateThrottle]
 
     def post(self, request):
         import logging

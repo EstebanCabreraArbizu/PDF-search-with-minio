@@ -1490,3 +1490,40 @@ async function populateHashes() {
         hashButton.disabled = false;
     }
 }
+
+function registerActionHandlers() {
+    const bindings = [
+        ['logoutButton', 'click', () => logout()],
+        ['files-tab', 'click', () => loadFilesList()],
+        ['clearFiltersButton', 'click', () => clearFilters()],
+        ['mergeButton', 'click', () => mergeAndDownload()],
+        ['openFolderBrowserButton', 'click', () => openFolderBrowser()],
+        ['uploadFilesButton', 'click', () => uploadFiles()],
+        ['syncButton', 'click', () => syncIndex()],
+        ['syncStopButton', 'click', () => stopSync()],
+        ['hashButton', 'click', () => populateHashes()],
+        ['filesSearchButton', 'click', () => loadFilesList()],
+        ['clearFileFiltersButton', 'click', () => clearFileFilters()],
+        ['goUpFolderButton', 'click', () => goUpFolder()],
+        ['refreshFolderBrowserButton', 'click', () => loadFolderBrowser(currentBrowserPath)],
+        ['createSubfolderButton', 'click', () => createNewSubfolder()],
+        ['selectCurrentFolderButton', 'click', () => selectCurrentFolder()],
+    ];
+
+    bindings.forEach(([id, eventName, handler]) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener(eventName, handler);
+        }
+    });
+
+    const selectFilesButton = document.getElementById('selectFilesButton');
+    if (selectFilesButton) {
+        selectFilesButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            document.getElementById('fileInput').click();
+        });
+    }
+}
+
+registerActionHandlers();
