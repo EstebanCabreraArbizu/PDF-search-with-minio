@@ -3,7 +3,11 @@
     "version": "1.0.0",
     "description": "Frontend assets build and obfuscation",
     "scripts": {
-        "obfuscate": "node tools/obfuscate.js"
+        "obfuscate": "node tools/obfuscate.js",
+        "sync:corp-style": "node tools/sync-corp-style.js"
+    },
+    "dependencies": {
+        "@richard-paredes-1/corp-style": "latest"
     },
     "devDependencies": {
         "javascript-obfuscator": "^4.1.0"

@@ -1,0 +1,16 @@
+.git
+venv/
+venv_new/
+node_modules/
+postgres-data/
+minio/data/
+staticfiles/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.playwright-mcp/
+.npmrc
+db.sqlite3

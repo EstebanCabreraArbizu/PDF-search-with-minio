@@ -1,4 +1,4 @@
-version: '3.8'
+# version: '3.8'
 
 services:
   
@@ -50,7 +50,7 @@ services:
   # SERVICIO 2: Flask (API de búsqueda)
   # ═══════════════════════════════════════════════════
   flask-app:
-    build: ./flask-app  # 🏗️ Construye desde Dockerfile local
+    build: ./flask_project  # 🏗️ Construye desde Dockerfile local
     container_name: flask-api
     ports:
       - "5000:5000"  # Tu API estará en http://localhost:5000
@@ -69,12 +69,14 @@ services:
       minio:
         condition: service_healthy #⏳ Espera a que MinIO inicie
     volumes:
-      - ./flask-app:/app  # 🔄 Hot-reload: cambios en código se reflejan al instante
+      - ./flask_project:/app  # 🔄 Hot-reload: cambios en código se reflejan al instante
     networks:
       - pdf-network
 
   django-app:
-    build: ./django-app
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: django-api
     ports:
       - "8000:8000"
@@ -94,8 +96,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    volumes:
-      - ./django-app:/app
     networks:
       - pdf-network
 
