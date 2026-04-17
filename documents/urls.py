@@ -3,12 +3,16 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     SearchView, ReindexView, FilterOptionsView, 
     DownloadView, SyncIndexView, PopulateHashesView, IndexStatsView, index,
+    seguros_ui, tregistro_ui,
     FilesListView, FilesUploadView, CreateFolderView, FilesDeleteView, FoldersListView,
     BulkSearchView, MergePdfsView, CurrentUserView, HealthCheckView
 )
 
 urlpatterns = [
-    path('', index, name='index'),
+    path('', seguros_ui, name='index'),
+    path('legacy/', index, name='legacy_index'),
+    path('ui/seguros/', seguros_ui, name='search_seguros_ui'),
+    path('ui/tregistro/', tregistro_ui, name='search_tregistro_ui'),
     path('api/search', SearchView.as_view(), name='search'),
     path('api/search/bulk', BulkSearchView.as_view(), name='bulk_search'),
     path('api/filter-options', FilterOptionsView.as_view(), name='filter_options'),

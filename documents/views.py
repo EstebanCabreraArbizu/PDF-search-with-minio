@@ -84,6 +84,14 @@ class HealthCheckView(APIView):
 def index(request):
     return render(request, 'documents/search.html')
 
+
+def seguros_ui(request):
+    return render(request, 'documents/search_seguros.html')
+
+
+def tregistro_ui(request):
+    return render(request, 'documents/search_tregistro.html')
+
 class FilterOptionsView(APIView):
     permission_classes = [IsAuthenticated]
 
