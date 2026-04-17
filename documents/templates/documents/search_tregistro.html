@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="es" data-theme="corp">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buscador T-Registro - Mock Local</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <link rel="stylesheet" href="{% static 'documents/vendor/corp-style.css' %}">
+  <link rel="stylesheet" href="{% static 'documents/css/search-document.css' %}">
+</head>
+<body class="search-page-body tregistro-page">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-box"><i class="ti ti-shield-check"></i></div>
+      <div class="sidebar-title">
+        <h4>DocSearch</h4>
+        <span>V1.0.0</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Modulos</div>
+      <a class="nav-item" href="{% url 'search_seguros_ui' %}"><i class="ti ti-shield"></i> Seguros</a>
+      <a class="nav-item active" href="{% url 'search_tregistro_ui' %}"><i class="ti ti-file-certificate"></i> T-Registro</a>
+      <a class="nav-item" href="#"><i class="ti ti-folders"></i> Constancias</a>
+
+      <div class="nav-section-label">Administracion</div>
+      <a class="nav-item" href="#"><i class="ti ti-folder-cog"></i> Gestion de Archivos</a>
+      <a class="nav-item" href="#"><i class="ti ti-refresh"></i> Sincronizacion</a>
+    </nav>
+
+    <div class="sidebar-user">
+      <div class="sidebar-user-main">
+        <div class="sidebar-avatar">AD</div>
+        <div>
+          <p class="sidebar-user-name">admin</p>
+          <p class="sidebar-user-role">ADMINISTRADOR</p>
+        </div>
+      </div>
+      <button class="sidebar-logout" type="button" id="logoutBtn" aria-label="CERRAR SESION" title="CERRAR SESION">
+        <i class="ti ti-logout-2"></i>
+      </button>
+    </div>
+  </aside>
+
+  <section class="workspace">
+    <header class="topbar acrylic-surface topbar-minimal">
+      <div class="topbar-actions">
+        <button id="themeToggleBtn" class="theme-switcher theme-toggle-btn" type="button" aria-label="Cambiar tema" title="Cambiar tema">
+          <i id="themeToggleIcon" class="ti ti-palette"></i>
+        </button>
+      </div>
+    </header>
+
+    <main class="content-area">
+      <div>
+        <h1 class="page-title"><span class="accent" style="color:var(--primary);">◆</span>BUSCADOR DE DOCUMENTOS - T-REGISTRO</h1>
+        <p class="page-subtitle">BUSCA Y DESCARGA DOCUMENTOS DE ALTA Y BAJA DEL T-REGISTRO DEL REPOSITORIO DOCUMENTAL CORPORATIVO</p>
+      </div>
+
+      <section class="stats-grid four" id="statsTRegistro"></section>
+
+      <section class="search-panel acrylic-surface">
+        <div class="search-mode-tabs" style="margin-bottom:12px;">
+          <button class="mode-tab active" data-mode="simple"> <i class="ti ti-search"></i> Busqueda Simple</button>
+          <button class="mode-tab" data-mode="masiva"> <i class="ti ti-list-search"></i> Busqueda Masiva por DNI</button>
+        </div>
+
+        <div class="panel-title"><i class="ti ti-filter"></i> FILTROS DE BUSQUEDA</div>
+
+        <form id="tregistroForm" class="search-form">
+          <div id="simpleMode" class="form-grid">
+            <div class="form-group">
+              <label>DNI (opcional)</label>
+              <input id="dniInput" class="form-control" type="text" placeholder="Ej: 12345678">
+            </div>
+          </div>
+
+          <div id="masivaMode" class="form-group hidden">
+            <label>DNIs de trabajadores (separados por coma, espacio o salto de linea)</label>
+            <textarea id="dniMasivo" class="form-control" rows="3" placeholder="12345678&#10;87654321"></textarea>
+          </div>
+
+          <div class="form-grid cols-3">
+            <div class="form-group">
+              <label>Razon Social</label>
+              <select id="empresaSelect" class="form-select"></select>
+            </div>
+            <div class="form-group">
+              <label>Tipo de Documento</label>
+              <select id="tipoSelect" class="form-select">
+                <option value="">Alta y Baja</option>
+                <option value="Alta">Alta</option>
+                <option value="Baja">Baja</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Periodo (Mes Anio)</label>
+              <select id="periodoSelect" class="form-select">
+                <option value="">Todos</option>
+                <option value="Ene 2024">Ene 2024</option>
+                <option value="Feb 2024">Feb 2024</option>
+                <option value="Mar 2024">Mar 2024</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="search-actions">
+            <button class="btn btn-primary" type="submit"><i class="ti ti-search"></i> Buscar</button>
+            <button class="btn btn-soft" type="button" id="limpiarBtn"><i class="ti ti-rotate"></i> Limpiar</button>
+            <button class="btn btn-primary" type="button" id="downloadZipBtn"><i class="ti ti-download"></i> Descargar todo (ZIP)</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="results-panel acrylic-surface">
+        <div class="results-header">
+          <div class="results-count" id="resultCount">0 documentos encontrados</div>
+        </div>
+
+        <div id="stateEmpty" class="empty-state">
+          <div class="empty-icon"><i class="ti ti-search"></i></div>
+          <h3 style="margin:0;">Sin consulta activa</h3>
+          <p style="margin:0;">Ejecuta una busqueda para listar documentos de T-Registro.</p>
+        </div>
+
+        <div id="stateLoading" class="loading-state hidden">
+          <div class="spinner"></div>
+          <span>Consultando indice local...</span>
+        </div>
+
+        <div id="stateTable" class="results-table-wrapper hidden">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Documento</th>
+                <th>Razon Social</th>
+                <th>Tipo</th>
+                <th>DNI Trabajador</th>
+                <th>Periodo</th>
+                <th>Fecha Carga</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <script>
+    const DATA = [
+      { doc: 'ALTA-TREGISTRO-12345678-2024-01.pdf', empresa: 'EMPRESA ABC SAC', tipo: 'Alta', dni: '12345678', periodo: 'Ene 2024', fecha: '05/01/2024' },
+      { doc: 'BAJA-TREGISTRO-87654321-2024-03.pdf', empresa: 'EMPRESA ABC SAC', tipo: 'Baja', dni: '87654321', periodo: 'Mar 2024', fecha: '12/03/2024' },
+      { doc: 'ALTA-TREGISTRO-11223344-2024-02.pdf', empresa: 'CONSORCIO DEL SUR', tipo: 'Alta', dni: '11223344', periodo: 'Feb 2024', fecha: '15/02/2024' },
+      { doc: 'BAJA-TREGISTRO-22334455-2024-02.pdf', empresa: 'CONSORCIO DEL SUR', tipo: 'Baja', dni: '22334455', periodo: 'Feb 2024', fecha: '25/02/2024' },
+      { doc: 'ALTA-TREGISTRO-33445566-2024-01.pdf', empresa: 'SERVICIOS NORTE', tipo: 'Alta', dni: '33445566', periodo: 'Ene 2024', fecha: '09/01/2024' },
+      { doc: 'BAJA-TREGISTRO-55667788-2024-03.pdf', empresa: 'SERVICIOS NORTE', tipo: 'Baja', dni: '55667788', periodo: 'Mar 2024', fecha: '20/03/2024' }
+    ];
+
+    const THEME_KEY = 'docsearch-theme';
+    const DEFAULT_THEME = 'corp';
+    const THEMES = [DEFAULT_THEME, 'corp-dark', 'dark', 'light'];
+    const THEME_META = {
+      corp: { label: 'Tema Corporativo', icon: 'ti ti-building-bank' },
+      'corp-dark': { label: 'Tema Corporativo Oscuro', icon: 'ti ti-building-castle' },
+      dark: { label: 'Tema Oscuro', icon: 'ti ti-moon-stars' },
+      light: { label: 'Tema Claro', icon: 'ti ti-sun-high' }
+    };
+
+    function applyTheme(theme) {
+      const safeTheme = THEMES.includes(theme) ? theme : DEFAULT_THEME;
+      document.documentElement.setAttribute('data-theme', safeTheme);
+      return safeTheme;
+    }
+
+    function syncThemeToggle(theme) {
+      const themeToggleBtn = document.getElementById('themeToggleBtn');
+      const themeToggleIcon = document.getElementById('themeToggleIcon');
+      if (!themeToggleBtn || !themeToggleIcon) {
+        return;
+      }
+
+      const meta = THEME_META[theme] || THEME_META[DEFAULT_THEME];
+      themeToggleIcon.className = meta.icon;
+      themeToggleBtn.title = `${meta.label} (clic para cambiar)`;
+      themeToggleBtn.setAttribute('aria-label', `Tema actual: ${meta.label}. Clic para cambiar.`);
+    }
+
+    function initTopbarControls() {
+      const themeToggleBtn = document.getElementById('themeToggleBtn');
+      const logoutBtn = document.getElementById('logoutBtn');
+
+      let storedTheme = DEFAULT_THEME;
+      try {
+        const themeFromStorage = localStorage.getItem(THEME_KEY);
+        storedTheme = themeFromStorage || DEFAULT_THEME;
+        if (!themeFromStorage) {
+          localStorage.setItem(THEME_KEY, DEFAULT_THEME);
+        }
+      } catch (error) {
+        storedTheme = DEFAULT_THEME;
+      }
+
+      const activeTheme = applyTheme(storedTheme);
+      syncThemeToggle(activeTheme);
+
+      if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+          const currentTheme = document.documentElement.getAttribute('data-theme') || DEFAULT_THEME;
+          const currentIndex = THEMES.indexOf(currentTheme);
+          const nextTheme = THEMES[(currentIndex + 1) % THEMES.length];
+          const selectedTheme = applyTheme(nextTheme);
+          syncThemeToggle(selectedTheme);
+          try {
+            localStorage.setItem(THEME_KEY, selectedTheme);
+          } catch (error) {
+            // No-op: localStorage may be blocked in some environments.
+          }
+        });
+      }
+
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+          alert('Cierre de sesion (mock local).');
+        });
+      }
+    }
+
+    const form = document.getElementById('tregistroForm');
+    const tableBody = document.getElementById('tableBody');
+    const resultCount = document.getElementById('resultCount');
+    const stateEmpty = document.getElementById('stateEmpty');
+    const stateLoading = document.getElementById('stateLoading');
+    const stateTable = document.getElementById('stateTable');
+
+    function renderStats(data) {
+      const altas = data.filter(x => x.tipo === 'Alta').length;
+      const bajas = data.filter(x => x.tipo === 'Baja').length;
+      const empresas = new Set(data.map(x => x.empresa)).size;
+      document.getElementById('statsTRegistro').innerHTML = `
+        <article class="stat-card acrylic-surface stat-border-1">
+          <div class="label">Total</div>
+          <div class="value">${data.length}</div>
+          <div class="hint">Documentos indexados</div>
+        </article>
+        <article class="stat-card acrylic-surface stat-border-2">
+          <div class="label">Altas</div>
+          <div class="value">${altas}</div>
+          <div class="hint">Altas registradas</div>
+        </article>
+        <article class="stat-card acrylic-surface stat-border-3">
+          <div class="label">Bajas</div>
+          <div class="value">${bajas}</div>
+          <div class="hint">Bajas registradas</div>
+        </article>
+        <article class="stat-card acrylic-surface stat-border-4">
+          <div class="label">Empresas</div>
+          <div class="value">${empresas}</div>
+          <div class="hint">Con documentacion</div>
+        </article>
+      `;
+    }
+
+    function fillEmpresas(data) {
+      const select = document.getElementById('empresaSelect');
+      const empresas = Array.from(new Set(data.map(x => x.empresa))).sort();
+      select.innerHTML = '<option value="">- Todas las empresas -</option>' + empresas.map(e => `<option value="${e}">${e}</option>`).join('');
+    }
+
+    function setMode(mode) {
+      document.querySelectorAll('.mode-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
+      document.getElementById('simpleMode').classList.toggle('hidden', mode !== 'simple');
+      document.getElementById('masivaMode').classList.toggle('hidden', mode !== 'masiva');
+    }
+
+    function parseMasivo(raw) {
+      return raw.split(/[\n,;\s]+/).map(v => v.trim()).filter(Boolean);
+    }
+
+    function renderRows(rows) {
+      resultCount.textContent = `${rows.length} documentos encontrados`;
+      if (rows.length === 0) {
+        stateEmpty.classList.remove('hidden');
+        stateTable.classList.add('hidden');
+        return;
+      }
+
+      stateEmpty.classList.add('hidden');
+      stateTable.classList.remove('hidden');
+      tableBody.innerHTML = rows.map(r => `
+        <tr>
+          <td>
+            <div class="fw-500">${r.doc}</div>
+            <div class="doc-meta">85 KB - Cargado por admin</div>
+          </td>
+          <td>${r.empresa}</td>
+          <td>${r.tipo === 'Alta' ? '<span class="badge badge-green">ALTA</span>' : '<span class="badge badge-red">BAJA</span>'}</td>
+          <td><span class="badge badge-blue">${r.dni}</span></td>
+          <td>${r.periodo}</td>
+          <td>${r.fecha}</td>
+          <td>
+            <div class="actions">
+              <button class="btn btn-sm btn-success-soft"><i class="ti ti-download"></i> Descargar</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function searchData() {
+      const mode = document.querySelector('.mode-tab.active').dataset.mode;
+      const empresa = document.getElementById('empresaSelect').value;
+      const tipo = document.getElementById('tipoSelect').value;
+      const dni = document.getElementById('dniInput').value.trim();
+      const periodo = document.getElementById('periodoSelect').value;
+
+      let rows = DATA.filter(r => {
+        const okEmpresa = !empresa || r.empresa === empresa;
+        const okTipo = !tipo || r.tipo === tipo;
+        const okPeriodo = !periodo || r.periodo === periodo;
+        if (mode === 'simple') {
+          const okDni = !dni || r.dni.includes(dni);
+          return okEmpresa && okTipo && okPeriodo && okDni;
+        }
+        return okEmpresa && okTipo && okPeriodo;
+      });
+
+      if (mode === 'masiva') {
+        const masivo = parseMasivo(document.getElementById('dniMasivo').value);
+        if (masivo.length === 0) {
+          alert('Ingresa al menos un DNI para busqueda masiva.');
+          return [];
+        }
+        const set = new Set(masivo);
+        rows = rows.filter(r => set.has(r.dni));
+      }
+
+      return rows;
+    }
+
+    document.querySelectorAll('.mode-tab').forEach(btn => {
+      btn.addEventListener('click', () => setMode(btn.dataset.mode));
+    });
+
+    document.getElementById('limpiarBtn').addEventListener('click', () => {
+      form.reset();
+      renderRows([]);
+    });
+
+    document.getElementById('downloadZipBtn').addEventListener('click', () => {
+      alert('Descarga mock: ZIP generado localmente para resultados actuales.');
+    });
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      stateLoading.classList.remove('hidden');
+      stateEmpty.classList.add('hidden');
+      stateTable.classList.add('hidden');
+      setTimeout(() => {
+        const rows = searchData();
+        stateLoading.classList.add('hidden');
+        renderRows(rows);
+      }, 360);
+    });
+
+    initTopbarControls();
+    renderStats(DATA);
+    fillEmpresas(DATA);
+    renderRows([]);
+  </script>
+</body>
+</html>
