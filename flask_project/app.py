@@ -84,7 +84,7 @@ minio_client = Minio(
     MINIO_ENDPOINT,
     access_key=MINIO_ACCESS_KEY,
     secret_key=MINIO_SECRET_KEY,
-    secure=False  # True en producción con HTTPS
+    secure=True  # HTTPS habilitado para s3.liderman.net.pe
 )
 app.logger.info(f"MinIO conf: endpoint={MINIO_ENDPOINT} bucket={BUCKET_NAME} secure={minio_client._Minio__is_secure if hasattr(minio_client, '_Minio__is_secure') else 'unknown'} access_key_prefix={MINIO_ACCESS_KEY[:4]}")
 try:
@@ -1931,6 +1931,8 @@ def upload_file():
                             self.size = int(resp.headers.get('Content-Length', 0))
                             # Convertimos la fecha del header Last-Modified a objeto datetime
                             self.last_modified = parsedate_to_datetime(resp.headers.get('Last-Modified'))
+                            # ETag viene en los headers (usado como hash MD5)
+                            self.etag = resp.headers.get('ETag', '').strip('"')
 
                     # Creamos el objeto compatible
                     obj = MockMinioObject(object_name, response)
@@ -2259,34 +2261,54 @@ def merge_pdfs():
     if len(paths) > 100:
         return jsonify({'error': 'Máximo 100 archivos por fusión.'}), 400
     
+    def download_pdf(path):
+        """Descarga un PDF de MinIO y retorna (path, bytes, error)"""
+        try:
+            response = minio_client.get_object(BUCKET_NAME, path)
+            pdf_bytes = response.read()
+            response.close()
+            response.release_conn()
+            return (path, pdf_bytes, None)
+        except Exception as e:
+            return (path, None, str(e))
+    
     try:
-        # Crear documento PDF combinado
-        merged_pdf = fitz.open()
-        files_merged = []
+        # Descargar PDFs en paralelo para evitar timeout
+        pdf_data = {}
         errors = []
         
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(download_pdf, path): path for path in paths}
+            for future in concurrent.futures.as_completed(futures):
+                path, pdf_bytes, error = future.result()
+                if error:
+                    app.logger.error(f"✗ Error descargando {path}: {error}")
+                    errors.append({'path': path, 'error': error})
+                else:
+                    pdf_data[path] = pdf_bytes
+                    app.logger.info(f"✓ Descargado: {path}")
+        
+        if not pdf_data:
+            return jsonify({
+                'error': 'No se pudo descargar ningún archivo.',
+                'errors': errors
+            }), 400
+        
+        # Crear documento PDF combinado (en orden original)
+        merged_pdf = fitz.open()
+        files_merged = []
+        
         for path in paths:
-            try:
-                # Descargar PDF de MinIO
-                response = minio_client.get_object(BUCKET_NAME, path)
-                pdf_bytes = response.read()
-                response.close()
-                response.release_conn()
-                
-                # Abrir y añadir al documento combinado
-                src_pdf = fitz.open(stream=pdf_bytes, filetype="pdf")
-                merged_pdf.insert_pdf(src_pdf)
-                src_pdf.close()
-                
-                files_merged.append(path)
-                app.logger.info(f"✓ Añadido al merge: {path}")
-                
-            except S3Error as e:
-                app.logger.error(f"✗ Error descargando {path}: {e}")
-                errors.append({'path': path, 'error': str(e)})
-            except Exception as e:
-                app.logger.error(f"✗ Error procesando {path}: {e}")
-                errors.append({'path': path, 'error': str(e)})
+            if path in pdf_data:
+                try:
+                    src_pdf = fitz.open(stream=pdf_data[path], filetype="pdf")
+                    merged_pdf.insert_pdf(src_pdf)
+                    src_pdf.close()
+                    files_merged.append(path)
+                    app.logger.info(f"✓ Añadido al merge: {path}")
+                except Exception as e:
+                    app.logger.error(f"✗ Error procesando {path}: {e}")
+                    errors.append({'path': path, 'error': str(e)})
         
         if not files_merged:
             return jsonify({

@@ -13,7 +13,9 @@ __pycache__/
 dist/
 build/
 *test-*
-*.env
+.env
+.env.*
+!.env.example
 node_modules/
-.npmrc
-staticfiles/
+documents/migrations/*
+staticfiles/*

@@ -6,6 +6,7 @@ from django.db.models import Q, Sum, Count
 from django.http import StreamingHttpResponse
 from .models import PDFIndex, DownloadLog
 from .serializers import PDFIndexSerializer
+from .throttling import SearchRateThrottle, BulkSearchRateThrottle
 from .utils import (
     minio_client, extract_metadata, search_in_pdf, 
     extract_text_from_pdf, BANCOS_VALIDOS, RAZONES_SOCIALES_VALIDAS
@@ -20,6 +21,66 @@ import concurrent.futures
 _minio_list_cache = {'time': 0, 'data': None}
 
 from django.shortcuts import render
+from django.db import connection
+
+
+# ═══════════════════════════════════════════════════
+# UTILITY VIEWS (Auth/Health)
+# ═══════════════════════════════════════════════════
+
+class CurrentUserView(APIView):
+    """
+    Obtiene información del usuario actual.
+    GET /api/me
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        return Response({
+            'id': user.id,
+            'username': user.username,
+            'role': 'admin' if user.is_staff else 'user',
+            'is_active': user.is_active
+        })
+
+
+class HealthCheckView(APIView):
+    """
+    Health check para monitoreo (PostgreSQL + MinIO).
+    GET /health
+    """
+    permission_classes = []  # Sin autenticación
+    
+    def get(self, request):
+        from datetime import datetime
+        
+        # Verificar PostgreSQL
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT 1')
+            db_status = 'ok'
+        except Exception as e:
+            db_status = f'error: {str(e)}'
+        
+        # Verificar MinIO
+        try:
+            minio_client.bucket_exists(settings.MINIO_BUCKET)
+            minio_status = 'ok'
+        except Exception as e:
+            minio_status = f'error: {str(e)}'
+        
+        overall_status = 'ok' if db_status == 'ok' and minio_status == 'ok' else 'degraded'
+        
+        return Response({
+            'status': overall_status,
+            'timestamp': datetime.utcnow().isoformat(),
+            'services': {
+                'database': db_status,
+                'storage': minio_status
+            }
+        }, status=200 if overall_status == 'ok' else 503)
+
 from django.db import connection
 
 
@@ -119,6 +180,7 @@ class FilterOptionsView(APIView):
                     'bancos': [b for b in bancos if b],
                     'tipos_documento': [t for t in tipos if t],
                     'meses': meses,
+                    'index_stats': {'total': total_indexed, 'indexed': True, 'source': 'postgresql_index'},
                     'index_stats': {'total': total_indexed, 'indexed': True, 'source': 'postgresql_index'}
                 })
         except Exception as e:
@@ -129,6 +191,7 @@ class FilterOptionsView(APIView):
             'razones_sociales': RAZONES_SOCIALES_VALIDAS,
             'bancos': BANCOS_VALIDOS + ['GENERAL'],
             'meses': meses,
+            'index_stats': {'total': 0, 'indexed': False, 'source': 'static_config'},
             'index_stats': {'total': 0, 'indexed': False, 'source': 'static_config'}
         })
 
@@ -137,9 +200,15 @@ class SearchView(APIView):
     Búsqueda de PDFs con validaciones completas.
     POST /api/search
     """
+    """
+    Búsqueda de PDFs con validaciones completas.
+    POST /api/search
+    """
     permission_classes = [IsAuthenticated]
+    throttle_classes = [SearchRateThrottle]
 
     def post(self, request):
+        from datetime import datetime
         from datetime import datetime
         start_time = time.time()
         data = request.data
@@ -151,7 +220,17 @@ class SearchView(APIView):
         # ═══════════════════════════════════════════════════
         
         # Validar código de empleado (obligatorio)
+        # ═══════════════════════════════════════════════════
+        # VALIDACIONES COMPLETAS
+        # ═══════════════════════════════════════════════════
+        
+        # Validar código de empleado (obligatorio)
         if not codigo_empleado:
+            return Response({
+                'error': 'El código de empleado es obligatorio para realizar la búsqueda.',
+                'hint': 'Los filtros adicionales (banco, mes, año, razon_social) son opcionales.',
+                'total': 0, 'results': []
+            }, status=400)
             return Response({
                 'error': 'El código de empleado es obligatorio para realizar la búsqueda.',
                 'hint': 'Los filtros adicionales (banco, mes, año, razon_social) son opcionales.',
@@ -159,6 +238,51 @@ class SearchView(APIView):
             }, status=400)
             
         if not re.match(r'^\d{4,10}$', codigo_empleado):
+            return Response({
+                'error': 'Código de empleado inválido. Debe contener entre 4 y 10 dígitos numéricos.',
+                'total': 0, 'results': []
+            }, status=400)
+        
+        # Validar banco
+        if data.get('banco') and data['banco'] not in BANCOS_VALIDOS + ['GENERAL']:
+            return Response({
+                'error': f'Banco inválido. Valores permitidos: {BANCOS_VALIDOS + ["GENERAL"]}',
+                'total': 0, 'results': []
+            }, status=400)
+        
+        # Validar mes (01-12)
+        if data.get('mes') and not re.match(r'^(0[1-9]|1[0-2])$', str(data['mes'])):
+            return Response({
+                'error': 'Mes inválido. Debe ser un valor entre 01 y 12.',
+                'total': 0, 'results': []
+            }, status=400)
+        
+        # Validar año (2019 - actual)
+        if data.get('año'):
+            try:
+                año_filtro = int(data['año'])
+                current_year = datetime.now().year
+                if año_filtro < 2019 or año_filtro > current_year:
+                    return Response({
+                        'error': f'Año inválido. Debe ser entre 2019 y {current_year}.',
+                        'total': 0, 'results': []
+                    }, status=400)
+            except ValueError:
+                return Response({
+                    'error': 'Año inválido. Debe ser un número (ej: 2024).',
+                    'total': 0, 'results': []
+                }, status=400)
+        
+        # Validar razón social
+        if data.get('razon_social') and data['razon_social'] not in RAZONES_SOCIALES_VALIDAS:
+            return Response({
+                'error': f'Razón social inválida. Valores permitidos: {RAZONES_SOCIALES_VALIDAS}',
+                'total': 0, 'results': []
+            }, status=400)
+
+        # ═══════════════════════════════════════════════════
+        # BÚSQUEDA INDEXADA (PostgreSQL)
+        # ═══════════════════════════════════════════════════
             return Response({
                 'error': 'Código de empleado inválido. Debe contener entre 4 y 10 dígitos numéricos.',
                 'total': 0, 'results': []
@@ -227,8 +351,12 @@ class SearchView(APIView):
                 })
             except Exception as e:
                 # Fallback to MinIO search (legacy)
+                # Fallback to MinIO search (legacy)
                 pass
 
+        # ═══════════════════════════════════════════════════
+        # FALLBACK: Búsqueda Directa MinIO (Legacy)
+        # ═══════════════════════════════════════════════════
         # ═══════════════════════════════════════════════════
         # FALLBACK: Búsqueda Directa MinIO (Legacy)
         # ═══════════════════════════════════════════════════
@@ -237,6 +365,23 @@ class SearchView(APIView):
             objects = minio_client.list_objects(settings.MINIO_BUCKET, recursive=True)
             for obj in objects:
                 if not obj.object_name.endswith('.pdf'): continue
+                
+                meta = extract_metadata(obj.object_name)
+                
+                # Aplicar filtros
+                if data.get('año') and meta['año'] != data['año']: continue
+                if data.get('banco') and meta['banco'] != data['banco']: continue
+                if data.get('mes') and meta['mes'] != data['mes']: continue
+                if data.get('razon_social') and meta['razon_social'] != data['razon_social']: continue
+                
+                # Buscar código en PDF
+                if search_in_pdf(obj.object_name, codigo_empleado):
+                    results.append({
+                        'filename': obj.object_name,
+                        'metadata': meta,
+                        'download_url': f'/api/download/{obj.object_name}',
+                        'size_kb': round(obj.size / 1024, 2)
+                    })
                 
                 meta = extract_metadata(obj.object_name)
                 
@@ -300,13 +445,23 @@ class SyncIndexView(APIView):
     
     DETECTA ARCHIVOS MOVIDOS usando tamaño + hash MD5.
     """
+    """
+    Sincronización INTELIGENTE del índice con BATCH PROCESSING.
+    POST /api/index/sync
+    
+    DETECTA ARCHIVOS MOVIDOS usando tamaño + hash MD5.
+    """
     permission_classes = [IsAdminUser]
 
     def post(self, request):
         import logging
         logger = logging.getLogger(__name__)
         
+        import logging
+        logger = logging.getLogger(__name__)
+        
         global _minio_list_cache
+        data = request.data or {}
         data = request.data or {}
         batch_size = min(int(data.get('batch_size', 50)), 200)
         skip_new = data.get('skip_new', False)
@@ -315,6 +470,7 @@ class SyncIndexView(APIView):
         new_files = 0
         moved_files = 0
         moved_details = []
+        removed_orphans = 0
         removed_orphans = 0
         errors = 0
         
@@ -503,8 +659,190 @@ class SyncIndexView(APIView):
         except Exception as e:
             logger.error(f"Error en sincronización: {e}")
             return Response({'error': f'Error inesperado: {str(e)}'}, status=500)
+            
+            objects_list = _minio_list_cache['data']
+            minio_map = {obj.object_name: obj for obj in objects_list}
+            minio_names = set(minio_map.keys())
+            
+            # Construir índice por hash para detección de movidos
+            minio_by_hash = {}
+            for obj in objects_list:
+                md5_hash = obj.etag.strip('"') if obj.etag else None
+                if md5_hash:
+                    key = (obj.size, md5_hash)
+                    if key not in minio_by_hash:
+                        minio_by_hash[key] = []
+                    minio_by_hash[key].append(obj)
+            
+            # CASO ESPECIAL: No hay PDFs
+            indexed_count = PDFIndex.objects.count()
+            if len(minio_names) == 0 and indexed_count == 0:
+                elapsed = round(time.time() - start_time, 2)
+                return Response({
+                    'message': 'No hay PDFs en MinIO ni en el índice',
+                    'total_in_minio': 0,
+                    'total_indexed': 0,
+                    'new_files': 0,
+                    'moved_files': 0,
+                    'removed_orphans': 0,
+                    'pending_new': 0,
+                    'has_more': False,
+                    'progress_percent': 100,
+                    'errors': 0,
+                    'time_seconds': elapsed,
+                    'batch_size': batch_size
+                })
+            
+            # ═══════════════════════════════════════════════════
+            # PASO 2: Obtener indexados y detectar huérfanos
+            # ═══════════════════════════════════════════════════
+            indexed_qs = PDFIndex.objects.all()
+            indexed_map = {r.minio_object_name: r for r in indexed_qs}
+            indexed_names = set(indexed_map.keys())
+            
+            orphan_names = indexed_names - minio_names
+            
+            # Índice de huérfanos por tamaño + hash
+            orphan_by_hash = {}
+            for name in orphan_names:
+                record = indexed_map[name]
+                if record.md5_hash and record.size_bytes:
+                    key = (record.size_bytes, record.md5_hash)
+                    if key not in orphan_by_hash:
+                        orphan_by_hash[key] = []
+                    orphan_by_hash[key].append(record)
+            
+            # ═══════════════════════════════════════════════════
+            # PASO 3: Detectar archivos movidos
+            # ═══════════════════════════════════════════════════
+            new_names = minio_names - indexed_names
+            truly_new_names = []
+            
+            for name in new_names:
+                obj = minio_map[name]
+                md5 = obj.etag.strip('"') if obj.etag else None
+                key = (obj.size, md5) if md5 else None
+                
+                if key and key in orphan_by_hash and orphan_by_hash[key]:
+                    # ¡Archivo MOVIDO detectado!
+                    orphan_rec = orphan_by_hash[key].pop(0)
+                    old_path = orphan_rec.minio_object_name
+                    
+                    try:
+                        meta = extract_metadata(name)
+                        orphan_rec.minio_object_name = name
+                        orphan_rec.razon_social = meta['razon_social']
+                        orphan_rec.banco = meta['banco']
+                        orphan_rec.año = meta['año']
+                        orphan_rec.mes = meta['mes']
+                        orphan_rec.tipo_documento = meta['tipo_documento']
+                        orphan_rec.last_modified = obj.last_modified
+                        orphan_rec.indexed_at = datetime.utcnow()
+                        orphan_rec.save()
+                        
+                        moved_files += 1
+                        if len(moved_details) < 20:
+                            moved_details.append({
+                                'old_path': old_path,
+                                'new_path': name
+                            })
+                        
+                        # Quitar de huérfanos (vieja ruta)
+                        orphan_names.discard(old_path)
+                        
+                    except Exception as e:
+                        logger.error(f"✗ Error procesando archivo movido {name}: {e}")
+                        errors += 1
+                else:
+                    truly_new_names.append(name)
+            
+            # ═══════════════════════════════════════════════════
+            # PASO 4: Eliminar huérfanos restantes
+            # ═══════════════════════════════════════════════════
+            if orphan_names:
+                PDFIndex.objects.filter(minio_object_name__in=orphan_names).delete()
+                removed_orphans = len(orphan_names)
+            
+            # ═══════════════════════════════════════════════════
+            # PASO 5: Indexar nuevos en batch
+            # ═══════════════════════════════════════════════════
+            total_truly_new = len(truly_new_names)
+            pending_new = total_truly_new
+            
+            if not skip_new and truly_new_names:
+                batch = truly_new_names[:batch_size]
+                for name in batch:
+                    try:
+                        obj = minio_map[name]
+                        meta = extract_metadata(name)
+                        text, codigos = extract_text_from_pdf(name)
+                        
+                        PDFIndex.objects.create(
+                            minio_object_name=name,
+                            razon_social=meta['razon_social'],
+                            banco=meta['banco'],
+                            mes=meta['mes'],
+                            año=meta['año'],
+                            tipo_documento=meta['tipo_documento'],
+                            size_bytes=obj.size,
+                            md5_hash=obj.etag.strip('"') if obj.etag else None,
+                            codigos_empleado=','.join(codigos) if codigos else '',
+                            last_modified=obj.last_modified,
+                            is_indexed=bool(text)
+                        )
+                        new_files += 1
+                        pending_new -= 1
+                    except Exception as e:
+                        logger.error(f"✗ Error indexando {name}: {e}")
+                        errors += 1
+                        pending_new -= 1
+            
+            elapsed = round(time.time() - start_time, 2)
+            has_more = pending_new > 0 and not skip_new
+            
+            # Calcular progreso
+            if total_truly_new > 0:
+                progress_percent = round(((total_truly_new - pending_new) / total_truly_new) * 100)
+            else:
+                progress_percent = 100
+            
+            result = {
+                'message': 'Sincronización completada' if not has_more else f'Lote procesado ({new_files} de {total_truly_new})',
+                'total_in_minio': len(minio_names),
+                'total_indexed': PDFIndex.objects.count(),
+                'new_files': new_files,
+                'moved_files': moved_files,
+                'removed_orphans': removed_orphans,
+                'pending_new': pending_new,
+                'has_more': has_more,
+                'progress_percent': progress_percent,
+                'errors': errors,
+                'time_seconds': elapsed,
+                'batch_size': batch_size
+            }
+            
+            if moved_details:
+                result['moved_details'] = moved_details
+            
+            status_log = "parcial" if has_more else "completa"
+            logger.info(f"✓ Sincronización {status_log}: {new_files} nuevos, {moved_files} movidos, {removed_orphans} eliminados, {pending_new} pendientes en {elapsed}s")
+            
+            return Response(result)
+            
+        except Exception as e:
+            logger.error(f"Error en sincronización: {e}")
+            return Response({'error': f'Error inesperado: {str(e)}'}, status=500)
 
 class PopulateHashesView(APIView):
+    """
+    Poblar SOLO los hashes MD5 de registros existentes.
+    POST /api/index/populate-hashes
+    
+    Este endpoint es RÁPIDO porque:
+    - NO descarga PDFs
+    - NO extrae texto
+    - Solo lee el ETag de MinIO (ya contiene el MD5)
+    """
     """
     Poblar SOLO los hashes MD5 de registros existentes.
     POST /api/index/populate-hashes
@@ -517,6 +855,11 @@ class PopulateHashesView(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        data = request.data or {}
+        batch_size = min(int(data.get('batch_size', 500)), 2000)
         import logging
         logger = logging.getLogger(__name__)
         
@@ -615,8 +958,104 @@ class PopulateHashesView(APIView):
         except Exception as e:
             logger.error(f"Error en populate hashes: {e}")
             return Response({'error': f'Error inesperado: {str(e)}'}, status=500)
+        start_time = time.time()
+        updated = 0
+        not_found = 0
+        errors = 0
+        
+        try:
+            # ═══════════════════════════════════════════════════
+            # PASO 1: Obtener mapa de MinIO con ETags
+            # ═══════════════════════════════════════════════════
+            minio_etags = {}
+            for obj in minio_client.list_objects(settings.MINIO_BUCKET, recursive=True):
+                if obj.object_name.endswith('.pdf') and obj.etag:
+                    minio_etags[obj.object_name] = {
+                        'hash': obj.etag.strip('"'),
+                        'size': obj.size
+                    }
+            
+            # ═══════════════════════════════════════════════════
+            # PASO 2: Buscar registros SIN hash
+            # ═══════════════════════════════════════════════════
+            total_without_hash = PDFIndex.objects.filter(
+                Q(md5_hash__isnull=True) | Q(md5_hash='')
+            ).count()
+            
+            # CASO ESPECIAL: No hay registros pendientes
+            if total_without_hash == 0:
+                total_records = PDFIndex.objects.count()
+                elapsed = round(time.time() - start_time, 2)
+                return Response({
+                    'message': 'No hay registros pendientes de hash' if total_records > 0 else 'No hay PDFs indexados',
+                    'updated': 0,
+                    'not_found_in_minio': 0,
+                    'pending': 0,
+                    'has_more': False,
+                    'progress_percent': 100,
+                    'errors': 0,
+                    'time_seconds': elapsed,
+                    'batch_size': batch_size,
+                    'total_records': total_records
+                })
+            
+            qs = PDFIndex.objects.filter(
+                Q(md5_hash__isnull=True) | Q(md5_hash='')
+            ).exclude(minio_object_name='')[:batch_size]
+            
+            # ═══════════════════════════════════════════════════
+            # PASO 3: Actualizar hashes
+            # ═══════════════════════════════════════════════════
+            for record in qs:
+                if record.minio_object_name in minio_etags:
+                    try:
+                        info = minio_etags[record.minio_object_name]
+                        record.md5_hash = info['hash']
+                        record.size_bytes = info['size']
+                        record.save()
+                        updated += 1
+                    except Exception as e:
+                        logger.error(f"Error actualizando hash de {record.minio_object_name}: {e}")
+                        errors += 1
+                else:
+                    not_found += 1
+            
+            elapsed = round(time.time() - start_time, 2)
+            pending = total_without_hash - updated
+            has_more = pending > 0
+            
+            # Calcular progreso
+            total_records = PDFIndex.objects.count()
+            if total_records > 0:
+                progress_percent = round(((total_records - pending) / total_records) * 100, 1)
+            else:
+                progress_percent = 100
+            
+            result = {
+                'message': 'Hashes poblados' if not has_more else f'Lote procesado ({updated} de {total_without_hash})',
+                'updated': updated,
+                'not_found_in_minio': not_found,
+                'pending': pending,
+                'has_more': has_more,
+                'progress_percent': progress_percent,
+                'errors': errors,
+                'time_seconds': elapsed,
+                'batch_size': batch_size
+            }
+            
+            logger.info(f"✓ Populate hashes: {updated} actualizados, {pending} pendientes en {elapsed}s")
+            
+            return Response(result)
+            
+        except Exception as e:
+            logger.error(f"Error en populate hashes: {e}")
+            return Response({'error': f'Error inesperado: {str(e)}'}, status=500)
 
 class IndexStatsView(APIView):
+    """
+    Estadísticas del índice de PDFs.
+    GET /api/index/stats
+    """
     """
     Estadísticas del índice de PDFs.
     GET /api/index/stats
@@ -630,10 +1069,23 @@ class IndexStatsView(APIView):
         # Último indexado
         last = PDFIndex.objects.order_by('-indexed_at').first() if total > 0 else None
         
+        total = PDFIndex.objects.count()
+        total_size = PDFIndex.objects.aggregate(Sum('size_bytes'))['size_bytes__sum'] or 0
+        
+        # Último indexado
+        last = PDFIndex.objects.order_by('-indexed_at').first() if total > 0 else None
+        
         return Response({
             'total_indexed': total,
             'total_size_gb': round(total_size / (1024**3), 2),
+            'total_indexed': total,
+            'total_size_gb': round(total_size / (1024**3), 2),
             'by_year': {x['año']: x['c'] for x in PDFIndex.objects.values('año').annotate(c=Count('id'))},
+            'by_razon_social': {x['razon_social']: x['c'] for x in PDFIndex.objects.values('razon_social').annotate(c=Count('id'))},
+            'by_banco': {x['banco']: x['c'] for x in PDFIndex.objects.values('banco').annotate(c=Count('id'))},
+            'last_indexed': last.indexed_at.isoformat() if last and last.indexed_at else None,
+            'indexed_successfully': PDFIndex.objects.filter(is_indexed=True).count(),
+            'with_errors': PDFIndex.objects.filter(is_indexed=False).count(),
             'by_razon_social': {x['razon_social']: x['c'] for x in PDFIndex.objects.values('razon_social').annotate(c=Count('id'))},
             'by_banco': {x['banco']: x['c'] for x in PDFIndex.objects.values('banco').annotate(c=Count('id'))},
             'last_indexed': last.indexed_at.isoformat() if last and last.indexed_at else None,
@@ -642,6 +1094,12 @@ class IndexStatsView(APIView):
         })
 
 class ReindexView(APIView):
+    """
+    Reindexar todos los PDFs de MinIO en PostgreSQL.
+    POST /api/reindex
+    
+    INCLUYE: Eliminación de índices huérfanos (PDFs eliminados de MinIO)
+    """
     """
     Reindexar todos los PDFs de MinIO en PostgreSQL.
     POST /api/reindex
@@ -1125,6 +1583,7 @@ class BulkSearchView(APIView):
     }
     """
     permission_classes = [IsAuthenticated]
+    throttle_classes = [BulkSearchRateThrottle]
 
     def post(self, request):
         import logging
@@ -1266,8 +1725,6 @@ class MergePdfsView(APIView):
         from minio.error import S3Error
         import fitz  # PyMuPDF
         import logging
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        
         logger = logging.getLogger(__name__)
         
         data = request.data
@@ -1280,71 +1737,40 @@ class MergePdfsView(APIView):
         if len(paths) > 100:
             return Response({'error': 'Máximo 100 archivos por fusión.'}, status=400)
         
-        def download_pdf(path):
-            """Descarga un PDF de MinIO y retorna los bytes (ejecuta en paralelo)"""
-            try:
-                response = minio_client.get_object(settings.MINIO_BUCKET, path)
-                pdf_bytes = response.read()
-                response.close()
-                response.release_conn()
-                return {'path': path, 'bytes': pdf_bytes, 'success': True}
-            except S3Error as e:
-                logger.error(f"✗ Error descargando {path}: {e}")
-                return {'path': path, 'error': str(e), 'success': False}
-            except Exception as e:
-                logger.error(f"✗ Error inesperado {path}: {e}")
-                return {'path': path, 'error': str(e), 'success': False}
-        
         try:
-            # ═══════════════════════════════════════════════════
-            # FASE 1: Descargas en paralelo (ThreadPoolExecutor)
-            # ═══════════════════════════════════════════════════
-            downloaded_pdfs = {}
-            errors = []
-            
-            # Usar max 8 workers para no saturar MinIO
-            max_workers = min(8, len(paths))
-            logger.info(f"⚡ Descargando {len(paths)} PDFs en paralelo (workers: {max_workers})")
-            
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_path = {executor.submit(download_pdf, path): path for path in paths}
-                
-                for future in as_completed(future_to_path):
-                    result = future.result()
-                    if result['success']:
-                        downloaded_pdfs[result['path']] = result['bytes']
-                    else:
-                        errors.append({'path': result['path'], 'error': result['error']})
-            
-            logger.info(f"✓ Descargados: {len(downloaded_pdfs)}, Errores: {len(errors)}")
-            
-            if not downloaded_pdfs:
-                return Response({
-                    'error': 'No se pudo descargar ningún archivo.',
-                    'errors': errors
-                }, status=400)
-            
-            # ═══════════════════════════════════════════════════
-            # FASE 2: Fusión secuencial (mantener orden original)
-            # ═══════════════════════════════════════════════════
+            # Crear documento PDF combinado
             merged_pdf = fitz.open()
             files_merged = []
+            errors = []
             
-            # Mantener orden original de paths
             for path in paths:
-                if path in downloaded_pdfs:
-                    try:
-                        src_pdf = fitz.open(stream=downloaded_pdfs[path], filetype="pdf")
-                        merged_pdf.insert_pdf(src_pdf)
-                        src_pdf.close()
-                        files_merged.append(path)
-                        
-                        # Liberar memoria inmediatamente
-                        del downloaded_pdfs[path]
-                        
-                    except Exception as e:
-                        logger.error(f"✗ Error fusionando {path}: {e}")
-                        errors.append({'path': path, 'error': f'Error al fusionar: {str(e)}'})
+                try:
+                    # Descargar PDF de MinIO
+                    response = minio_client.get_object(settings.MINIO_BUCKET, path)
+                    pdf_bytes = response.read()
+                    response.close()
+                    response.release_conn()
+                    
+                    # Abrir y añadir al documento combinado
+                    src_pdf = fitz.open(stream=pdf_bytes, filetype="pdf")
+                    merged_pdf.insert_pdf(src_pdf)
+                    src_pdf.close()
+                    
+                    files_merged.append(path)
+                    logger.info(f"✓ Añadido al merge: {path}")
+                    
+                except S3Error as e:
+                    logger.error(f"✗ Error descargando {path}: {e}")
+                    errors.append({'path': path, 'error': str(e)})
+                except Exception as e:
+                    logger.error(f"✗ Error procesando {path}: {e}")
+                    errors.append({'path': path, 'error': str(e)})
+            
+            if not files_merged:
+                return Response({
+                    'error': 'No se pudo procesar ningún archivo.',
+                    'errors': errors
+                }, status=400)
             
             # Exportar PDF combinado a bytes
             output = BytesIO()

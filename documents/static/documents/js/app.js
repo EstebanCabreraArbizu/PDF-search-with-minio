@@ -393,7 +393,7 @@ function displayResults(data) {
                             <small class="text-muted d-block mb-2" style="font-size: 0.7rem;">
                                 ${r.filename}
                             </small>
-                            <button onclick="downloadFile('${r.download_url}')" class="btn btn-sm btn-primary w-100">
+                            <button class="btn btn-sm btn-primary w-100" data-action="download" data-url="${encodeURIComponent(r.download_url)}">
                                 📥 Descargar
                             </button>
                         </div>
@@ -713,7 +713,7 @@ function displaySelectedFiles(rejectedCount = 0) {
                             </div>
                         </div>
                         <div>
-                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile(${idx})">🗑️</button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-action="remove-file" data-index="${idx}">🗑️</button>
                         </div>
                     </li>
                 `;
@@ -974,7 +974,7 @@ function displayFilesList(data) {
 
         // Botón anterior
         pagination += `<li class="page-item ${!data.has_prev ? 'disabled' : ''}">
-                    <a class="page-link" href="#" onclick="loadFilesList(${currentFilesPage - 1}); return false;">‹ Anterior</a>
+                    <a class="page-link" href="#" data-action="paginate" data-page="${currentFilesPage - 1}">‹ Anterior</a>
                 </li>`;
 
         // Páginas
@@ -988,13 +988,13 @@ function displayFilesList(data) {
 
         for (let i = startPage; i <= endPage; i++) {
             pagination += `<li class="page-item ${i === currentFilesPage ? 'active' : ''}">
-                        <a class="page-link" href="#" onclick="loadFilesList(${i}); return false;">${i}</a>
+                        <a class="page-link" href="#" data-action="paginate" data-page="${i}">${i}</a>
                     </li>`;
         }
 
         // Botón siguiente
         pagination += `<li class="page-item ${!data.has_next ? 'disabled' : ''}">
-                    <a class="page-link" href="#" onclick="loadFilesList(${currentFilesPage + 1}); return false;">Siguiente ›</a>
+                    <a class="page-link" href="#" data-action="paginate" data-page="${currentFilesPage + 1}">Siguiente ›</a>
                 </li>`;
 
         pagination += '</ul></nav>';
@@ -1045,13 +1045,15 @@ function displayFilesList(data) {
                                         <td>
                                             <div class="btn-group btn-group-sm">
                                                 <button class="btn btn-primary" 
-                                                        onclick="downloadFile('${file.download_url}')"
+                                                        data-action="download"
+                                                        data-url="${encodeURIComponent(file.download_url)}"
                                                         title="Descargar">
                                                     📥
                                                 </button>
                                                 ${isAdmin ? `
                                                     <button class="btn btn-danger" 
-                                                            onclick="deleteFile('${file.path.replace(/'/g, "\\'")}')"
+                                                            data-action="delete-file"
+                                                            data-path="${encodeURIComponent(file.path)}"
                                                             title="Eliminar">
                                                         🗑️
                                                     </button>
@@ -1139,7 +1141,7 @@ async function loadFolderBrowser(path) {
         // Actualizar breadcrumb
         breadcrumb.innerHTML = `
                     <li class="breadcrumb-item">
-                        <a href="#" onclick="loadFolderBrowser(''); return false;">🏠 Raíz</a>
+                        <a href="#" data-action="browse-folder" data-path="">🏠 Raíz</a>
                     </li>
                 `;
         data.breadcrumb.forEach((item, index) => {
@@ -1149,7 +1151,7 @@ async function loadFolderBrowser(path) {
             } else {
                 breadcrumb.innerHTML += `
                             <li class="breadcrumb-item">
-                                <a href="#" onclick="loadFolderBrowser('${item.path}'); return false;">${item.name}</a>
+                                <a href="#" data-action="browse-folder" data-path="${encodeURIComponent(item.path)}">${item.name}</a>
                             </li>
                         `;
             }
@@ -1174,7 +1176,8 @@ async function loadFolderBrowser(path) {
                     ` + data.folders.map(folder => `
                         <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
                              style="cursor: pointer;"
-                             onclick="loadFolderBrowser('${folder.path}')">
+                             data-action="browse-folder"
+                             data-path="${encodeURIComponent(folder.path)}">
                             <div>
                                 <span class="me-2">📁</span>
                                 <strong>${folder.name}</strong>
@@ -1182,7 +1185,8 @@ async function loadFolderBrowser(path) {
                             <div>
                                 <span class="badge bg-secondary me-2">${folder.count} PDF(s)</span>
                                 <button class="btn btn-sm btn-success" 
-                                        onclick="event.stopPropagation(); selectFolder('${folder.path}');"
+                                        data-action="select-folder"
+                                        data-path="${encodeURIComponent(folder.path)}"
                                         title="Seleccionar esta carpeta">
                                     ✓ Usar
                                 </button>
@@ -1490,3 +1494,101 @@ async function populateHashes() {
         hashButton.disabled = false;
     }
 }
+
+function registerActionHandlers() {
+    const bindings = [
+        ['logoutButton', 'click', () => logout()],
+        ['files-tab', 'click', () => loadFilesList()],
+        ['clearFiltersButton', 'click', () => clearFilters()],
+        ['mergeButton', 'click', () => mergeAndDownload()],
+        ['openFolderBrowserButton', 'click', () => openFolderBrowser()],
+        ['uploadFilesButton', 'click', () => uploadFiles()],
+        ['syncButton', 'click', () => syncIndex()],
+        ['syncStopButton', 'click', () => stopSync()],
+        ['hashButton', 'click', () => populateHashes()],
+        ['filesSearchButton', 'click', () => loadFilesList()],
+        ['clearFileFiltersButton', 'click', () => clearFileFilters()],
+        ['goUpFolderButton', 'click', () => goUpFolder()],
+        ['refreshFolderBrowserButton', 'click', () => loadFolderBrowser(currentBrowserPath)],
+        ['createSubfolderButton', 'click', () => createNewSubfolder()],
+        ['selectCurrentFolderButton', 'click', () => selectCurrentFolder()],
+    ];
+
+    bindings.forEach(([id, eventName, handler]) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener(eventName, handler);
+        }
+    });
+
+    const selectFilesButton = document.getElementById('selectFilesButton');
+    if (selectFilesButton) {
+        selectFilesButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            document.getElementById('fileInput').click();
+        });
+    }
+}
+
+function registerDelegatedListeners() {
+    document.addEventListener('click', (event) => {
+        const actionElement = event.target.closest('[data-action]');
+        if (!actionElement) {
+            return;
+        }
+
+        const action = actionElement.dataset.action;
+
+        if (action === 'download') {
+            const encodedUrl = actionElement.dataset.url;
+            if (encodedUrl) {
+                downloadFile(decodeURIComponent(encodedUrl));
+            }
+            return;
+        }
+
+        if (action === 'remove-file') {
+            const index = Number.parseInt(actionElement.dataset.index, 10);
+            if (!Number.isNaN(index)) {
+                removeFile(index);
+            }
+            return;
+        }
+
+        if (action === 'paginate') {
+            event.preventDefault();
+            const page = Number.parseInt(actionElement.dataset.page, 10);
+            if (!Number.isNaN(page)) {
+                loadFilesList(page);
+            }
+            return;
+        }
+
+        if (action === 'delete-file') {
+            const encodedPath = actionElement.dataset.path;
+            if (encodedPath) {
+                deleteFile(decodeURIComponent(encodedPath));
+            }
+            return;
+        }
+
+        if (action === 'browse-folder') {
+            event.preventDefault();
+            const encodedPath = actionElement.dataset.path || '';
+            loadFolderBrowser(encodedPath ? decodeURIComponent(encodedPath) : '');
+            return;
+        }
+
+        if (action === 'select-folder') {
+            event.preventDefault();
+            event.stopPropagation();
+            const encodedPath = actionElement.dataset.path;
+            if (encodedPath) {
+                selectFolder(decodeURIComponent(encodedPath));
+            }
+        }
+    });
+}
+
+registerActionHandlers();
+registerDelegatedListeners();

@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from .models import PDFIndex
-
 class PDFIndexSerializer(serializers.ModelSerializer):
     """
     Serializer compatible con el formato de Flask (to_dict).
