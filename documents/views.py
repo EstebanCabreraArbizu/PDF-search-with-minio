@@ -5,7 +5,7 @@ from rest_framework import status
 from django.db.models import Q, Sum, Count
 from django.http import StreamingHttpResponse
 from auditlog.services import record_audit_event
-from docrepo.models import Document
+from docrepo.models import Document, StorageObject
 from docrepo.services import deactivate_document_by_storage_key, upsert_document_from_upload
 from .models import PDFIndex, DownloadLog
 from .serializers import PDFIndexSerializer
@@ -458,54 +458,44 @@ class SyncIndexView(APIView):
 
     def post(self, request):
         import logging
+
         logger = logging.getLogger(__name__)
-        
-        import logging
-        logger = logging.getLogger(__name__)
-        
+
         global _minio_list_cache
-        data = request.data or {}
         data = request.data or {}
         batch_size = min(int(data.get('batch_size', 50)), 200)
         skip_new = data.get('skip_new', False)
-        
+        dual_write_legacy = getattr(settings, 'DOCREPO_DUAL_WRITE_LEGACY_ENABLED', True)
+
         start_time = time.time()
         new_files = 0
         moved_files = 0
         moved_details = []
         removed_orphans = 0
-        removed_orphans = 0
         errors = 0
-        
+
         try:
-            # ═══════════════════════════════════════════════════
-            # PASO 1: Listar MinIO (con caché de 60s)
-            # ═══════════════════════════════════════════════════
             now = time.time()
             if _minio_list_cache['data'] is None or (now - _minio_list_cache['time']) > 60:
-                logger.info("Listing MinIO (cache expired or empty)...")
+                logger.info('Listing MinIO (cache expired or empty)...')
                 minio_all = []
                 for obj in minio_client.list_objects(settings.MINIO_BUCKET, recursive=True):
                     if obj.object_name.endswith('.pdf'):
                         minio_all.append(obj)
                 _minio_list_cache = {'time': now, 'data': minio_all}
-            
+
             objects_list = _minio_list_cache['data']
             minio_map = {obj.object_name: obj for obj in objects_list}
             minio_names = set(minio_map.keys())
-            
-            # Construir índice por hash para detección de movidos
-            minio_by_hash = {}
-            for obj in objects_list:
-                md5_hash = obj.etag.strip('"') if obj.etag else None
-                if md5_hash:
-                    key = (obj.size, md5_hash)
-                    if key not in minio_by_hash:
-                        minio_by_hash[key] = []
-                    minio_by_hash[key].append(obj)
-            
-            # CASO ESPECIAL: No hay PDFs
-            indexed_count = PDFIndex.objects.count()
+
+            storage_rows = StorageObject.objects.select_related('document').filter(
+                bucket_name=settings.MINIO_BUCKET,
+                document__is_active=True,
+            )
+            storage_by_key = {row.object_key: row for row in storage_rows if row.object_key}
+            indexed_names = set(storage_by_key.keys())
+
+            indexed_count = Document.objects.filter(is_active=True, index_state__is_indexed=True).count()
             if len(minio_names) == 0 and indexed_count == 0:
                 elapsed = round(time.time() - start_time, 2)
                 return Response({
@@ -522,83 +512,89 @@ class SyncIndexView(APIView):
                     'time_seconds': elapsed,
                     'batch_size': batch_size
                 })
-            
-            # ═══════════════════════════════════════════════════
-            # PASO 2: Obtener indexados y detectar huérfanos
-            # ═══════════════════════════════════════════════════
-            indexed_qs = PDFIndex.objects.all()
-            indexed_map = {r.minio_object_name: r for r in indexed_qs}
-            indexed_names = set(indexed_map.keys())
-            
+
             orphan_names = indexed_names - minio_names
-            
-            # Índice de huérfanos por tamaño + hash
+
             orphan_by_hash = {}
-            for name in orphan_names:
-                record = indexed_map[name]
-                if record.md5_hash and record.size_bytes:
-                    key = (record.size_bytes, record.md5_hash)
-                    if key not in orphan_by_hash:
-                        orphan_by_hash[key] = []
-                    orphan_by_hash[key].append(record)
-            
-            # ═══════════════════════════════════════════════════
-            # PASO 3: Detectar archivos movidos
-            # ═══════════════════════════════════════════════════
+            for orphan_name in orphan_names:
+                storage = storage_by_key.get(orphan_name)
+                if storage is None:
+                    continue
+
+                md5_hash = (storage.etag or '').strip('"') or (storage.document.source_hash_md5 or '')
+                if md5_hash and storage.size_bytes:
+                    key = (storage.size_bytes, md5_hash)
+                    orphan_by_hash.setdefault(key, []).append(storage)
+
             new_names = minio_names - indexed_names
             truly_new_names = []
-            
+
             for name in new_names:
                 obj = minio_map[name]
                 md5 = obj.etag.strip('"') if obj.etag else None
                 key = (obj.size, md5) if md5 else None
-                
+
                 if key and key in orphan_by_hash and orphan_by_hash[key]:
-                    # ¡Archivo MOVIDO detectado!
-                    orphan_rec = orphan_by_hash[key].pop(0)
-                    old_path = orphan_rec.minio_object_name
-                    
+                    orphan_storage = orphan_by_hash[key].pop(0)
+                    old_path = orphan_storage.object_key
+
                     try:
-                        meta = extract_metadata(name)
-                        orphan_rec.minio_object_name = name
-                        orphan_rec.razon_social = meta['razon_social']
-                        orphan_rec.banco = meta['banco']
-                        orphan_rec.año = meta['año']
-                        orphan_rec.mes = meta['mes']
-                        orphan_rec.tipo_documento = meta['tipo_documento']
-                        orphan_rec.last_modified = obj.last_modified
-                        orphan_rec.indexed_at = datetime.utcnow()
-                        orphan_rec.save()
-                        
+                        orphan_storage.object_key = name
+                        orphan_storage.etag = md5 or ''
+                        orphan_storage.size_bytes = obj.size or 0
+                        orphan_storage.last_modified = obj.last_modified
+                        orphan_storage.save(update_fields=['object_key', 'etag', 'size_bytes', 'last_modified', 'updated_at'])
+
+                        existing_codes = list(
+                            orphan_storage.document.employee_codes.values_list('employee_code', flat=True)
+                        )
+                        index_state = getattr(orphan_storage.document, 'index_state', None)
+                        is_indexed = index_state.is_indexed if index_state else True
+
+                        upsert_document_from_upload(
+                            object_key=name,
+                            metadata=extract_metadata(name),
+                            size_bytes=obj.size or 0,
+                            etag=md5,
+                            last_modified=obj.last_modified,
+                            employee_codes=existing_codes,
+                            is_indexed=is_indexed,
+                            actor=request.user,
+                        )
+
+                        if dual_write_legacy:
+                            PDFIndex.objects.filter(minio_object_name=old_path).update(minio_object_name=name)
+
                         moved_files += 1
                         if len(moved_details) < 20:
-                            moved_details.append({
-                                'old_path': old_path,
-                                'new_path': name
-                            })
-                        
-                        # Quitar de huérfanos (vieja ruta)
+                            moved_details.append({'old_path': old_path, 'new_path': name})
+
                         orphan_names.discard(old_path)
-                        
-                    except Exception as e:
-                        logger.error(f"✗ Error procesando archivo movido {name}: {e}")
+                    except Exception as move_error:
+                        logger.error(f'✗ Error procesando archivo movido {name}: {move_error}')
                         errors += 1
                 else:
                     truly_new_names.append(name)
-            
-            # ═══════════════════════════════════════════════════
-            # PASO 4: Eliminar huérfanos restantes
-            # ═══════════════════════════════════════════════════
+
             if orphan_names:
-                PDFIndex.objects.filter(minio_object_name__in=orphan_names).delete()
-                removed_orphans = len(orphan_names)
-            
-            # ═══════════════════════════════════════════════════
-            # PASO 5: Indexar nuevos en batch
-            # ═══════════════════════════════════════════════════
+                for orphan_name in orphan_names:
+                    try:
+                        document = deactivate_document_by_storage_key(
+                            object_key=orphan_name,
+                            actor=request.user,
+                        )
+                        if document:
+                            removed_orphans += 1
+                    except Exception as orphan_error:
+                        logger.error(f'✗ Error desactivando huérfano {orphan_name}: {orphan_error}')
+                        errors += 1
+
+                if dual_write_legacy:
+                    PDFIndex.objects.filter(minio_object_name__in=orphan_names).delete()
+
             total_truly_new = len(truly_new_names)
             pending_new = total_truly_new
-            
+
             if not skip_new and truly_new_names:
                 batch = truly_new_names[:batch_size]
                 for name in batch:
@@ -606,40 +602,56 @@ class SyncIndexView(APIView):
                         obj = minio_map[name]
                         meta = extract_metadata(name)
                         text, codigos = extract_text_from_pdf(name)
-                        
-                        PDFIndex.objects.create(
-                            minio_object_name=name,
-                            razon_social=meta['razon_social'],
-                            banco=meta['banco'],
-                            mes=meta['mes'],
-                            año=meta['año'],
-                            tipo_documento=meta['tipo_documento'],
-                            size_bytes=obj.size,
-                            md5_hash=obj.etag.strip('"') if obj.etag else None,
-                            codigos_empleado=','.join(codigos) if codigos else '',
+                        md5_hash = obj.etag.strip('"') if obj.etag else None
+                        is_indexed = bool(text)
+
+                        upsert_document_from_upload(
+                            object_key=name,
+                            metadata=meta,
+                            size_bytes=obj.size or 0,
+                            etag=md5_hash,
                             last_modified=obj.last_modified,
-                            is_indexed=bool(text)
+                            employee_codes=codigos,
+                            is_indexed=is_indexed,
+                            actor=request.user,
                         )
+
+                        if dual_write_legacy:
+                            PDFIndex.objects.update_or_create(
+                                minio_object_name=name,
+                                defaults={
+                                    'razon_social': meta['razon_social'],
+                                    'banco': meta['banco'],
+                                    'mes': meta['mes'],
+                                    'año': meta['año'],
+                                    'tipo_documento': meta['tipo_documento'],
+                                    'size_bytes': obj.size,
+                                    'md5_hash': md5_hash,
+                                    'codigos_empleado': ','.join(codigos) if codigos else '',
+                                    'last_modified': obj.last_modified,
+                                    'is_indexed': is_indexed,
+                                },
+                            )
+
                         new_files += 1
                         pending_new -= 1
-                    except Exception as e:
-                        logger.error(f"✗ Error indexando {name}: {e}")
+                    except Exception as index_error:
+                        logger.error(f'✗ Error indexando {name}: {index_error}')
                         errors += 1
                         pending_new -= 1
-            
+
             elapsed = round(time.time() - start_time, 2)
             has_more = pending_new > 0 and not skip_new
-            
-            # Calcular progreso
+
             if total_truly_new > 0:
                 progress_percent = round(((total_truly_new - pending_new) / total_truly_new) * 100)
             else:
                 progress_percent = 100
-            
+
             result = {
                 'message': 'Sincronización completada' if not has_more else f'Lote procesado ({new_files} de {total_truly_new})',
                 'total_in_minio': len(minio_names),
-                'total_indexed': PDFIndex.objects.count(),
+                'total_indexed': Document.objects.filter(is_active=True, index_state__is_indexed=True).count(),
                 'new_files': new_files,
                 'moved_files': moved_files,
                 'removed_orphans': removed_orphans,
@@ -650,190 +662,36 @@ class SyncIndexView(APIView):
                 'time_seconds': elapsed,
                 'batch_size': batch_size
             }
-            
+
             if moved_details:
                 result['moved_details'] = moved_details
-            
-            status_log = "parcial" if has_more else "completa"
-            logger.info(f"✓ Sincronización {status_log}: {new_files} nuevos, {moved_files} movidos, {removed_orphans} eliminados, {pending_new} pendientes en {elapsed}s")
-            
+
+            record_audit_event(
+                action='INDEX_SYNC_COMPLETED',
+                resource_type='index',
+                resource_id='docrepo_sync',
+                request=request,
+                actor=request.user,
+                metadata=result,
+            )
+
+            status_log = 'parcial' if has_more else 'completa'
+            logger.info(
+                f"✓ Sincronización {status_log}: {new_files} nuevos, {moved_files} movidos, "
+                f"{removed_orphans} desactivados, {pending_new} pendientes en {elapsed}s"
+            )
+
             return Response(result)
-            
         except Exception as e:
-            logger.error(f"Error en sincronización: {e}")
-            return Response({'error': f'Error inesperado: {str(e)}'}, status=500)
-            
-            objects_list = _minio_list_cache['data']
-            minio_map = {obj.object_name: obj for obj in objects_list}
-            minio_names = set(minio_map.keys())
-            
-            # Construir índice por hash para detección de movidos
-            minio_by_hash = {}
-            for obj in objects_list:
-                md5_hash = obj.etag.strip('"') if obj.etag else None
-                if md5_hash:
-                    key = (obj.size, md5_hash)
-                    if key not in minio_by_hash:
-                        minio_by_hash[key] = []
-                    minio_by_hash[key].append(obj)
-            
-            # CASO ESPECIAL: No hay PDFs
-            indexed_count = PDFIndex.objects.count()
-            if len(minio_names) == 0 and indexed_count == 0:
-                elapsed = round(time.time() - start_time, 2)
-                return Response({
-                    'message': 'No hay PDFs en MinIO ni en el índice',
-                    'total_in_minio': 0,
-                    'total_indexed': 0,
-                    'new_files': 0,
-                    'moved_files': 0,
-                    'removed_orphans': 0,
-                    'pending_new': 0,
-                    'has_more': False,
-                    'progress_percent': 100,
-                    'errors': 0,
-                    'time_seconds': elapsed,
-                    'batch_size': batch_size
-                })
-            
-            # ═══════════════════════════════════════════════════
-            # PASO 2: Obtener indexados y detectar huérfanos
-            # ═══════════════════════════════════════════════════
-            indexed_qs = PDFIndex.objects.all()
-            indexed_map = {r.minio_object_name: r for r in indexed_qs}
-            indexed_names = set(indexed_map.keys())
-            
-            orphan_names = indexed_names - minio_names
-            
-            # Índice de huérfanos por tamaño + hash
-            orphan_by_hash = {}
-            for name in orphan_names:
-                record = indexed_map[name]
-                if record.md5_hash and record.size_bytes:
-                    key = (record.size_bytes, record.md5_hash)
-                    if key not in orphan_by_hash:
-                        orphan_by_hash[key] = []
-                    orphan_by_hash[key].append(record)
-            
-            # ═══════════════════════════════════════════════════
-            # PASO 3: Detectar archivos movidos
-            # ═══════════════════════════════════════════════════
-            new_names = minio_names - indexed_names
-            truly_new_names = []
-            
-            for name in new_names:
-                obj = minio_map[name]
-                md5 = obj.etag.strip('"') if obj.etag else None
-                key = (obj.size, md5) if md5 else None
-                
-                if key and key in orphan_by_hash and orphan_by_hash[key]:
-                    # ¡Archivo MOVIDO detectado!
-                    orphan_rec = orphan_by_hash[key].pop(0)
-                    old_path = orphan_rec.minio_object_name
-                    
-                    try:
-                        meta = extract_metadata(name)
-                        orphan_rec.minio_object_name = name
-                        orphan_rec.razon_social = meta['razon_social']
-                        orphan_rec.banco = meta['banco']
-                        orphan_rec.año = meta['año']
-                        orphan_rec.mes = meta['mes']
-                        orphan_rec.tipo_documento = meta['tipo_documento']
-                        orphan_rec.last_modified = obj.last_modified
-                        orphan_rec.indexed_at = datetime.utcnow()
-                        orphan_rec.save()
-                        
-                        moved_files += 1
-                        if len(moved_details) < 20:
-                            moved_details.append({
-                                'old_path': old_path,
-                                'new_path': name
-                            })
-                        
-                        # Quitar de huérfanos (vieja ruta)
-                        orphan_names.discard(old_path)
-                        
-                    except Exception as e:
-                        logger.error(f"✗ Error procesando archivo movido {name}: {e}")
-                        errors += 1
-                else:
-                    truly_new_names.append(name)
-            
-            # ═══════════════════════════════════════════════════
-            # PASO 4: Eliminar huérfanos restantes
-            # ═══════════════════════════════════════════════════
-            if orphan_names:
-                PDFIndex.objects.filter(minio_object_name__in=orphan_names).delete()
-                removed_orphans = len(orphan_names)
-            
-            # ═══════════════════════════════════════════════════
-            # PASO 5: Indexar nuevos en batch
-            # ═══════════════════════════════════════════════════
-            total_truly_new = len(truly_new_names)
-            pending_new = total_truly_new
-            
-            if not skip_new and truly_new_names:
-                batch = truly_new_names[:batch_size]
-                for name in batch:
-                    try:
-                        obj = minio_map[name]
-                        meta = extract_metadata(name)
-                        text, codigos = extract_text_from_pdf(name)
-                        
-                        PDFIndex.objects.create(
-                            minio_object_name=name,
-                            razon_social=meta['razon_social'],
-                            banco=meta['banco'],
-                            mes=meta['mes'],
-                            año=meta['año'],
-                            tipo_documento=meta['tipo_documento'],
-                            size_bytes=obj.size,
-                            md5_hash=obj.etag.strip('"') if obj.etag else None,
-                            codigos_empleado=','.join(codigos) if codigos else '',
-                            last_modified=obj.last_modified,
-                            is_indexed=bool(text)
-                        )
-                        new_files += 1
-                        pending_new -= 1
-                    except Exception as e:
-                        logger.error(f"✗ Error indexando {name}: {e}")
-                        errors += 1
-                        pending_new -= 1
-            
-            elapsed = round(time.time() - start_time, 2)
-            has_more = pending_new > 0 and not skip_new
-            
-            # Calcular progreso
-            if total_truly_new > 0:
-                progress_percent = round(((total_truly_new - pending_new) / total_truly_new) * 100)
-            else:
-                progress_percent = 100
-            
-            result = {
-                'message': 'Sincronización completada' if not has_more else f'Lote procesado ({new_files} de {total_truly_new})',
-                'total_in_minio': len(minio_names),
-                'total_indexed': PDFIndex.objects.count(),
-                'new_files': new_files,
-                'moved_files': moved_files,
-                'removed_orphans': removed_orphans,
-                'pending_new': pending_new,
-                'has_more': has_more,
-                'progress_percent': progress_percent,
-                'errors': errors,
-                'time_seconds': elapsed,
-                'batch_size': batch_size
-            }
-            
-            if moved_details:
-                result['moved_details'] = moved_details
-            
-            status_log = "parcial" if has_more else "completa"
-            logger.info(f"✓ Sincronización {status_log}: {new_files} nuevos, {moved_files} movidos, {removed_orphans} eliminados, {pending_new} pendientes en {elapsed}s")
-            
-            return Response(result)
-            
-        except Exception as e:
-            logger.error(f"Error en sincronización: {e}")
+            logger.error(f'Error en sincronización: {e}')
+            record_audit_event(
+                action='INDEX_SYNC_FAILED',
+                resource_type='index',
+                resource_id='docrepo_sync',
+                request=request,
+                actor=request.user,
+                metadata={'status_code': 500, 'error': str(e)},
+            )
             return Response({'error': f'Error inesperado: {str(e)}'}, status=500)
 
 class PopulateHashesView(APIView):
@@ -1113,85 +971,121 @@ class ReindexView(APIView):
     
     def post(self, request):
         import logging
+
         logger = logging.getLogger(__name__)
-        
+
         data = request.data or {}
         clean_orphans = data.get('clean_orphans', True)
-        
+        dual_write_legacy = getattr(settings, 'DOCREPO_DUAL_WRITE_LEGACY_ENABLED', True)
+
         start_time = time.time()
         indexed_count = 0
         new_count = 0
         updated_count = 0
         error_count = 0
         orphans_removed = 0
-        
+
         try:
-            # Paso 1: Obtener lista de PDFs en MinIO
             minio_objects = {}
             for obj in minio_client.list_objects(settings.MINIO_BUCKET, recursive=True):
                 if obj.object_name.endswith('.pdf'):
                     minio_objects[obj.object_name] = obj
-            
-            logger.info(f"📁 Encontrados {len(minio_objects)} PDFs en MinIO")
-            
-            # Paso 2: Eliminar índices huérfanos
+
+            logger.info(f'📁 Encontrados {len(minio_objects)} PDFs en MinIO')
+
+            minio_keys = set(minio_objects.keys())
+            storage_rows = StorageObject.objects.select_related('document').filter(
+                bucket_name=settings.MINIO_BUCKET,
+                document__is_active=True,
+            )
+            storage_by_key = {row.object_key: row for row in storage_rows if row.object_key}
+            indexed_keys = set(storage_by_key.keys())
+
             if clean_orphans:
-                indexed_names = set(PDFIndex.objects.values_list('minio_object_name', flat=True))
-                orphan_names = indexed_names - set(minio_objects.keys())
-                
-                if orphan_names:
+                orphan_names = indexed_keys - minio_keys
+                for orphan_name in orphan_names:
+                    try:
+                        document = deactivate_document_by_storage_key(
+                            object_key=orphan_name,
+                            actor=request.user,
+                        )
+                        if document:
+                            orphans_removed += 1
+                    except Exception as orphan_error:
+                        error_count += 1
+                        logger.error(f'✗ Error desactivando huérfano {orphan_name}: {orphan_error}')
+
+                if dual_write_legacy and orphan_names:
                     PDFIndex.objects.filter(minio_object_name__in=orphan_names).delete()
-                    orphans_removed = len(orphan_names)
-                    logger.info(f"🗑️ Eliminados {orphans_removed} índices huérfanos")
-            
-            # Paso 3: Indexar PDFs nuevos o actualizados
+
             to_process = []
             for object_name, obj in minio_objects.items():
                 try:
-                    existing = PDFIndex.objects.filter(minio_object_name=object_name).first()
-                    if not existing:
+                    existing = storage_by_key.get(object_name)
+                    if existing is None:
                         to_process.append((obj, 'new'))
                         new_count += 1
-                    elif existing.last_modified != obj.last_modified:
+                        continue
+
+                    existing_md5 = (existing.etag or '').strip('"')
+                    current_md5 = obj.etag.strip('"') if obj.etag else ''
+                    changed = (
+                        existing.last_modified != obj.last_modified
+                        or (existing.size_bytes or 0) != (obj.size or 0)
+                        or existing_md5 != current_md5
+                    )
+
+                    if changed:
                         to_process.append((obj, 'update'))
                         updated_count += 1
                     else:
                         indexed_count += 1
-                except Exception as e:
+                except Exception as classify_error:
                     error_count += 1
-            
-            # Paso 4: Procesar nuevos/actualizados (secuencial para Django ORM)
+                    logger.error(f'✗ Error clasificando {object_name}: {classify_error}')
+
             for obj, action in to_process:
                 try:
                     meta = extract_metadata(obj.object_name)
                     text, codigos = extract_text_from_pdf(obj.object_name)
                     md5_hash = obj.etag.strip('"') if obj.etag else None
-                    
-                    PDFIndex.objects.update_or_create(
-                        minio_object_name=obj.object_name,
-                        defaults={
-                            'razon_social': meta['razon_social'],
-                            'banco': meta['banco'],
-                            'mes': meta['mes'],
-                            'año': meta['año'],
-                            'tipo_documento': meta['tipo_documento'],
-                            'size_bytes': obj.size,
-                            'md5_hash': md5_hash,
-                            'codigos_empleado': ','.join(codigos) if codigos else '',
-                            'last_modified': obj.last_modified,
-                            'is_indexed': bool(text),
-                            'index_error': None if text else 'Error extrayendo texto'
-                        }
+                    is_indexed = bool(text)
+
+                    upsert_document_from_upload(
+                        object_key=obj.object_name,
+                        metadata=meta,
+                        size_bytes=obj.size or 0,
+                        etag=md5_hash,
+                        last_modified=obj.last_modified,
+                        employee_codes=codigos,
+                        is_indexed=is_indexed,
+                        actor=request.user,
                     )
+
+                    if dual_write_legacy:
+                        PDFIndex.objects.update_or_create(
+                            minio_object_name=obj.object_name,
+                            defaults={
+                                'razon_social': meta['razon_social'],
+                                'banco': meta['banco'],
+                                'mes': meta['mes'],
+                                'año': meta['año'],
+                                'tipo_documento': meta['tipo_documento'],
+                                'size_bytes': obj.size,
+                                'md5_hash': md5_hash,
+                                'codigos_empleado': ','.join(codigos) if codigos else '',
+                                'last_modified': obj.last_modified,
+                                'is_indexed': is_indexed,
+                            },
+                        )
+
                     indexed_count += 1
                 except Exception as e:
                     error_count += 1
-                    logger.error(f"✗ Error indexando {obj.object_name}: {e}")
-            
+                    logger.error(f'✗ Error indexando {obj.object_name}: {e}')
+
             elapsed = round(time.time() - start_time, 2)
-            logger.info(f"✓ Indexación completada: {indexed_count} PDFs en {elapsed}s")
-            
-            return Response({
+            result = {
                 'message': 'Indexación completada',
                 'total_in_minio': len(minio_objects),
                 'total_indexed': indexed_count,
@@ -1199,11 +1093,29 @@ class ReindexView(APIView):
                 'updated': updated_count,
                 'orphans_removed': orphans_removed,
                 'errors': error_count,
-                'time_seconds': elapsed
-            })
-            
+                'time_seconds': elapsed,
+            }
+
+            logger.info(f'✓ Indexación completada: {indexed_count} PDFs en {elapsed}s')
+            record_audit_event(
+                action='INDEX_REINDEX_COMPLETED',
+                resource_type='index',
+                resource_id='docrepo_reindex',
+                request=request,
+                actor=request.user,
+                metadata=result,
+            )
+            return Response(result)
         except Exception as e:
-            logger.error(f"Error en reindexación: {e}")
+            logger.error(f'Error en reindexación: {e}')
+            record_audit_event(
+                action='INDEX_REINDEX_FAILED',
+                resource_type='index',
+                resource_id='docrepo_reindex',
+                request=request,
+                actor=request.user,
+                metadata={'status_code': 500, 'error': str(e)},
+            )
             return Response({'error': f'Error inesperado: {str(e)}'}, status=500)
 
 
