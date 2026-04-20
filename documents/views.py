@@ -5,6 +5,7 @@ from rest_framework import status
 from django.db.models import Q, Sum, Count
 from django.http import StreamingHttpResponse
 from auditlog.services import record_audit_event
+from docrepo.models import Document
 from docrepo.services import deactivate_document_by_storage_key, upsert_document_from_upload
 from .models import PDFIndex, DownloadLog
 from .serializers import PDFIndexSerializer
@@ -1218,6 +1219,36 @@ class FilesListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        def safe_int(value, default=None):
+            try:
+                return int(str(value).strip())
+            except (TypeError, ValueError):
+                return default
+
+        def resolve_tipo_documento(doc):
+            if getattr(doc, 'domain_id', None) is None:
+                return ''
+
+            domain_code = getattr(getattr(doc, 'domain', None), 'code', '')
+            if domain_code == 'CONSTANCIA_ABONO':
+                constancia = getattr(doc, 'constancia_detail', None)
+                if constancia is None:
+                    return ''
+                return constancia.payroll_type or constancia.legacy_tipo_documento or ''
+            if domain_code == 'SEGUROS':
+                insurance = getattr(doc, 'insurance_detail', None)
+                if insurance is None or insurance.insurance_type is None:
+                    return ''
+                if insurance.insurance_subtype is not None:
+                    return f"{insurance.insurance_type.name} - {insurance.insurance_subtype.name}"
+                return insurance.insurance_type.name
+            if domain_code == 'TREGISTRO':
+                treg = getattr(doc, 'tregistro_detail', None)
+                if treg is None or treg.movement_type is None:
+                    return ''
+                return treg.movement_type.name
+            return ''
+
         # Parámetros de filtrado
         folder_filter = request.query_params.get('folder', '').strip()
         search_query = request.query_params.get('search', '').strip()
@@ -1234,35 +1265,55 @@ class FilesListView(APIView):
         order = request.query_params.get('order', 'desc')
 
         try:
-            query = Q(is_indexed=True)
+            query = Q(is_active=True, index_state__is_indexed=True)
 
             if folder_filter:
-                query &= Q(minio_object_name__startswith=folder_filter)
+                query &= Q(storage_object__object_key__startswith=folder_filter)
             if search_query:
-                query &= Q(minio_object_name__icontains=search_query)
+                query &= Q(storage_object__object_key__icontains=search_query)
             if año:
-                query &= Q(año=año)
+                year_value = safe_int(año)
+                if year_value is not None:
+                    query &= Q(period__year=year_value)
             if mes:
-                query &= Q(mes=mes)
+                month_value = safe_int(mes)
+                if month_value is not None:
+                    query &= Q(period__month=month_value)
             if banco:
-                query &= Q(banco=banco)
+                query &= Q(constancia_detail__bank__name__iexact=banco) | Q(constancia_detail__bank__code__iexact=banco)
             if razon_social:
-                query &= Q(razon_social=razon_social)
+                query &= Q(company__name__iexact=razon_social) | Q(company__code__iexact=razon_social)
             if tipo_documento:
-                query &= Q(tipo_documento__icontains=tipo_documento)
+                query &= (
+                    Q(constancia_detail__payroll_type__icontains=tipo_documento)
+                    | Q(constancia_detail__legacy_tipo_documento__icontains=tipo_documento)
+                    | Q(insurance_detail__insurance_type__name__icontains=tipo_documento)
+                    | Q(insurance_detail__insurance_subtype__name__icontains=tipo_documento)
+                    | Q(tregistro_detail__movement_type__name__icontains=tipo_documento)
+                )
 
             # Ordenamiento
             order_prefix = '' if order == 'asc' else '-'
             field_map = {
                 'indexed_at': 'indexed_at',
-                'last_modified': 'last_modified',
-                'size': 'size_bytes',
-                'filename': 'minio_object_name'
+                'last_modified': 'storage_object__last_modified',
+                'size': 'storage_object__size_bytes',
+                'filename': 'storage_object__object_key'
             }
             order_field = field_map.get(sort_field, 'indexed_at')
             ordering = f'{order_prefix}{order_field}'
 
-            queryset = PDFIndex.objects.filter(query).order_by(ordering)
+            queryset = Document.objects.filter(query).select_related(
+                'domain',
+                'company',
+                'period',
+                'storage_object',
+                'index_state',
+                'constancia_detail__bank',
+                'insurance_detail__insurance_type',
+                'insurance_detail__insurance_subtype',
+                'tregistro_detail__movement_type',
+            ).order_by(ordering)
             total = queryset.count()
 
             # Paginación manual
@@ -1274,7 +1325,9 @@ class FilesListView(APIView):
 
             files = []
             for record in paginated:
-                size_bytes = record.size_bytes or 0
+                storage = getattr(record, 'storage_object', None)
+                object_key = storage.object_key if storage and storage.object_key else record.source_path_legacy
+                size_bytes = storage.size_bytes if storage and storage.size_bytes else 0
                 if size_bytes < 1024:
                     size_human = f"{size_bytes} B"
                 elif size_bytes < 1024 * 1024:
@@ -1282,25 +1335,28 @@ class FilesListView(APIView):
                 else:
                     size_human = f"{size_bytes / (1024 * 1024):.1f} MB"
 
-                parts = record.minio_object_name.split('/')
+                parts = object_key.split('/') if object_key else ['']
                 file_name = parts[-1]
                 folder_name = '/'.join(parts[:-1]) if len(parts) > 1 else ''
+                index_state = getattr(record, 'index_state', None)
+                constancia = getattr(record, 'constancia_detail', None)
+                period = getattr(record, 'period', None)
 
                 files.append({
                     'name': file_name,
-                    'path': record.minio_object_name,
+                    'path': object_key,
                     'folder': folder_name,
                     'size_bytes': size_bytes,
                     'size_human': size_human,
-                    'last_modified': record.last_modified.isoformat() if record.last_modified else None,
+                    'last_modified': storage.last_modified.isoformat() if storage and storage.last_modified else None,
                     'indexed_at': record.indexed_at.isoformat() if record.indexed_at else None,
-                    'indexed': record.is_indexed,
-                    'año': record.año,
-                    'mes': record.mes,
-                    'banco': record.banco,
-                    'razon_social': record.razon_social,
-                    'tipo_documento': record.tipo_documento,
-                    'download_url': f'/api/download/{record.minio_object_name}'
+                    'indexed': index_state.is_indexed if index_state else False,
+                    'año': str(period.year) if period else '',
+                    'mes': f"{period.month:02d}" if period else '',
+                    'banco': constancia.bank.name if constancia and constancia.bank else '',
+                    'razon_social': record.company.name if record.company else '',
+                    'tipo_documento': resolve_tipo_documento(record),
+                    'download_url': f'/api/download/{object_key}' if object_key else None,
                 })
 
             return Response({
@@ -1643,11 +1699,16 @@ class FoldersListView(APIView):
         try:
             # Obtener paths que empiezan con parent
             if parent:
-                paths = PDFIndex.objects.filter(
-                    minio_object_name__startswith=parent
-                ).values_list('minio_object_name', flat=True)
+                paths = Document.objects.filter(
+                    is_active=True,
+                    index_state__is_indexed=True,
+                    storage_object__object_key__startswith=parent,
+                ).values_list('storage_object__object_key', flat=True)
             else:
-                paths = PDFIndex.objects.values_list('minio_object_name', flat=True)
+                paths = Document.objects.filter(
+                    is_active=True,
+                    index_state__is_indexed=True,
+                ).values_list('storage_object__object_key', flat=True)
 
             # Extraer carpetas únicas del nivel actual
             folders = {}
@@ -1716,6 +1777,33 @@ class BulkSearchView(APIView):
     def post(self, request):
         import logging
         logger = logging.getLogger(__name__)
+
+        def safe_int(value, default=None):
+            try:
+                return int(str(value).strip())
+            except (TypeError, ValueError):
+                return default
+
+        def resolve_tipo_documento(doc):
+            domain_code = getattr(getattr(doc, 'domain', None), 'code', '')
+            if domain_code == 'CONSTANCIA_ABONO':
+                constancia = getattr(doc, 'constancia_detail', None)
+                if constancia is None:
+                    return ''
+                return constancia.payroll_type or constancia.legacy_tipo_documento or ''
+            if domain_code == 'SEGUROS':
+                insurance = getattr(doc, 'insurance_detail', None)
+                if insurance is None or insurance.insurance_type is None:
+                    return ''
+                if insurance.insurance_subtype is not None:
+                    return f"{insurance.insurance_type.name} - {insurance.insurance_subtype.name}"
+                return insurance.insurance_type.name
+            if domain_code == 'TREGISTRO':
+                treg = getattr(doc, 'tregistro_detail', None)
+                if treg is None or treg.movement_type is None:
+                    return ''
+                return treg.movement_type.name
+            return ''
         
         data = request.data
         codigos_input = data.get('codigos', [])
@@ -1752,29 +1840,44 @@ class BulkSearchView(APIView):
         
         try:
             # Construir query base con filtros
-            query = Q(is_indexed=True)
+            query = Q(is_active=True, index_state__is_indexed=True)
             
             # Aplicar filtros adicionales
             if año:
-                query &= Q(año=año)
+                year_value = safe_int(año)
+                if year_value is not None:
+                    query &= Q(period__year=year_value)
             if mes:
-                query &= Q(mes=mes)
+                month_value = safe_int(mes)
+                if month_value is not None:
+                    query &= Q(period__month=month_value)
             if banco:
-                query &= Q(banco=banco)
+                query &= Q(constancia_detail__bank__name__iexact=banco) | Q(constancia_detail__bank__code__iexact=banco)
             if razon_social:
-                query &= Q(razon_social=razon_social)
+                query &= Q(company__name__iexact=razon_social) | Q(company__code__iexact=razon_social)
             if tipo_documento:
-                query &= Q(tipo_documento__icontains=tipo_documento)
+                query &= (
+                    Q(constancia_detail__payroll_type__icontains=tipo_documento)
+                    | Q(constancia_detail__legacy_tipo_documento__icontains=tipo_documento)
+                    | Q(insurance_detail__insurance_type__name__icontains=tipo_documento)
+                    | Q(insurance_detail__insurance_subtype__name__icontains=tipo_documento)
+                    | Q(tregistro_detail__movement_type__name__icontains=tipo_documento)
+                )
             
             # Construir condiciones OR para todos los códigos
-            codigo_conditions = Q()
-            for codigo in codigos:
-                codigo_conditions |= Q(codigos_empleado__icontains=codigo)
-            
-            query &= codigo_conditions
+            query &= Q(employee_codes__employee_code__in=codigos)
             
             # Ejecutar consulta
-            all_records = PDFIndex.objects.filter(query)
+            all_records = Document.objects.filter(query).select_related(
+                'domain',
+                'company',
+                'period',
+                'storage_object',
+                'constancia_detail__bank',
+                'insurance_detail__insurance_type',
+                'insurance_detail__insurance_subtype',
+                'tregistro_detail__movement_type',
+            ).prefetch_related('employee_codes').distinct()
             
             logger.info(f"Búsqueda masiva: {len(codigos)} códigos → {all_records.count()} registros")
             
@@ -1783,28 +1886,35 @@ class BulkSearchView(APIView):
             codigos_encontrados = set()
             
             for record in all_records:
-                codigos_en_pdf = record.codigos_empleado or ''
-                codigos_match = []
-                
-                for codigo in codigos:
-                    if codigo.lower() in codigos_en_pdf.lower():
-                        codigos_match.append(codigo)
-                        codigos_encontrados.add(codigo)
+                codes_in_document = {
+                    code.employee_code
+                    for code in record.employee_codes.all()
+                    if code.employee_code
+                }
+                codigos_match = [codigo for codigo in codigos if codigo in codes_in_document]
+                for code in codigos_match:
+                    codigos_encontrados.add(code)
                 
                 if codigos_match:
+                    storage = getattr(record, 'storage_object', None)
+                    object_key = storage.object_key if storage and storage.object_key else record.source_path_legacy
+                    size_bytes = storage.size_bytes if storage and storage.size_bytes else 0
+                    period = getattr(record, 'period', None)
+                    constancia = getattr(record, 'constancia_detail', None)
+
                     results.append({
-                        'id': record.id,
-                        'filename': record.minio_object_name,
+                        'id': str(record.id),
+                        'filename': object_key,
                         'metadata': {
-                            'año': record.año,
-                            'mes': record.mes,
-                            'banco': record.banco,
-                            'razon_social': record.razon_social,
-                            'tipo_documento': record.tipo_documento
+                            'año': str(period.year) if period else '',
+                            'mes': f"{period.month:02d}" if period else '',
+                            'banco': constancia.bank.name if constancia and constancia.bank else '',
+                            'razon_social': record.company.name if record.company else '',
+                            'tipo_documento': resolve_tipo_documento(record)
                         },
-                        'size_bytes': record.size_bytes or 0,
-                        'size_kb': round((record.size_bytes or 0) / 1024, 1),
-                        'download_url': f'/api/download/{record.minio_object_name}',
+                        'size_bytes': size_bytes,
+                        'size_kb': round(size_bytes / 1024, 1),
+                        'download_url': f'/api/download/{object_key}' if object_key else None,
                         'codigos_match': codigos_match
                     })
             
