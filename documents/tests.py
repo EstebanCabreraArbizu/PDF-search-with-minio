@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
-from documents.views import ReindexView, SyncIndexView
+from documents.views import IndexStatsView, PopulateHashesView, ReindexView, SyncIndexView
 
 
 class SearchViewFallbackTests(APITestCase):
@@ -164,3 +164,137 @@ class DocrepoIndexViewsUnitTests(TestCase):
 
 		mock_upsert.assert_called_once()
 		self.assertTrue(mock_record_audit.called)
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views.StorageObject.objects.select_related')
+	@patch('documents.views.minio_client.list_objects')
+	def test_populate_hashes_returns_no_pending_when_already_complete(
+		self,
+		mock_list_objects,
+		mock_select_related,
+		mock_record_audit,
+	):
+		mock_list_objects.return_value = []
+
+		base_storage_qs = MagicMock()
+		pending_qs = MagicMock()
+		pending_qs.count.return_value = 0
+
+		filter_qs = MagicMock()
+		filter_qs.exclude.return_value = base_storage_qs
+
+		mock_select_related.return_value.filter.return_value = filter_qs
+		base_storage_qs.filter.return_value = pending_qs
+		base_storage_qs.count.return_value = 2
+
+		response = PopulateHashesView().post(self._request({'batch_size': 50}))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['updated'], 0)
+		self.assertEqual(response.data['pending'], 0)
+		self.assertEqual(response.data['has_more'], False)
+		self.assertEqual(response.data['source'], 'docrepo_v2')
+		self.assertEqual(response.data['total_records'], 2)
+		self.assertFalse(mock_record_audit.called)
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views.StorageObject.objects.select_related')
+	@patch('documents.views.minio_client.list_objects')
+	def test_populate_hashes_updates_storage_and_document_hash(
+		self,
+		mock_list_objects,
+		mock_select_related,
+		mock_record_audit,
+	):
+		fake_obj = SimpleNamespace(
+			object_name='2025/RESGUARDO/01.ENERO/BCP/hash_target.pdf',
+			etag='"etag-hash"',
+			size=2048,
+			last_modified=datetime.utcnow(),
+		)
+		mock_list_objects.return_value = [fake_obj]
+
+		storage_obj = MagicMock()
+		storage_obj.object_key = fake_obj.object_name
+		storage_obj.document = MagicMock()
+
+		pending_qs = MagicMock()
+		pending_qs.count.return_value = 1
+		pending_qs.__getitem__.return_value = [storage_obj]
+
+		base_storage_qs = MagicMock()
+		base_storage_qs.filter.side_effect = [pending_qs, pending_qs]
+		base_storage_qs.count.return_value = 1
+
+		filter_qs = MagicMock()
+		filter_qs.exclude.return_value = base_storage_qs
+		mock_select_related.return_value.filter.return_value = filter_qs
+
+		response = PopulateHashesView().post(self._request({'batch_size': 50}))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['updated'], 1)
+		self.assertEqual(response.data['legacy_updated'], 0)
+		self.assertEqual(response.data['errors'], 0)
+		self.assertEqual(response.data['source'], 'docrepo_v2')
+
+		storage_obj.save.assert_called_once()
+		storage_obj.document.save.assert_called_once()
+		mock_record_audit.assert_called_once()
+
+	@patch('documents.views.StorageObject.objects.filter')
+	@patch('documents.views.Document.objects.filter')
+	def test_index_stats_returns_docrepo_aggregated_payload(
+		self,
+		mock_document_filter,
+		mock_storage_filter,
+	):
+		last = SimpleNamespace(indexed_at=datetime(2026, 4, 20, 12, 0, 0))
+
+		documents_qs = MagicMock()
+		documents_qs.count.return_value = 4
+		documents_qs.order_by.return_value.first.return_value = last
+
+		year_qs = MagicMock()
+		year_qs.values.return_value.annotate.return_value = [
+			{'period__year': 2025, 'c': 3},
+			{'period__year': 2024, 'c': 1},
+		]
+
+		bank_qs = MagicMock()
+		bank_qs.exclude.return_value.values.return_value.annotate.return_value = [
+			{'constancia_detail__bank__name': 'BCP', 'c': 2},
+		]
+
+		documents_qs.exclude.side_effect = [year_qs, bank_qs]
+
+		company_values_qs = MagicMock()
+		company_values_qs.annotate.return_value = [
+			{'company__name': 'RESGUARDO', 'c': 4},
+		]
+		documents_qs.values.return_value = company_values_qs
+
+		documents_qs.filter.side_effect = [
+			SimpleNamespace(count=lambda: 3),
+			SimpleNamespace(count=lambda: 1),
+		]
+
+		mock_document_filter.return_value = documents_qs
+
+		storage_qs = MagicMock()
+		storage_qs.aggregate.return_value = {'size_bytes__sum': 1024**3}
+		mock_storage_filter.return_value = storage_qs
+
+		response = IndexStatsView().get(self._request())
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['source'], 'docrepo_v2')
+		self.assertEqual(response.data['total_indexed'], 4)
+		self.assertEqual(response.data['total_size_gb'], 1.0)
+		self.assertEqual(response.data['by_year'], {'2025': 3, '2024': 1})
+		self.assertEqual(response.data['by_razon_social'], {'RESGUARDO': 4})
+		self.assertEqual(response.data['by_banco'], {'BCP': 2})
+		self.assertEqual(response.data['indexed_successfully'], 3)
+		self.assertEqual(response.data['with_errors'], 1)
