@@ -1,0 +1,73 @@
+{% extends 'documents/base_search.html' %}
+{% load static %}
+
+{% block page_title_text %}Gestion de Archivos - DocSearch{% endblock %}
+{% block body_class %}search-page-body files-page{% endblock %}
+
+{% block page_title %}<span class="accent">&#9670;</span>GESTION DE ARCHIVOS Y SINCRONIZACION{% endblock %}
+{% block page_subtitle %}MODULO ADMINISTRATIVO DEDICADO PARA CARGA, CONTROL DOCUMENTAL Y SINCRONIZACION DE INDICE{% endblock %}
+
+{% block main_content %}
+  <section class="stats-grid three" id="statsFiles">
+    <article class="stat-card acrylic-surface">
+      <div class="label">Estado</div>
+      <div class="value">Transicion</div>
+      <div class="hint">Migracion gradual desde legacy sin corte operativo</div>
+    </article>
+    <article class="stat-card acrylic-surface">
+      <div class="label">Fuente Operativa</div>
+      <div class="value">Legacy</div>
+      <div class="hint">El backend activo de gestion y sync se mantiene estable</div>
+    </article>
+    <article class="stat-card acrylic-surface">
+      <div class="label">Objetivo</div>
+      <div class="value">UI Unificada</div>
+      <div class="hint">Consolidar administracion en esta pantalla moderna</div>
+    </article>
+  </section>
+
+  <section id="files-section" class="search-panel acrylic-surface">
+    <div class="panel-title"><i class="ti ti-folder-cog"></i> GESTION DE ARCHIVOS</div>
+    <p>
+      Esta pantalla es el punto de entrada moderno para administracion documental.
+      Durante esta fase inicial, el motor operativo se conserva intacto en legacy para no interrumpir trabajo.
+    </p>
+
+    <div class="search-actions">
+      <a id="openLegacyFilesBtn" class="btn btn-primary" href="{% url 'legacy_index' %}" target="_blank" rel="noopener">
+        <i class="ti ti-external-link"></i> Abrir modulo legacy (nueva pestaña)
+      </a>
+      <a class="btn btn-soft" href="{% url 'legacy_index' %}">
+        <i class="ti ti-arrow-right"></i> Abrir modulo legacy aqui
+      </a>
+    </div>
+  </section>
+
+  <section id="sync-section" class="results-panel acrylic-surface">
+    <div class="results-header">
+      <div class="results-count">Sincronizacion de Indice</div>
+    </div>
+
+    <div class="empty-state" style="padding-top: 1.5rem; padding-bottom: 1.5rem;">
+      <div class="empty-icon"><i class="ti ti-refresh"></i></div>
+      <h3 style="margin:0;">Sincronizacion integrada en esta pantalla</h3>
+      <p style="margin:0; max-width: 720px;">
+        El enlace de sincronizacion del sidebar ya apunta a este modulo. En esta fase, se mantiene la ejecucion
+        operativa en legacy mientras completamos el desacople final de componentes y scripts.
+      </p>
+    </div>
+
+    <div class="search-actions" style="padding: 0 1.5rem 1.5rem 1.5rem;">
+      <a id="openLegacySyncBtn" class="btn btn-primary" href="{% url 'legacy_index' %}" target="_blank" rel="noopener">
+        <i class="ti ti-external-link"></i> Ejecutar sincronizacion en legacy
+      </a>
+      <a class="btn btn-soft" href="{% url 'legacy_index' %}">
+        <i class="ti ti-arrow-right"></i> Ir a legacy
+      </a>
+    </div>
+  </section>
+{% endblock %}
+
+{% block page_scripts %}
+  <script src="{% static 'documents/js/search_files_v2.js' %}"></script>
+{% endblock %}

@@ -7,7 +7,7 @@ from .views import (
     BulkSearchView, MergePdfsView, CurrentUserView, HealthCheckView
 )
 from .auth_views import AuthLoginView, AuthLogoutView
-from .ui_views import login_ui, constancias_ui
+from .ui_views import login_ui, constancias_ui, files_ui
 
 urlpatterns = [
     path('', login_ui, name='index'),
@@ -16,6 +16,7 @@ urlpatterns = [
     path('ui/seguros/', seguros_ui, name='search_seguros_ui'),
     path('ui/tregistro/', tregistro_ui, name='search_tregistro_ui'),
     path('ui/constancias/', constancias_ui, name='search_constancias_ui'),
+    path('ui/files/', files_ui, name='files_management_ui'),
     path('api/auth/login/', AuthLoginView.as_view(), name='auth_login'),
     path('api/auth/logout/', AuthLogoutView.as_view(), name='auth_logout'),
     path('api/search', SearchView.as_view(), name='search'),

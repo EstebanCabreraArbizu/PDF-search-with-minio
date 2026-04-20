@@ -221,11 +221,25 @@ def index(request):
 
 
 def seguros_ui(request):
-    return render(request, 'documents/search_seguros.html')
+    return render(
+        request,
+        'documents/search_seguros.html',
+        {
+            'active_module': 'seguros',
+            'active_admin': '',
+        },
+    )
 
 
 def tregistro_ui(request):
-    return render(request, 'documents/search_tregistro.html')
+    return render(
+        request,
+        'documents/search_tregistro.html',
+        {
+            'active_module': 'tregistro',
+            'active_admin': '',
+        },
+    )
 
 class FilterOptionsView(APIView):
     permission_classes = [IsAuthenticated]

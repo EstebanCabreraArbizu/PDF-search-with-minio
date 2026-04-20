@@ -17,7 +17,7 @@ const THEME_META = {
   light: { label: 'Tema Claro', icon: 'ti ti-sun' }
 };
 
-const DEFAULT_NEXT = '/ui/seguros/';
+const DEFAULT_NEXT = '/ui/constancias/';
 
 const form = document.getElementById('loginForm');
 const usernameInput = document.getElementById('usernameInput');
