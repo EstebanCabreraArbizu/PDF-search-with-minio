@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from auditlog.services import record_audit_event
 from documents.models import DownloadLog, PDFIndex
 from documents.utils import minio_client
 
@@ -390,6 +391,13 @@ class DocumentDownloadV2View(APIView):
     def get(self, request, document_id):
         document = Document.objects.select_related("storage_object").filter(id=document_id, is_active=True).first()
         if document is None:
+            record_audit_event(
+                action="DOC_DOWNLOAD_FAILED",
+                resource_type="document",
+                resource_id=str(document_id),
+                request=request,
+                metadata={"reason": "document_not_found", "status_code": 404},
+            )
             return Response({"error": "Documento no encontrado."}, status=404)
 
         storage = getattr(document, "storage_object", None)
@@ -400,17 +408,47 @@ class DocumentDownloadV2View(APIView):
             object_key = document.source_path_legacy
 
         if not object_key:
+            record_audit_event(
+                action="DOC_DOWNLOAD_FAILED",
+                resource_type="document",
+                resource_id=str(document.id),
+                request=request,
+                document=document,
+                metadata={"reason": "storage_reference_missing", "status_code": 404},
+            )
             return Response({"error": "Documento sin referencia de storage."}, status=404)
 
         try:
             response = minio_client.get_object(settings.MINIO_BUCKET, object_key)
         except Exception:
+            record_audit_event(
+                action="DOC_DOWNLOAD_FAILED",
+                resource_type="document",
+                resource_id=str(document.id),
+                request=request,
+                document=document,
+                metadata={"reason": "storage_object_not_found", "status_code": 404, "object_key": object_key},
+            )
             return Response({"error": "Archivo no encontrado en storage."}, status=404)
 
         DownloadLog.objects.create(
             user=request.user,
             filename=object_key,
             ip_address=request.META.get("REMOTE_ADDR"),
+        )
+
+        record_audit_event(
+            action="DOC_DOWNLOAD_SUCCEEDED",
+            resource_type="document",
+            resource_id=str(document.id),
+            request=request,
+            actor=request.user,
+            document=document,
+            metadata={
+                "status_code": 200,
+                "object_key": object_key,
+                "domain": document.domain.code,
+            },
         )
 
         safe_filename = object_key.split("/")[-1] or f"{document.id}.pdf"

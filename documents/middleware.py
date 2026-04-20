@@ -2,9 +2,12 @@ import logging
 import re
 import threading
 import time
+import uuid
 
 from django.conf import settings
 from django.http import HttpResponseNotFound, JsonResponse
+
+from auditlog.services import record_audit_event
 
 
 logger = logging.getLogger(__name__)
@@ -190,7 +193,9 @@ class AuditLoggingMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        request.correlation_id = self._resolve_correlation_id(request)
         response = self.get_response(request)
+        response['X-Correlation-ID'] = str(request.correlation_id)
 
         if request.method not in {'POST', 'PUT', 'PATCH', 'DELETE'}:
             return response
@@ -211,9 +216,40 @@ class AuditLoggingMiddleware:
                 'path': request.path,
                 'status_code': response.status_code,
                 'ip': get_client_ip(request),
+                'correlation_id': str(request.correlation_id),
             },
         )
+
+        if not self._is_explicitly_audited_path(request.path):
+            resource_type = 'admin_endpoint' if request.path.startswith(_admin_path_prefix()) else 'api_endpoint'
+            resource_id = request.path[:64]
+            resolver = getattr(request, 'resolver_match', None)
+            if resolver and resolver.view_name:
+                resource_id = str(resolver.view_name)[:64]
+
+            record_audit_event(
+                action=f'HTTP_{request.method}',
+                resource_type=resource_type,
+                resource_id=resource_id,
+                request=request,
+                metadata={
+                    'path': request.path,
+                    'method': request.method,
+                    'status_code': response.status_code,
+                },
+            )
+
         return response
+
+    def _resolve_correlation_id(self, request):
+        candidate = request.META.get('HTTP_X_CORRELATION_ID') or ''
+        try:
+            return uuid.UUID(str(candidate))
+        except (ValueError, TypeError, AttributeError):
+            return uuid.uuid4()
+
+    def _is_explicitly_audited_path(self, path):
+        return path.startswith('/api/auth/login/') or path.startswith('/api/auth/logout/')
 
 
 class SecurityHeadersMiddleware:
