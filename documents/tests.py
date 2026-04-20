@@ -382,6 +382,59 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 		mock_record_audit.assert_called_once()
 
 	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.settings.DOCREPO_AUTO_ROUTE_UPLOAD_ENABLED', True)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views._find_active_duplicate_by_hash_size')
+	@patch('documents.views.build_auto_storage_prefix')
+	@patch('documents.views.infer_upload_metadata')
+	@patch('documents.views.extract_text_from_pdf_bytes')
+	def test_files_classify_preview_marks_duplicate(
+		self,
+		mock_extract_text_from_bytes,
+		mock_infer_upload_metadata,
+		mock_build_auto_storage_prefix,
+		mock_find_duplicate,
+		mock_record_audit,
+	):
+		fake_upload = SimpleNamespace(
+			name='FIN DE MES DESTACADOS_27022024.pdf',
+			read=lambda: b'%PDF-1.4 classify-preview duplicate',
+		)
+		files = SimpleNamespace(getlist=lambda _key: [fake_upload])
+
+		mock_extract_text_from_bytes.return_value = ('FIN DE MES DESTACADOS', ['42177863'])
+		mock_infer_upload_metadata.return_value = {
+			'año': '2024',
+			'razon_social': 'RESGUARDO',
+			'mes': '02',
+			'banco': 'BCP',
+			'tipo_documento': 'FIN DE MES DESTACADOS',
+			'domain_code': 'CONSTANCIA_ABONO',
+		}
+		mock_build_auto_storage_prefix.return_value = '2024/RESGUARDO/02.FEBRERO/CONSTANCIA_ABONO/FIN DE MES DESTACADOS'
+		mock_find_duplicate.return_value = SimpleNamespace(
+			document=SimpleNamespace(id='dup-preview-id'),
+			object_key='2024/RESGUARDO/02.FEBRERO/CONSTANCIA_ABONO/FIN DE MES DESTACADOS/FIN DE MES DESTACADOS_27022024.pdf',
+		)
+
+		request = self._request(files=files, post={})
+		response = FilesClassifyPreviewView().post(request)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data['success'])
+		self.assertEqual(response.data['summary']['total_files'], 1)
+		self.assertEqual(response.data['summary']['ready'], 0)
+		self.assertEqual(response.data['summary']['requires_confirmation'], 1)
+		self.assertEqual(response.data['summary']['duplicates'], 1)
+		self.assertEqual(response.data['files'][0]['status'], 'DUPLICATE')
+		self.assertTrue(response.data['files'][0]['requires_confirmation'])
+		self.assertEqual(response.data['files'][0]['duplicate']['document_id'], 'dup-preview-id')
+		self.assertIn('duplicado_hash_size', response.data['files'][0]['warnings'])
+
+		mock_find_duplicate.assert_called_once()
+		mock_record_audit.assert_called_once()
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
 	@patch('documents.views.record_audit_event')
 	@patch('documents.views.upsert_document_from_upload')
 	@patch('documents.views.minio_client.put_object')
