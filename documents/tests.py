@@ -329,6 +329,74 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 		)
 
 	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.settings.DOCREPO_AUTO_ROUTE_UPLOAD_ENABLED', True)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views.upsert_document_from_upload')
+	@patch('documents.views.extract_text_from_pdf')
+	@patch('documents.views.build_auto_storage_prefix')
+	@patch('documents.views.infer_upload_metadata')
+	@patch('documents.views.extract_text_from_pdf_bytes')
+	@patch('documents.views.minio_client.stat_object')
+	@patch('documents.views.minio_client.put_object')
+	def test_files_upload_auto_routes_when_folder_missing(
+		self,
+		mock_put_object,
+		mock_stat_object,
+		mock_extract_text_from_bytes,
+		mock_infer_upload_metadata,
+		mock_build_auto_storage_prefix,
+		mock_extract_text,
+		mock_upsert,
+		mock_record_audit,
+	):
+		fake_upload = SimpleNamespace(
+			name='SCTR PENSION 02012026 FACILITIES.pdf',
+			read=lambda: b'%PDF-1.4 auto-route test content',
+		)
+		files = SimpleNamespace(getlist=lambda _key: [fake_upload])
+
+		mock_extract_text_from_bytes.return_value = ('SCTR PENSION FACILITIES', ['42177863'])
+		mock_infer_upload_metadata.return_value = {
+			'año': '2026',
+			'razon_social': 'FACILITIES',
+			'mes': '01',
+			'banco': 'GENERAL',
+			'tipo_documento': 'SCTR PENSION',
+			'domain_code': 'SEGUROS',
+		}
+		mock_build_auto_storage_prefix.return_value = '2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION'
+
+		mock_stat_object.return_value = SimpleNamespace(
+			etag='"etag-auto"',
+			last_modified=datetime.utcnow(),
+		)
+		mock_extract_text.return_value = ('contenido', ['42177863'])
+		mock_upsert.return_value = SimpleNamespace(
+			document=SimpleNamespace(id='doc-auto'),
+			domain_code='SEGUROS',
+		)
+
+		request = self._request(files=files, post={})
+		response = FilesUploadView().post(request)
+
+		self.assertEqual(response.status_code, 201)
+		self.assertTrue(response.data['success'])
+		self.assertEqual(response.data['total_uploaded'], 1)
+		self.assertEqual(
+			response.data['uploaded'][0]['path'],
+			'2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION/SCTR PENSION 02012026 FACILITIES.pdf'
+		)
+		self.assertTrue(response.data['uploaded'][0]['auto_routed'])
+		self.assertEqual(response.data['uploaded'][0]['domain_preview'], 'SEGUROS')
+
+		mock_extract_text_from_bytes.assert_called_once()
+		mock_infer_upload_metadata.assert_called_once()
+		mock_build_auto_storage_prefix.assert_called_once()
+		mock_put_object.assert_called_once()
+		mock_upsert.assert_called_once()
+		mock_record_audit.assert_called_once()
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
 	@patch('documents.views.record_audit_event')
 	@patch('documents.views.upsert_document_from_upload')
 	@patch('documents.views.extract_text_from_pdf')

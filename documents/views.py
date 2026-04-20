@@ -10,8 +10,10 @@ from .models import PDFIndex, DownloadLog
 from .serializers import PDFIndexSerializer
 from .throttling import SearchRateThrottle, BulkSearchRateThrottle
 from .utils import (
-    minio_client, extract_metadata, search_in_pdf, 
-    extract_text_from_pdf, BANCOS_VALIDOS, RAZONES_SOCIALES_VALIDAS
+    minio_client, extract_metadata, search_in_pdf,
+    extract_text_from_pdf, extract_text_from_pdf_bytes,
+    infer_upload_metadata, build_auto_storage_prefix,
+    BANCOS_VALIDOS, RAZONES_SOCIALES_VALIDAS
 )
 import time
 from datetime import datetime
@@ -1061,9 +1063,10 @@ class FilesUploadView(APIView):
         import logging
         logger = logging.getLogger(__name__)
         dual_write_legacy = getattr(settings, 'DOCREPO_DUAL_WRITE_LEGACY_ENABLED', True)
+        auto_route_enabled = getattr(settings, 'DOCREPO_AUTO_ROUTE_UPLOAD_ENABLED', True)
 
         files = request.FILES.getlist('files[]')
-        folder = request.POST.get('folder', '').strip()
+        requested_folder = request.POST.get('folder', '').strip()
 
         if not files:
             return Response({'error': 'No se proporcionaron archivos.'}, status=400)
@@ -1080,14 +1083,37 @@ class FilesUploadView(APIView):
                 continue
 
             try:
-                if folder and not folder.endswith('/'):
-                    folder += '/'
-
-                object_name = f"{folder}{file.name}" if folder else file.name
-
                 # Leer contenido del archivo
                 file_content = file.read()
                 file_size = len(file_content)
+
+                hints = {
+                    'año': request.POST.get('año', request.POST.get('anio', '')),
+                    'mes': request.POST.get('mes', ''),
+                    'banco': request.POST.get('banco', ''),
+                    'razon_social': request.POST.get('razon_social', request.POST.get('empresa', '')),
+                    'tipo_documento': request.POST.get('tipo_documento', request.POST.get('tipo', '')),
+                }
+
+                auto_routed = False
+                preview_domain = ''
+                normalized_folder = requested_folder
+
+                if normalized_folder:
+                    if not normalized_folder.endswith('/'):
+                        normalized_folder += '/'
+                    object_name = f"{normalized_folder}{file.name}"
+                    meta = extract_metadata(object_name)
+                elif auto_route_enabled:
+                    preview_text, _ = extract_text_from_pdf_bytes(file_content)
+                    meta = infer_upload_metadata(file.name, preview_text, hints)
+                    preview_domain = meta.get('domain_code', '')
+                    auto_prefix = build_auto_storage_prefix(meta, preview_domain)
+                    object_name = f"{auto_prefix}/{file.name}"
+                    auto_routed = True
+                else:
+                    object_name = file.name
+                    meta = extract_metadata(object_name)
 
                 # Subir a MinIO
                 minio_client.put_object(
@@ -1104,7 +1130,6 @@ class FilesUploadView(APIView):
                 object_etag = stat.etag.strip('"') if getattr(stat, 'etag', None) else None
                 object_last_modified = getattr(stat, 'last_modified', None)
 
-                meta = extract_metadata(object_name)
                 text, codigos = extract_text_from_pdf(object_name)
                 indexed = bool(text)
 
@@ -1154,6 +1179,9 @@ class FilesUploadView(APIView):
                         'status_code': 201,
                         'object_key': object_name,
                         'domain': ingest_result.domain_code,
+                        'domain_preview': preview_domain,
+                        'auto_routed': auto_routed,
+                        'requested_folder': requested_folder,
                         'indexed': indexed,
                         'size_bytes': file_size,
                         'legacy_sync_enabled': dual_write_legacy,
@@ -1169,6 +1197,8 @@ class FilesUploadView(APIView):
                     'indexed': indexed,
                     'docrepo_document_id': str(ingest_result.document.id),
                     'domain': ingest_result.domain_code,
+                    'domain_preview': preview_domain,
+                    'auto_routed': auto_routed,
                     'legacy_sync_enabled': dual_write_legacy,
                     'legacy_synced': legacy_synced,
                     'legacy_sync_error': legacy_sync_error,

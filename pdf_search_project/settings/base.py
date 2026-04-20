@@ -157,6 +157,7 @@ MINIO_REGION = os.environ.get('MINIO_REGION', None)
 # =============================================================================
 DOCREPO_DUAL_READ_ENABLED = os.environ.get('DOCREPO_DUAL_READ_ENABLED', 'False').lower() == 'true'
 DOCREPO_DUAL_WRITE_LEGACY_ENABLED = os.environ.get('DOCREPO_DUAL_WRITE_LEGACY_ENABLED', 'True').lower() == 'true'
+DOCREPO_AUTO_ROUTE_UPLOAD_ENABLED = os.environ.get('DOCREPO_AUTO_ROUTE_UPLOAD_ENABLED', 'True').lower() == 'true'
 DOCREPO_MAX_RESULTS = int(os.environ.get('DOCREPO_MAX_RESULTS', '500'))
 
 
