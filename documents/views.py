@@ -718,46 +718,43 @@ class PopulateHashesView(APIView):
     def post(self, request):
         import logging
         logger = logging.getLogger(__name__)
-        
+
         data = request.data or {}
         batch_size = min(int(data.get('batch_size', 500)), 2000)
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        data = request.data or {}
-        batch_size = min(int(data.get('batch_size', 500)), 2000)
-        
+        dual_write_legacy = getattr(settings, 'DOCREPO_DUAL_WRITE_LEGACY_ENABLED', True)
+
         start_time = time.time()
         updated = 0
+        legacy_updated = 0
         not_found = 0
         errors = 0
-        
+
         try:
-            # ═══════════════════════════════════════════════════
-            # PASO 1: Obtener mapa de MinIO con ETags
-            # ═══════════════════════════════════════════════════
             minio_etags = {}
             for obj in minio_client.list_objects(settings.MINIO_BUCKET, recursive=True):
                 if obj.object_name.endswith('.pdf') and obj.etag:
                     minio_etags[obj.object_name] = {
                         'hash': obj.etag.strip('"'),
-                        'size': obj.size
+                        'size': obj.size,
+                        'last_modified': obj.last_modified,
                     }
-            
-            # ═══════════════════════════════════════════════════
-            # PASO 2: Buscar registros SIN hash
-            # ═══════════════════════════════════════════════════
-            total_without_hash = PDFIndex.objects.filter(
-                Q(md5_hash__isnull=True) | Q(md5_hash='')
+
+            base_storage_qs = StorageObject.objects.select_related('document').filter(
+                bucket_name=settings.MINIO_BUCKET,
+                document__is_active=True,
+            ).exclude(object_key='')
+
+            total_without_hash = base_storage_qs.filter(
+                Q(etag__isnull=True) | Q(etag='')
             ).count()
-            
-            # CASO ESPECIAL: No hay registros pendientes
+
             if total_without_hash == 0:
-                total_records = PDFIndex.objects.count()
+                total_records = base_storage_qs.count()
                 elapsed = round(time.time() - start_time, 2)
-                return Response({
+                result = {
                     'message': 'No hay registros pendientes de hash' if total_records > 0 else 'No hay PDFs indexados',
                     'updated': 0,
+                    'legacy_updated': 0,
                     'not_found_in_minio': 0,
                     'pending': 0,
                     'has_more': False,
@@ -765,151 +762,91 @@ class PopulateHashesView(APIView):
                     'errors': 0,
                     'time_seconds': elapsed,
                     'batch_size': batch_size,
-                    'total_records': total_records
-                })
-            
-            qs = PDFIndex.objects.filter(
-                Q(md5_hash__isnull=True) | Q(md5_hash='')
-            ).exclude(minio_object_name='')[:batch_size]
-            
-            # ═══════════════════════════════════════════════════
-            # PASO 3: Actualizar hashes
-            # ═══════════════════════════════════════════════════
-            for record in qs:
-                if record.minio_object_name in minio_etags:
+                    'total_records': total_records,
+                    'source': 'docrepo_v2',
+                }
+                return Response(result)
+
+            qs = base_storage_qs.filter(
+                Q(etag__isnull=True) | Q(etag='')
+            )[:batch_size]
+
+            for storage in qs:
+                if storage.object_key in minio_etags:
                     try:
-                        info = minio_etags[record.minio_object_name]
-                        record.md5_hash = info['hash']
-                        record.size_bytes = info['size']
-                        record.save()
+                        info = minio_etags[storage.object_key]
+                        storage.etag = info['hash']
+                        storage.size_bytes = info['size']
+                        storage.last_modified = info['last_modified']
+                        storage.save(update_fields=['etag', 'size_bytes', 'last_modified', 'updated_at'])
+
+                        document = storage.document
+                        document.source_hash_md5 = info['hash']
+                        document.save(update_fields=['source_hash_md5', 'updated_at'])
+
+                        if dual_write_legacy:
+                            legacy_updated += PDFIndex.objects.filter(
+                                minio_object_name=storage.object_key
+                            ).update(
+                                md5_hash=info['hash'],
+                                size_bytes=info['size'],
+                                last_modified=info['last_modified'],
+                            )
+
                         updated += 1
                     except Exception as e:
-                        logger.error(f"Error actualizando hash de {record.minio_object_name}: {e}")
+                        logger.error(f"Error actualizando hash de {storage.object_key}: {e}")
                         errors += 1
                 else:
                     not_found += 1
-            
+
             elapsed = round(time.time() - start_time, 2)
             pending = total_without_hash - updated
             has_more = pending > 0
-            
-            # Calcular progreso
-            total_records = PDFIndex.objects.count()
+
+            total_records = base_storage_qs.count()
             if total_records > 0:
                 progress_percent = round(((total_records - pending) / total_records) * 100, 1)
             else:
                 progress_percent = 100
-            
+
             result = {
                 'message': 'Hashes poblados' if not has_more else f'Lote procesado ({updated} de {total_without_hash})',
                 'updated': updated,
+                'legacy_updated': legacy_updated,
                 'not_found_in_minio': not_found,
                 'pending': pending,
                 'has_more': has_more,
                 'progress_percent': progress_percent,
                 'errors': errors,
                 'time_seconds': elapsed,
-                'batch_size': batch_size
+                'batch_size': batch_size,
+                'source': 'docrepo_v2',
             }
-            
+
             logger.info(f"✓ Populate hashes: {updated} actualizados, {pending} pendientes en {elapsed}s")
-            
+
+            record_audit_event(
+                action='INDEX_HASH_POPULATE_COMPLETED',
+                resource_type='index',
+                resource_id='docrepo_hash_populate',
+                request=request,
+                actor=request.user,
+                metadata=result,
+            )
+
             return Response(result)
-            
+
         except Exception as e:
             logger.error(f"Error en populate hashes: {e}")
-            return Response({'error': f'Error inesperado: {str(e)}'}, status=500)
-        start_time = time.time()
-        updated = 0
-        not_found = 0
-        errors = 0
-        
-        try:
-            # ═══════════════════════════════════════════════════
-            # PASO 1: Obtener mapa de MinIO con ETags
-            # ═══════════════════════════════════════════════════
-            minio_etags = {}
-            for obj in minio_client.list_objects(settings.MINIO_BUCKET, recursive=True):
-                if obj.object_name.endswith('.pdf') and obj.etag:
-                    minio_etags[obj.object_name] = {
-                        'hash': obj.etag.strip('"'),
-                        'size': obj.size
-                    }
-            
-            # ═══════════════════════════════════════════════════
-            # PASO 2: Buscar registros SIN hash
-            # ═══════════════════════════════════════════════════
-            total_without_hash = PDFIndex.objects.filter(
-                Q(md5_hash__isnull=True) | Q(md5_hash='')
-            ).count()
-            
-            # CASO ESPECIAL: No hay registros pendientes
-            if total_without_hash == 0:
-                total_records = PDFIndex.objects.count()
-                elapsed = round(time.time() - start_time, 2)
-                return Response({
-                    'message': 'No hay registros pendientes de hash' if total_records > 0 else 'No hay PDFs indexados',
-                    'updated': 0,
-                    'not_found_in_minio': 0,
-                    'pending': 0,
-                    'has_more': False,
-                    'progress_percent': 100,
-                    'errors': 0,
-                    'time_seconds': elapsed,
-                    'batch_size': batch_size,
-                    'total_records': total_records
-                })
-            
-            qs = PDFIndex.objects.filter(
-                Q(md5_hash__isnull=True) | Q(md5_hash='')
-            ).exclude(minio_object_name='')[:batch_size]
-            
-            # ═══════════════════════════════════════════════════
-            # PASO 3: Actualizar hashes
-            # ═══════════════════════════════════════════════════
-            for record in qs:
-                if record.minio_object_name in minio_etags:
-                    try:
-                        info = minio_etags[record.minio_object_name]
-                        record.md5_hash = info['hash']
-                        record.size_bytes = info['size']
-                        record.save()
-                        updated += 1
-                    except Exception as e:
-                        logger.error(f"Error actualizando hash de {record.minio_object_name}: {e}")
-                        errors += 1
-                else:
-                    not_found += 1
-            
-            elapsed = round(time.time() - start_time, 2)
-            pending = total_without_hash - updated
-            has_more = pending > 0
-            
-            # Calcular progreso
-            total_records = PDFIndex.objects.count()
-            if total_records > 0:
-                progress_percent = round(((total_records - pending) / total_records) * 100, 1)
-            else:
-                progress_percent = 100
-            
-            result = {
-                'message': 'Hashes poblados' if not has_more else f'Lote procesado ({updated} de {total_without_hash})',
-                'updated': updated,
-                'not_found_in_minio': not_found,
-                'pending': pending,
-                'has_more': has_more,
-                'progress_percent': progress_percent,
-                'errors': errors,
-                'time_seconds': elapsed,
-                'batch_size': batch_size
-            }
-            
-            logger.info(f"✓ Populate hashes: {updated} actualizados, {pending} pendientes en {elapsed}s")
-            
-            return Response(result)
-            
-        except Exception as e:
-            logger.error(f"Error en populate hashes: {e}")
+            record_audit_event(
+                action='INDEX_HASH_POPULATE_FAILED',
+                resource_type='index',
+                resource_id='docrepo_hash_populate',
+                request=request,
+                actor=request.user,
+                metadata={'status_code': 500, 'error': str(e)},
+            )
             return Response({'error': f'Error inesperado: {str(e)}'}, status=500)
 
 class IndexStatsView(APIView):
@@ -924,34 +861,46 @@ class IndexStatsView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        total = PDFIndex.objects.count()
-        total_size = PDFIndex.objects.aggregate(Sum('size_bytes'))['size_bytes__sum'] or 0
-        
-        # Último indexado
-        last = PDFIndex.objects.order_by('-indexed_at').first() if total > 0 else None
-        
-        total = PDFIndex.objects.count()
-        total_size = PDFIndex.objects.aggregate(Sum('size_bytes'))['size_bytes__sum'] or 0
-        
-        # Último indexado
-        last = PDFIndex.objects.order_by('-indexed_at').first() if total > 0 else None
-        
+        documents_qs = Document.objects.filter(is_active=True)
+        total = documents_qs.count()
+
+        total_size = StorageObject.objects.filter(
+            bucket_name=settings.MINIO_BUCKET,
+            document__is_active=True,
+        ).aggregate(Sum('size_bytes'))['size_bytes__sum'] or 0
+
+        last = documents_qs.order_by('-indexed_at').first() if total > 0 else None
+
+        by_year = {
+            str(row['period__year']): row['c']
+            for row in documents_qs.exclude(period__isnull=True)
+            .values('period__year')
+            .annotate(c=Count('id'))
+            if row['period__year'] is not None
+        }
+        by_razon_social = {
+            row['company__name']: row['c']
+            for row in documents_qs.values('company__name').annotate(c=Count('id'))
+            if row['company__name']
+        }
+        by_banco = {
+            row['constancia_detail__bank__name']: row['c']
+            for row in documents_qs.exclude(constancia_detail__bank__name__isnull=True)
+            .exclude(constancia_detail__bank__name='')
+            .values('constancia_detail__bank__name')
+            .annotate(c=Count('id'))
+        }
+
         return Response({
             'total_indexed': total,
             'total_size_gb': round(total_size / (1024**3), 2),
-            'total_indexed': total,
-            'total_size_gb': round(total_size / (1024**3), 2),
-            'by_year': {x['año']: x['c'] for x in PDFIndex.objects.values('año').annotate(c=Count('id'))},
-            'by_razon_social': {x['razon_social']: x['c'] for x in PDFIndex.objects.values('razon_social').annotate(c=Count('id'))},
-            'by_banco': {x['banco']: x['c'] for x in PDFIndex.objects.values('banco').annotate(c=Count('id'))},
+            'by_year': by_year,
+            'by_razon_social': by_razon_social,
+            'by_banco': by_banco,
             'last_indexed': last.indexed_at.isoformat() if last and last.indexed_at else None,
-            'indexed_successfully': PDFIndex.objects.filter(is_indexed=True).count(),
-            'with_errors': PDFIndex.objects.filter(is_indexed=False).count(),
-            'by_razon_social': {x['razon_social']: x['c'] for x in PDFIndex.objects.values('razon_social').annotate(c=Count('id'))},
-            'by_banco': {x['banco']: x['c'] for x in PDFIndex.objects.values('banco').annotate(c=Count('id'))},
-            'last_indexed': last.indexed_at.isoformat() if last and last.indexed_at else None,
-            'indexed_successfully': PDFIndex.objects.filter(is_indexed=True).count(),
-            'with_errors': PDFIndex.objects.filter(is_indexed=False).count()
+            'indexed_successfully': documents_qs.filter(index_state__is_indexed=True).count(),
+            'with_errors': documents_qs.filter(Q(index_state__isnull=True) | Q(index_state__is_indexed=False)).count(),
+            'source': 'docrepo_v2',
         })
 
 class ReindexView(APIView):
