@@ -4,6 +4,8 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework import status
 from django.db.models import Q, Sum, Count
 from django.http import StreamingHttpResponse
+from auditlog.services import record_audit_event
+from docrepo.services import deactivate_document_by_storage_key, upsert_document_from_upload
 from .models import PDFIndex, DownloadLog
 from .serializers import PDFIndexSerializer
 from .throttling import SearchRateThrottle, BulkSearchRateThrottle
@@ -1326,6 +1328,7 @@ class FilesUploadView(APIView):
         from io import BytesIO
         import logging
         logger = logging.getLogger(__name__)
+        dual_write_legacy = getattr(settings, 'DOCREPO_DUAL_WRITE_LEGACY_ENABLED', True)
 
         files = request.FILES.getlist('files[]')
         folder = request.POST.get('folder', '').strip()
@@ -1365,40 +1368,94 @@ class FilesUploadView(APIView):
 
                 logger.info(f"✓ Archivo subido: {object_name}")
 
-                # Auto-indexar
-                indexed = False
-                try:
-                    meta = extract_metadata(object_name)
-                    # Extraer texto y códigos
-                    text, codigos = extract_text_from_pdf(object_name)
+                stat = minio_client.stat_object(settings.MINIO_BUCKET, object_name)
+                object_etag = stat.etag.strip('"') if getattr(stat, 'etag', None) else None
+                object_last_modified = getattr(stat, 'last_modified', None)
 
-                    PDFIndex.objects.update_or_create(
-                        minio_object_name=object_name,
-                        defaults={
-                            'razon_social': meta['razon_social'],
-                            'banco': meta['banco'],
-                            'mes': meta['mes'],
-                            'año': meta['año'],
-                            'tipo_documento': meta['tipo_documento'],
-                            'size_bytes': file_size,
-                            'codigos_empleado': ','.join(codigos) if codigos else '',
-                            'is_indexed': bool(text)
-                        }
-                    )
-                    indexed = True
-                    logger.info(f"✓ Archivo indexado: {object_name}")
-                except Exception as idx_error:
-                    logger.error(f"✗ Error indexando {object_name}: {idx_error}")
+                meta = extract_metadata(object_name)
+                text, codigos = extract_text_from_pdf(object_name)
+                indexed = bool(text)
+
+                ingest_result = upsert_document_from_upload(
+                    object_key=object_name,
+                    metadata=meta,
+                    size_bytes=file_size,
+                    etag=object_etag,
+                    last_modified=object_last_modified,
+                    employee_codes=codigos,
+                    is_indexed=indexed,
+                    actor=request.user,
+                )
+
+                legacy_synced = False
+                legacy_sync_error = ''
+                if dual_write_legacy:
+                    try:
+                        PDFIndex.objects.update_or_create(
+                            minio_object_name=object_name,
+                            defaults={
+                                'razon_social': meta['razon_social'],
+                                'banco': meta['banco'],
+                                'mes': meta['mes'],
+                                'año': meta['año'],
+                                'tipo_documento': meta['tipo_documento'],
+                                'size_bytes': file_size,
+                                'md5_hash': object_etag,
+                                'codigos_empleado': ','.join(codigos) if codigos else '',
+                                'last_modified': object_last_modified,
+                                'is_indexed': indexed,
+                            }
+                        )
+                        legacy_synced = True
+                    except Exception as legacy_error:
+                        legacy_sync_error = str(legacy_error)
+                        logger.warning(f"Legacy mirror sync failed for {object_name}: {legacy_error}")
+
+                record_audit_event(
+                    action='FILE_UPLOAD_SUCCEEDED',
+                    resource_type='file',
+                    resource_id=object_name,
+                    request=request,
+                    actor=request.user,
+                    document=ingest_result.document,
+                    metadata={
+                        'status_code': 201,
+                        'object_key': object_name,
+                        'domain': ingest_result.domain_code,
+                        'indexed': indexed,
+                        'size_bytes': file_size,
+                        'legacy_sync_enabled': dual_write_legacy,
+                        'legacy_synced': legacy_synced,
+                        'legacy_sync_error': legacy_sync_error,
+                    },
+                )
 
                 uploaded.append({
                     'filename': file.name,
                     'path': object_name,
                     'size': file_size,
-                    'indexed': indexed
+                    'indexed': indexed,
+                    'docrepo_document_id': str(ingest_result.document.id),
+                    'domain': ingest_result.domain_code,
+                    'legacy_sync_enabled': dual_write_legacy,
+                    'legacy_synced': legacy_synced,
+                    'legacy_sync_error': legacy_sync_error,
                 })
 
             except Exception as e:
                 logger.error(f"✗ Error subiendo {file.name}: {e}")
+                record_audit_event(
+                    action='FILE_UPLOAD_FAILED',
+                    resource_type='file',
+                    resource_id=file.name,
+                    request=request,
+                    actor=request.user,
+                    metadata={
+                        'status_code': 500,
+                        'filename': file.name,
+                        'error': str(e),
+                    },
+                )
                 errors.append({'filename': file.name, 'error': str(e)})
 
         return Response({
@@ -1476,25 +1533,96 @@ class FilesDeleteView(APIView):
             logger.info(f"✓ Archivo eliminado de MinIO: {file_path}")
 
             # Eliminar índice de PostgreSQL
-            PDFIndex.objects.filter(minio_object_name=file_path).delete()
+            legacy_deleted_count, _ = PDFIndex.objects.filter(minio_object_name=file_path).delete()
             logger.info(f"✓ Índice eliminado de PostgreSQL: {file_path}")
+
+            document = deactivate_document_by_storage_key(
+                object_key=file_path,
+                actor=request.user,
+            )
+
+            record_audit_event(
+                action='FILE_DELETE_SUCCEEDED',
+                resource_type='file',
+                resource_id=file_path,
+                request=request,
+                actor=request.user,
+                document=document,
+                metadata={
+                    'status_code': 200,
+                    'object_key': file_path,
+                    'legacy_deleted_count': legacy_deleted_count,
+                    'docrepo_document_id': str(document.id) if document else None,
+                },
+            )
 
             return Response({
                 'success': True,
                 'message': 'Archivo eliminado correctamente',
-                'path': file_path
+                'path': file_path,
+                'legacy_deleted_count': legacy_deleted_count,
+                'docrepo_document_id': str(document.id) if document else None,
             })
 
         except S3Error as e:
             if e.code == 'NoSuchKey':
                 # El archivo no existe en MinIO, pero limpiar índice
-                PDFIndex.objects.filter(minio_object_name=file_path).delete()
-                return Response({'error': 'El archivo no existe en MinIO.'}, status=404)
+                legacy_deleted_count, _ = PDFIndex.objects.filter(minio_object_name=file_path).delete()
+                document = deactivate_document_by_storage_key(
+                    object_key=file_path,
+                    actor=request.user,
+                )
+
+                record_audit_event(
+                    action='FILE_DELETE_NOT_FOUND',
+                    resource_type='file',
+                    resource_id=file_path,
+                    request=request,
+                    actor=request.user,
+                    document=document,
+                    metadata={
+                        'status_code': 404,
+                        'object_key': file_path,
+                        'legacy_deleted_count': legacy_deleted_count,
+                        'docrepo_document_id': str(document.id) if document else None,
+                        'reason': 'minio_object_missing',
+                    },
+                )
+
+                return Response({
+                    'error': 'El archivo no existe en MinIO.',
+                    'legacy_deleted_count': legacy_deleted_count,
+                    'docrepo_document_id': str(document.id) if document else None,
+                }, status=404)
             else:
                 logger.error(f"✗ Error S3 eliminando {file_path}: {e}")
+                record_audit_event(
+                    action='FILE_DELETE_FAILED',
+                    resource_type='file',
+                    resource_id=file_path,
+                    request=request,
+                    actor=request.user,
+                    metadata={
+                        'status_code': 500,
+                        'object_key': file_path,
+                        'error': str(e),
+                    },
+                )
                 return Response({'error': f'Error en MinIO: {str(e)}'}, status=500)
         except Exception as e:
             logger.error(f"✗ Error eliminando {file_path}: {e}")
+            record_audit_event(
+                action='FILE_DELETE_FAILED',
+                resource_type='file',
+                resource_id=file_path,
+                request=request,
+                actor=request.user,
+                metadata={
+                    'status_code': 500,
+                    'object_key': file_path,
+                    'error': str(e),
+                },
+            )
             return Response({'error': f'Error al eliminar: {str(e)}'}, status=500)
 
 
