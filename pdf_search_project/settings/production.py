@@ -15,6 +15,12 @@ En producción queremos:
 import os
 from .base import *  # Importa toda la configuración base
 
+
+def parse_env_list(raw_value: str) -> list[str]:
+    if not raw_value:
+        return []
+    return [item.strip() for item in raw_value.split(',') if item.strip()]
+
 # =============================================================================
 # MODO PRODUCCIÓN
 # =============================================================================
@@ -26,12 +32,16 @@ DEBUG = False
 SECRET_KEY = os.environ['DJANGO_SECRET_KEY']  # Falla si no existe
 
 # Solo acepta tu dominio específico
-ALLOWED_HOSTS = [
+DEFAULT_ALLOWED_HOSTS = [
     'search.liderman.net.pe',
     'www.search.liderman.net.pe',
     # IP del VPS (si accedes directo)
     os.getenv('VPS_IP', ''),
 ]
+
+env_allowed_hosts = parse_env_list(os.getenv('DJANGO_ALLOWED_HOSTS', ''))
+ALLOWED_HOSTS = env_allowed_hosts or DEFAULT_ALLOWED_HOSTS
+
 # Filtrar valores vacíos
 ALLOWED_HOSTS = [h for h in ALLOWED_HOSTS if h]
 

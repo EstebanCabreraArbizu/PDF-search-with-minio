@@ -78,13 +78,15 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: django-api
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     environment:
       # ═══════════════════════════════════════════════════
       # 🆕 CONFIGURACIÓN DE SEGURIDAD
       # ═══════════════════════════════════════════════════
-      - DJANGO_ENV=production  # Activa settings/production.py
+      - DJANGO_ENV=${DJANGO_ENV:-production}  # Permite controlar entorno desde .env
       # ⚠️ IMPORTANTE: Genera una clave única y segura con:
       # python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
       - DJANGO_SECRET_KEY=tu-clave-super-secreta-generada-aqui-cambiar-en-produccion
