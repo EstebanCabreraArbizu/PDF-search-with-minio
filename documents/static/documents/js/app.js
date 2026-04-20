@@ -727,6 +727,67 @@ function removeFile(index) {
     displaySelectedFiles();
 }
 
+function setFileItemStatus(globalIdx, message, tone = 'muted') {
+    const item = document.getElementById(`file-item-${globalIdx}`);
+    if (!item) return;
+
+    const content = item.querySelector('div');
+    if (!content) return;
+
+    let statusEl = item.querySelector('.upload-status');
+    if (!statusEl) {
+        statusEl = document.createElement('div');
+        statusEl.className = 'upload-status mt-1';
+        content.appendChild(statusEl);
+    }
+
+    statusEl.innerHTML = `<small class="text-${tone}">${message}</small>`;
+}
+
+function buildUploadFormData(files, folder) {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files[]', file));
+    formData.append('folder', folder || '');
+    return formData;
+}
+
+async function classifyChunkBeforeUpload(chunk, folder) {
+    const formData = buildUploadFormData(chunk, folder);
+
+    const response = await fetch('/api/files/classify-preview', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${authToken}`
+        },
+        body: formData
+    });
+
+    let data = {};
+    try {
+        data = await response.json();
+    } catch (error) {
+        data = {};
+    }
+
+    if (!response.ok || !data.success || !Array.isArray(data.files)) {
+        throw new Error(data.error || data.detail || 'No se pudo previsualizar la clasificación');
+    }
+
+    return data.files;
+}
+
+function buildConfirmationMessage(entries) {
+    const previewNames = entries
+        .slice(0, 8)
+        .map(entry => `- ${entry.file.name}`)
+        .join('\n');
+
+    const hiddenCount = Math.max(entries.length - 8, 0);
+    const hiddenMessage = hiddenCount > 0 ? `\n... y ${hiddenCount} archivo(s) más` : '';
+
+    return `Se detectaron ${entries.length} archivo(s) con metadata ambigua.\n\n${previewNames}${hiddenMessage}\n\n¿Deseas subirlos de todas formas?`;
+}
+
 // ========================================
 // SUBIR ARCHIVOS
 // ========================================
@@ -744,6 +805,11 @@ async function uploadFiles() {
     let totalUploaded = 0;
     let totalIndexed = 0;
     let totalErrors = 0;
+    let totalPreviewDuplicates = 0;
+    let totalPreviewInvalid = 0;
+    let totalPreviewFailed = 0;
+    let totalRequiresConfirmation = 0;
+    let totalSkippedByConfirmation = 0;
 
     // Disable UI while uploading
     const chunks = [];
@@ -755,16 +821,92 @@ async function uploadFiles() {
         for (let c = 0; c < chunks.length; c++) {
             const chunk = chunks[c];
 
-            // Show per-file progress bars
-            chunk.forEach((file, idx) => {
-                const globalIdx = c * UPLOAD_CHUNK_SIZE + idx;
+            const chunkEntries = chunk.map((file, idx) => ({
+                file,
+                globalIdx: c * UPLOAD_CHUNK_SIZE + idx,
+            }));
+
+            let previewFiles;
+            try {
+                previewFiles = await classifyChunkBeforeUpload(chunk, folder);
+            } catch (previewError) {
+                const continueWithoutPreview = confirm(
+                    `No se pudo previsualizar el lote ${c + 1} de ${chunks.length}.\n\n` +
+                    `Detalle: ${previewError.message}\n\n` +
+                    '¿Deseas intentar subir este lote sin previsualización?'
+                );
+
+                if (!continueWithoutPreview) {
+                    throw previewError;
+                }
+
+                previewFiles = chunk.map(() => ({ status: 'READY' }));
+            }
+
+            const readyEntries = [];
+            const confirmationEntries = [];
+
+            chunkEntries.forEach((entry, idx) => {
+                const preview = previewFiles[idx] || { status: 'ERROR' };
+                const status = preview.status || 'ERROR';
+
+                if (status === 'READY') {
+                    readyEntries.push({ ...entry, preview });
+                    return;
+                }
+
+                if (status === 'REQUIRES_CONFIRMATION') {
+                    totalRequiresConfirmation += 1;
+                    confirmationEntries.push({ ...entry, preview });
+                    setFileItemStatus(entry.globalIdx, '⚠ Requiere confirmación', 'warning');
+                    return;
+                }
+
+                if (status === 'DUPLICATE') {
+                    totalPreviewDuplicates += 1;
+                    setFileItemStatus(entry.globalIdx, '↷ Duplicado omitido', 'secondary');
+                    return;
+                }
+
+                if (status === 'INVALID_FILE') {
+                    totalPreviewInvalid += 1;
+                    setFileItemStatus(entry.globalIdx, '✗ Archivo inválido', 'danger');
+                    return;
+                }
+
+                totalPreviewFailed += 1;
+                setFileItemStatus(entry.globalIdx, '✗ Error de preclasificación', 'danger');
+            });
+
+            let uploadEntries = [...readyEntries];
+
+            if (confirmationEntries.length > 0) {
+                const proceedAmbiguous = confirm(buildConfirmationMessage(confirmationEntries));
+
+                if (proceedAmbiguous) {
+                    uploadEntries = uploadEntries.concat(confirmationEntries);
+                    confirmationEntries.forEach(entry => {
+                        setFileItemStatus(entry.globalIdx, '✓ Confirmado manualmente', 'info');
+                    });
+                } else {
+                    totalSkippedByConfirmation += confirmationEntries.length;
+                    confirmationEntries.forEach(entry => {
+                        setFileItemStatus(entry.globalIdx, '↷ Omitido por confirmación manual', 'secondary');
+                    });
+                }
+            }
+
+            if (uploadEntries.length === 0) {
+                continue;
+            }
+
+            // Show per-file progress bars only for files to upload
+            uploadEntries.forEach(({ globalIdx }) => {
                 const progressEl = document.getElementById(`progress-${globalIdx}`);
                 if (progressEl) progressEl.style.display = 'block';
             });
 
-            const formData = new FormData();
-            chunk.forEach(file => formData.append('files[]', file));
-            formData.append('folder', folder);
+            const formData = buildUploadFormData(uploadEntries.map(entry => entry.file), folder);
 
             const xhr = new XMLHttpRequest();
             const uploadPromise = new Promise((resolve, reject) => {
@@ -786,8 +928,7 @@ async function uploadFiles() {
                     if (!event.lengthComputable) return;
                     const percent = Math.round((event.loaded / event.total) * 100);
                     // Update each file progress bar in the chunk
-                    chunk.forEach((file, idx) => {
-                        const globalIdx = c * UPLOAD_CHUNK_SIZE + idx;
+                    uploadEntries.forEach(({ globalIdx }) => {
                         const bar = document.querySelector(`#file-item-${globalIdx} .progress-bar`);
                         if (bar) bar.style.width = percent + '%';
                     });
@@ -801,16 +942,63 @@ async function uploadFiles() {
             if (data && Array.isArray(data.uploaded)) {
                 totalUploaded += data.uploaded.length;
                 totalIndexed += data.uploaded.filter(u => u.indexed).length;
+
+                const uploadedNames = new Set(data.uploaded.map(item => item.filename));
+                uploadEntries.forEach(({ file, globalIdx }) => {
+                    if (uploadedNames.has(file.name)) {
+                        setFileItemStatus(globalIdx, '✓ Subido', 'success');
+                    }
+                });
             }
+
             if (data && Array.isArray(data.errors)) {
                 totalErrors += data.errors.length;
+
+                data.errors.forEach(errorItem => {
+                    const matchingEntry = uploadEntries.find(entry => entry.file.name === errorItem.filename);
+                    if (!matchingEntry) return;
+
+                    if (errorItem.code === 'DUPLICATE_FILE') {
+                        setFileItemStatus(matchingEntry.globalIdx, '↷ Duplicado bloqueado por servidor', 'secondary');
+                        return;
+                    }
+
+                    setFileItemStatus(
+                        matchingEntry.globalIdx,
+                        `✗ ${errorItem.error || 'Error de subida'}`,
+                        'danger'
+                    );
+                });
             }
 
             // small delay to let UI update
             await new Promise(r => setTimeout(r, 200));
         }
 
-        alert(`✓ Proceso completado:\n- Subidos: ${totalUploaded}\n- Indexados: ${totalIndexed}\n- Errores: ${totalErrors}`);
+        const summaryLines = [
+            '✓ Proceso completado:',
+            `- Subidos: ${totalUploaded}`,
+            `- Indexados: ${totalIndexed}`,
+            `- Errores de subida: ${totalErrors}`,
+        ];
+
+        if (totalRequiresConfirmation > 0) {
+            summaryLines.push(`- Requirieron confirmación: ${totalRequiresConfirmation}`);
+        }
+        if (totalSkippedByConfirmation > 0) {
+            summaryLines.push(`- Omitidos por confirmación manual: ${totalSkippedByConfirmation}`);
+        }
+        if (totalPreviewDuplicates > 0) {
+            summaryLines.push(`- Omitidos por duplicado (preview): ${totalPreviewDuplicates}`);
+        }
+        if (totalPreviewInvalid > 0) {
+            summaryLines.push(`- Omitidos por archivo inválido: ${totalPreviewInvalid}`);
+        }
+        if (totalPreviewFailed > 0) {
+            summaryLines.push(`- Omitidos por error de preclasificación: ${totalPreviewFailed}`);
+        }
+
+        alert(summaryLines.join('\n'));
 
         // Limpiar selección
         selectedFilesArray = [];
