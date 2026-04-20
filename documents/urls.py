@@ -3,7 +3,7 @@ from .views import (
     SearchView, ReindexView, FilterOptionsView, 
     DownloadView, SyncIndexView, PopulateHashesView, IndexStatsView, index,
     seguros_ui, tregistro_ui,
-    FilesListView, FilesUploadView, CreateFolderView, FilesDeleteView, FoldersListView,
+    FilesListView, FilesClassifyPreviewView, FilesUploadView, CreateFolderView, FilesDeleteView, FoldersListView,
     BulkSearchView, MergePdfsView, CurrentUserView, HealthCheckView
 )
 from .auth_views import AuthLoginView, AuthLogoutView
@@ -34,6 +34,7 @@ urlpatterns = [
     
     # File Management (migrated from Flask)
     path('api/files/list', FilesListView.as_view(), name='files_list'),
+    path('api/files/classify-preview', FilesClassifyPreviewView.as_view(), name='files_classify_preview'),
     path('api/files/upload', FilesUploadView.as_view(), name='files_upload'),
     path('api/files/create-folder', CreateFolderView.as_view(), name='create_folder'),
     path('api/files/delete', FilesDeleteView.as_view(), name='files_delete'),

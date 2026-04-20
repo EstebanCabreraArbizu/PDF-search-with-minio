@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 
 from documents.views import (
 	BulkSearchView,
+	FilesClassifyPreviewView,
 	FilesDeleteView,
 	FilesListView,
 	FilesUploadView,
@@ -331,6 +332,96 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
 	@patch('documents.views.settings.DOCREPO_AUTO_ROUTE_UPLOAD_ENABLED', True)
 	@patch('documents.views.record_audit_event')
+	@patch('documents.views._find_active_duplicate_by_hash_size')
+	@patch('documents.views.build_auto_storage_prefix')
+	@patch('documents.views.infer_upload_metadata')
+	@patch('documents.views.extract_text_from_pdf_bytes')
+	def test_files_classify_preview_returns_ready_item(
+		self,
+		mock_extract_text_from_bytes,
+		mock_infer_upload_metadata,
+		mock_build_auto_storage_prefix,
+		mock_find_duplicate,
+		mock_record_audit,
+	):
+		fake_upload = SimpleNamespace(
+			name='SCTR PENSION 02012026 FACILITIES.pdf',
+			read=lambda: b'%PDF-1.4 classify-preview content',
+		)
+		files = SimpleNamespace(getlist=lambda _key: [fake_upload])
+
+		mock_extract_text_from_bytes.return_value = ('SCTR PENSION FACILITIES', ['42177863'])
+		mock_infer_upload_metadata.return_value = {
+			'año': '2026',
+			'razon_social': 'FACILITIES',
+			'mes': '01',
+			'banco': 'GENERAL',
+			'tipo_documento': 'SCTR PENSION',
+			'domain_code': 'SEGUROS',
+		}
+		mock_build_auto_storage_prefix.return_value = '2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION'
+		mock_find_duplicate.return_value = None
+
+		request = self._request(files=files, post={})
+		response = FilesClassifyPreviewView().post(request)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data['success'])
+		self.assertEqual(response.data['summary']['total_files'], 1)
+		self.assertEqual(response.data['summary']['ready'], 1)
+		self.assertEqual(response.data['summary']['requires_confirmation'], 0)
+		self.assertEqual(response.data['summary']['duplicates'], 0)
+		self.assertEqual(response.data['files'][0]['status'], 'READY')
+		self.assertEqual(response.data['files'][0]['domain'], 'SEGUROS')
+		self.assertEqual(
+			response.data['files'][0]['logical_path'],
+			'2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION/SCTR PENSION 02012026 FACILITIES.pdf'
+		)
+
+		mock_find_duplicate.assert_called_once()
+		mock_record_audit.assert_called_once()
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views.upsert_document_from_upload')
+	@patch('documents.views.minio_client.put_object')
+	@patch('documents.views._find_active_duplicate_by_hash_size')
+	def test_files_upload_blocks_duplicate_by_hash_and_size(
+		self,
+		mock_find_duplicate,
+		mock_put_object,
+		mock_upsert,
+		mock_record_audit,
+	):
+		fake_upload = SimpleNamespace(
+			name='duplicado.pdf',
+			read=lambda: b'%PDF-1.4 duplicate content',
+		)
+		files = SimpleNamespace(getlist=lambda _key: [fake_upload])
+
+		mock_find_duplicate.return_value = SimpleNamespace(
+			document=SimpleNamespace(id='dup-doc-id'),
+			object_key='2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION/duplicado.pdf',
+		)
+
+		request = self._request(files=files, post={})
+		response = FilesUploadView().post(request)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertFalse(response.data['success'])
+		self.assertEqual(response.data['total_uploaded'], 0)
+		self.assertEqual(response.data['total_errors'], 1)
+		self.assertEqual(response.data['errors'][0]['code'], 'DUPLICATE_FILE')
+		self.assertEqual(response.data['errors'][0]['existing_document_id'], 'dup-doc-id')
+
+		mock_put_object.assert_not_called()
+		mock_upsert.assert_not_called()
+		mock_record_audit.assert_called_once()
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.settings.DOCREPO_AUTO_ROUTE_UPLOAD_ENABLED', True)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views._find_active_duplicate_by_hash_size')
 	@patch('documents.views.upsert_document_from_upload')
 	@patch('documents.views.extract_text_from_pdf')
 	@patch('documents.views.build_auto_storage_prefix')
@@ -347,6 +438,7 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 		mock_build_auto_storage_prefix,
 		mock_extract_text,
 		mock_upsert,
+		mock_find_duplicate,
 		mock_record_audit,
 	):
 		fake_upload = SimpleNamespace(
@@ -365,6 +457,7 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 			'domain_code': 'SEGUROS',
 		}
 		mock_build_auto_storage_prefix.return_value = '2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION'
+		mock_find_duplicate.return_value = None
 
 		mock_stat_object.return_value = SimpleNamespace(
 			etag='"etag-auto"',
@@ -390,6 +483,7 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 		self.assertEqual(response.data['uploaded'][0]['domain_preview'], 'SEGUROS')
 
 		mock_extract_text_from_bytes.assert_called_once()
+		mock_find_duplicate.assert_called_once()
 		mock_infer_upload_metadata.assert_called_once()
 		mock_build_auto_storage_prefix.assert_called_once()
 		mock_put_object.assert_called_once()
@@ -398,6 +492,7 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 
 	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
 	@patch('documents.views.record_audit_event')
+	@patch('documents.views._find_active_duplicate_by_hash_size')
 	@patch('documents.views.upsert_document_from_upload')
 	@patch('documents.views.extract_text_from_pdf')
 	@patch('documents.views.extract_metadata')
@@ -410,6 +505,7 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 		mock_extract_metadata,
 		mock_extract_text,
 		mock_upsert,
+		mock_find_duplicate,
 		mock_record_audit,
 	):
 		fake_upload = SimpleNamespace(
@@ -434,6 +530,7 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 			document=SimpleNamespace(id='doc-1'),
 			domain_code='CONSTANCIA_ABONO',
 		)
+		mock_find_duplicate.return_value = None
 
 		request = self._request(
 			files=files,
@@ -451,6 +548,7 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 
 		mock_put_object.assert_called_once()
 		mock_upsert.assert_called_once()
+		mock_find_duplicate.assert_called_once()
 		mock_record_audit.assert_called_once()
 
 	@patch('documents.views.record_audit_event')

@@ -15,6 +15,7 @@ from .utils import (
     infer_upload_metadata, build_auto_storage_prefix,
     BANCOS_VALIDOS, RAZONES_SOCIALES_VALIDAS
 )
+import hashlib
 import time
 from datetime import datetime
 import re
@@ -24,6 +25,137 @@ from django.db import connection
 
 # Cache simple en memoria para listado de MinIO (como en Flask app)
 _minio_list_cache = {'time': 0, 'data': None}
+
+CLASSIFICATION_DOMAIN_KEYWORDS = {
+    'SEGUROS': ['SCTR', 'VIDA LEY', 'POLIZA', 'SEGURO', 'PENSION', 'SALUD'],
+    'TREGISTRO': ['T-REGISTRO', 'TREGISTRO', 'ALTA', 'BAJA', 'PERSONAL EN FORMACION'],
+    'CONSTANCIA_ABONO': ['FIN DE MES', 'CUADRE', 'PLANILLA', 'ABONOS ENVIADOS', 'TELECREDITO'],
+}
+
+
+def _build_upload_hints(request):
+    return {
+        'año': request.POST.get('año', request.POST.get('anio', '')),
+        'mes': request.POST.get('mes', ''),
+        'banco': request.POST.get('banco', ''),
+        'razon_social': request.POST.get('razon_social', request.POST.get('empresa', '')),
+        'tipo_documento': request.POST.get('tipo_documento', request.POST.get('tipo', '')),
+    }
+
+
+def _find_active_duplicate_by_hash_size(file_size, md5_hash):
+    if file_size <= 0 or not md5_hash:
+        return None
+
+    return (
+        StorageObject.objects.select_related('document')
+        .filter(
+            bucket_name=settings.MINIO_BUCKET,
+            size_bytes=file_size,
+            document__is_active=True,
+        )
+        .filter(Q(etag=md5_hash) | Q(document__source_hash_md5=md5_hash))
+        .first()
+    )
+
+
+def _classification_missing_fields(meta, domain_code):
+    missing = []
+
+    if not str(meta.get('año', '')).strip():
+        missing.append('año')
+    if not str(meta.get('mes', '')).strip():
+        missing.append('mes')
+    razon_social = str(meta.get('razon_social', '')).strip().upper()
+    if not razon_social or razon_social == 'DESCONOCIDO':
+        missing.append('razon_social')
+    if not str(meta.get('tipo_documento', '')).strip():
+        missing.append('tipo_documento')
+
+    if domain_code == 'CONSTANCIA_ABONO':
+        banco = str(meta.get('banco', '')).strip().upper()
+        if not banco or banco == 'GENERAL':
+            missing.append('banco')
+
+    if domain_code == 'TREGISTRO':
+        tipo = str(meta.get('tipo_documento', '')).strip().upper()
+        if tipo not in {'ALTA', 'BAJA', 'TREGISTRO'} and 'ALTA' not in tipo and 'BAJA' not in tipo:
+            missing.append('tipo_movimiento')
+
+    if domain_code == 'SEGUROS':
+        tipo = str(meta.get('tipo_documento', '')).strip().upper()
+        if not any(token in tipo for token in ['SCTR', 'VIDA LEY', 'SEGURO', 'POLIZA']):
+            missing.append('tipo_seguro')
+
+    return list(dict.fromkeys(missing))
+
+
+def _classification_confidence(meta, hints, pdf_text, filename):
+    score = 0.35
+    domain_code = str(meta.get('domain_code') or 'CONSTANCIA_ABONO').strip().upper()
+
+    if str(meta.get('año', '')).strip():
+        score += 0.1
+    if str(meta.get('mes', '')).strip():
+        score += 0.1
+
+    razon_social = str(meta.get('razon_social', '')).strip().upper()
+    if razon_social and razon_social != 'DESCONOCIDO':
+        score += 0.1
+
+    hinted_fields = [
+        hints.get('año'),
+        hints.get('mes'),
+        hints.get('banco'),
+        hints.get('razon_social'),
+        hints.get('tipo_documento'),
+    ]
+    hint_count = len([value for value in hinted_fields if str(value or '').strip()])
+    score += min(hint_count * 0.05, 0.2)
+
+    joined = f"{filename or ''} {pdf_text or ''}".upper()
+    domain_keywords = CLASSIFICATION_DOMAIN_KEYWORDS.get(domain_code, [])
+    matched_keywords = [token for token in domain_keywords if token in joined]
+    if len(matched_keywords) >= 2:
+        score += 0.2
+    elif matched_keywords:
+        score += 0.1
+
+    if domain_code == 'CONSTANCIA_ABONO':
+        banco = str(meta.get('banco', '')).strip().upper()
+        if banco and banco != 'GENERAL':
+            score += 0.08
+        else:
+            score -= 0.05
+
+    score = max(0.05, min(0.99, score))
+    return round(score, 2)
+
+
+def _classification_warnings(meta, domain_code, confidence, duplicate, missing_fields):
+    warnings = []
+
+    if duplicate is not None:
+        warnings.append('duplicado_hash_size')
+    if confidence < float(getattr(settings, 'DOCREPO_CLASSIFICATION_MIN_CONFIDENCE', 0.7)):
+        warnings.append('low_confidence')
+    if missing_fields:
+        warnings.append('metadata_incompleta')
+
+    if domain_code == 'CONSTANCIA_ABONO' and str(meta.get('banco', '')).strip().upper() == 'GENERAL':
+        warnings.append('banco_no_detectado')
+
+    if domain_code == 'TREGISTRO':
+        tipo = str(meta.get('tipo_documento', '')).strip().upper()
+        if 'ALTA' not in tipo and 'BAJA' not in tipo:
+            warnings.append('movimiento_no_determinado')
+
+    if domain_code == 'SEGUROS':
+        tipo = str(meta.get('tipo_documento', '')).strip().upper()
+        if not any(token in tipo for token in ['SCTR', 'VIDA LEY', 'SEGURO', 'POLIZA']):
+            warnings.append('tipo_seguro_no_determinado')
+
+    return list(dict.fromkeys(warnings))
 
 
 # ═══════════════════════════════════════════════════
@@ -1051,6 +1183,145 @@ class FilesListView(APIView):
             return Response({'error': f'Error al listar archivos: {str(e)}'}, status=500)
 
 
+class FilesClassifyPreviewView(APIView):
+    """
+    Previsualiza clasificación automática y ruta lógica sin guardar en MinIO.
+    POST /api/files/classify-preview (multipart/form-data)
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+
+        files = request.FILES.getlist('files[]')
+        if not files:
+            return Response({'error': 'No se proporcionaron archivos.'}, status=400)
+
+        hints = _build_upload_hints(request)
+        min_confidence = float(getattr(settings, 'DOCREPO_CLASSIFICATION_MIN_CONFIDENCE', 0.7))
+
+        items = []
+        ready = 0
+        requires_confirmation = 0
+        duplicates = 0
+
+        for file in files:
+            if not file or not file.name:
+                continue
+
+            if not file.name.lower().endswith('.pdf'):
+                items.append({
+                    'filename': file.name,
+                    'status': 'INVALID_FILE',
+                    'requires_confirmation': True,
+                    'warnings': ['invalid_extension'],
+                    'missing_fields': [],
+                    'duplicate': None,
+                })
+                requires_confirmation += 1
+                continue
+
+            try:
+                file_content = file.read()
+                file_size = len(file_content)
+                file_md5 = hashlib.md5(file_content).hexdigest()
+
+                preview_text, preview_codes = extract_text_from_pdf_bytes(file_content)
+                meta = infer_upload_metadata(file.name, preview_text, hints)
+                domain_code = meta.get('domain_code', 'CONSTANCIA_ABONO')
+                logical_prefix = build_auto_storage_prefix(meta, domain_code)
+                logical_path = f"{logical_prefix}/{file.name}"
+
+                duplicate = _find_active_duplicate_by_hash_size(file_size, file_md5)
+                if duplicate is not None:
+                    duplicates += 1
+
+                missing_fields = _classification_missing_fields(meta, domain_code)
+                confidence = _classification_confidence(meta, hints, preview_text, file.name)
+                warnings = _classification_warnings(meta, domain_code, confidence, duplicate, missing_fields)
+
+                needs_confirmation = bool(
+                    duplicate is not None
+                    or missing_fields
+                    or confidence < min_confidence
+                )
+
+                if duplicate is not None:
+                    status = 'DUPLICATE'
+                elif needs_confirmation:
+                    status = 'REQUIRES_CONFIRMATION'
+                else:
+                    status = 'READY'
+
+                if needs_confirmation:
+                    requires_confirmation += 1
+                else:
+                    ready += 1
+
+                items.append({
+                    'filename': file.name,
+                    'size': file_size,
+                    'md5': file_md5,
+                    'status': status,
+                    'requires_confirmation': needs_confirmation,
+                    'confidence': confidence,
+                    'domain': domain_code,
+                    'metadata': {
+                        'año': meta.get('año', ''),
+                        'mes': meta.get('mes', ''),
+                        'razon_social': meta.get('razon_social', ''),
+                        'banco': meta.get('banco', ''),
+                        'tipo_documento': meta.get('tipo_documento', ''),
+                    },
+                    'logical_prefix': logical_prefix,
+                    'logical_path': logical_path,
+                    'missing_fields': missing_fields,
+                    'warnings': warnings,
+                    'detected_codes_count': len(preview_codes or []),
+                    'duplicate': {
+                        'document_id': str(duplicate.document.id),
+                        'object_key': duplicate.object_key,
+                    } if duplicate is not None else None,
+                })
+            except Exception as preview_error:
+                logger.error(f'✗ Error preclasificando {file.name}: {preview_error}')
+                requires_confirmation += 1
+                items.append({
+                    'filename': file.name,
+                    'status': 'ERROR',
+                    'requires_confirmation': True,
+                    'warnings': ['preview_error'],
+                    'missing_fields': [],
+                    'error': str(preview_error),
+                    'duplicate': None,
+                })
+
+        summary = {
+            'total_files': len(items),
+            'ready': ready,
+            'requires_confirmation': requires_confirmation,
+            'duplicates': duplicates,
+            'min_confidence': min_confidence,
+        }
+
+        record_audit_event(
+            action='FILE_CLASSIFICATION_PREVIEWED',
+            resource_type='file',
+            resource_id='bulk_preview',
+            request=request,
+            actor=request.user,
+            metadata=summary,
+        )
+
+        return Response({
+            'success': True,
+            'summary': summary,
+            'files': items,
+        })
+
+
 class FilesUploadView(APIView):
     """
     Subir uno o varios PDFs a MinIO y auto-indexarlos.
@@ -1086,18 +1357,42 @@ class FilesUploadView(APIView):
                 # Leer contenido del archivo
                 file_content = file.read()
                 file_size = len(file_content)
+                file_md5 = hashlib.md5(file_content).hexdigest()
 
-                hints = {
-                    'año': request.POST.get('año', request.POST.get('anio', '')),
-                    'mes': request.POST.get('mes', ''),
-                    'banco': request.POST.get('banco', ''),
-                    'razon_social': request.POST.get('razon_social', request.POST.get('empresa', '')),
-                    'tipo_documento': request.POST.get('tipo_documento', request.POST.get('tipo', '')),
-                }
+                duplicate = _find_active_duplicate_by_hash_size(file_size, file_md5)
+                if duplicate is not None:
+                    record_audit_event(
+                        action='FILE_UPLOAD_DUPLICATE_BLOCKED',
+                        resource_type='file',
+                        resource_id=file.name,
+                        request=request,
+                        actor=request.user,
+                        document=duplicate.document,
+                        metadata={
+                            'status_code': 409,
+                            'filename': file.name,
+                            'size_bytes': file_size,
+                            'md5_hash': file_md5,
+                            'existing_document_id': str(duplicate.document.id),
+                            'existing_object_key': duplicate.object_key,
+                        },
+                    )
+                    errors.append({
+                        'filename': file.name,
+                        'error': 'Archivo duplicado detectado (mismo hash y tamaño).',
+                        'code': 'DUPLICATE_FILE',
+                        'existing_document_id': str(duplicate.document.id),
+                        'existing_path': duplicate.object_key,
+                    })
+                    continue
+
+                hints = _build_upload_hints(request)
 
                 auto_routed = False
                 preview_domain = ''
                 normalized_folder = requested_folder
+                preview_text = None
+                preview_codes = []
 
                 if normalized_folder:
                     if not normalized_folder.endswith('/'):
@@ -1105,7 +1400,7 @@ class FilesUploadView(APIView):
                     object_name = f"{normalized_folder}{file.name}"
                     meta = extract_metadata(object_name)
                 elif auto_route_enabled:
-                    preview_text, _ = extract_text_from_pdf_bytes(file_content)
+                    preview_text, preview_codes = extract_text_from_pdf_bytes(file_content)
                     meta = infer_upload_metadata(file.name, preview_text, hints)
                     preview_domain = meta.get('domain_code', '')
                     auto_prefix = build_auto_storage_prefix(meta, preview_domain)
@@ -1127,10 +1422,13 @@ class FilesUploadView(APIView):
                 logger.info(f"✓ Archivo subido: {object_name}")
 
                 stat = minio_client.stat_object(settings.MINIO_BUCKET, object_name)
-                object_etag = stat.etag.strip('"') if getattr(stat, 'etag', None) else None
+                object_etag = stat.etag.strip('"') if getattr(stat, 'etag', None) else file_md5
                 object_last_modified = getattr(stat, 'last_modified', None)
 
-                text, codigos = extract_text_from_pdf(object_name)
+                if auto_routed and preview_text is not None:
+                    text, codigos = preview_text, preview_codes
+                else:
+                    text, codigos = extract_text_from_pdf(object_name)
                 indexed = bool(text)
 
                 ingest_result = upsert_document_from_upload(
@@ -1182,6 +1480,7 @@ class FilesUploadView(APIView):
                         'domain_preview': preview_domain,
                         'auto_routed': auto_routed,
                         'requested_folder': requested_folder,
+                        'md5_hash': file_md5,
                         'indexed': indexed,
                         'size_bytes': file_size,
                         'legacy_sync_enabled': dual_write_legacy,
@@ -1199,6 +1498,7 @@ class FilesUploadView(APIView):
                     'domain': ingest_result.domain_code,
                     'domain_preview': preview_domain,
                     'auto_routed': auto_routed,
+                    'md5_hash': file_md5,
                     'legacy_sync_enabled': dual_write_legacy,
                     'legacy_synced': legacy_synced,
                     'legacy_sync_error': legacy_sync_error,
