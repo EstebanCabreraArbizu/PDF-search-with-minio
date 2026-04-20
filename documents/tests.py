@@ -6,7 +6,17 @@ from unittest.mock import MagicMock, patch
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
-from documents.views import IndexStatsView, PopulateHashesView, ReindexView, SyncIndexView
+from documents.views import (
+	BulkSearchView,
+	FilesDeleteView,
+	FilesListView,
+	FilesUploadView,
+	FoldersListView,
+	IndexStatsView,
+	PopulateHashesView,
+	ReindexView,
+	SyncIndexView,
+)
 
 
 class SearchViewFallbackTests(APITestCase):
@@ -298,3 +308,213 @@ class DocrepoIndexViewsUnitTests(TestCase):
 		self.assertEqual(response.data['by_banco'], {'BCP': 2})
 		self.assertEqual(response.data['indexed_successfully'], 3)
 		self.assertEqual(response.data['with_errors'], 1)
+
+
+class DocrepoFileManagementViewsUnitTests(TestCase):
+	def setUp(self):
+		self.admin_user = SimpleNamespace(
+			id=1001,
+			is_authenticated=True,
+			is_staff=True,
+		)
+
+	def _request(self, data=None, query_params=None, files=None, post=None):
+		return SimpleNamespace(
+			data=data or {},
+			query_params=query_params or {},
+			FILES=files or SimpleNamespace(getlist=lambda _key: []),
+			POST=post or {},
+			user=self.admin_user,
+			META={},
+		)
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views.upsert_document_from_upload')
+	@patch('documents.views.extract_text_from_pdf')
+	@patch('documents.views.extract_metadata')
+	@patch('documents.views.minio_client.stat_object')
+	@patch('documents.views.minio_client.put_object')
+	def test_files_upload_ingests_docrepo_without_legacy_mirror(
+		self,
+		mock_put_object,
+		mock_stat_object,
+		mock_extract_metadata,
+		mock_extract_text,
+		mock_upsert,
+		mock_record_audit,
+	):
+		fake_upload = SimpleNamespace(
+			name='planilla_test.pdf',
+			read=lambda: b'%PDF-1.4 test content',
+		)
+		files = SimpleNamespace(getlist=lambda _key: [fake_upload])
+
+		mock_stat_object.return_value = SimpleNamespace(
+			etag='"etag123"',
+			last_modified=datetime.utcnow(),
+		)
+		mock_extract_metadata.return_value = {
+			'año': '2025',
+			'razon_social': 'RESGUARDO',
+			'mes': '01',
+			'banco': 'BCP',
+			'tipo_documento': 'GENERAL',
+		}
+		mock_extract_text.return_value = ('contenido', ['12345678'])
+		mock_upsert.return_value = SimpleNamespace(
+			document=SimpleNamespace(id='doc-1'),
+			domain_code='CONSTANCIA_ABONO',
+		)
+
+		request = self._request(
+			files=files,
+			post={'folder': '2025/RESGUARDO'},
+		)
+
+		response = FilesUploadView().post(request)
+
+		self.assertEqual(response.status_code, 201)
+		self.assertTrue(response.data['success'])
+		self.assertEqual(response.data['total_uploaded'], 1)
+		self.assertEqual(response.data['total_errors'], 0)
+		self.assertEqual(response.data['uploaded'][0]['path'], '2025/RESGUARDO/planilla_test.pdf')
+		self.assertFalse(response.data['uploaded'][0]['legacy_sync_enabled'])
+
+		mock_put_object.assert_called_once()
+		mock_upsert.assert_called_once()
+		mock_record_audit.assert_called_once()
+
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views.deactivate_document_by_storage_key')
+	@patch('documents.views.PDFIndex.objects.filter')
+	@patch('documents.views.minio_client.remove_object')
+	def test_files_delete_deactivates_docrepo_and_returns_success(
+		self,
+		mock_remove_object,
+		mock_legacy_filter,
+		mock_deactivate,
+		mock_record_audit,
+	):
+		mock_legacy_filter.return_value.delete.return_value = (2, {})
+		mock_deactivate.return_value = SimpleNamespace(id='doc-2')
+
+		request = self._request(data={'path': '2025/RESGUARDO/01.ENERO/BCP/delete_me.pdf'})
+		response = FilesDeleteView().delete(request)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data['success'])
+		self.assertEqual(response.data['legacy_deleted_count'], 2)
+		self.assertEqual(response.data['docrepo_document_id'], 'doc-2')
+
+		mock_remove_object.assert_called_once()
+		mock_deactivate.assert_called_once()
+		mock_record_audit.assert_called_once()
+
+	@patch('documents.views.Document.objects.filter')
+	def test_files_list_returns_paginated_docrepo_payload(self, mock_document_filter):
+		record = SimpleNamespace(
+			id='doc-list-1',
+			domain_id='CONSTANCIA_ABONO',
+			domain=SimpleNamespace(code='CONSTANCIA_ABONO'),
+			company=SimpleNamespace(name='RESGUARDO'),
+			period=SimpleNamespace(year=2025, month=1),
+			storage_object=SimpleNamespace(
+				object_key='2025/RESGUARDO/01.ENERO/BCP/archivo_listado.pdf',
+				size_bytes=2048,
+				last_modified=datetime(2026, 4, 20, 9, 0, 0),
+			),
+			index_state=SimpleNamespace(is_indexed=True),
+			constancia_detail=SimpleNamespace(
+				bank=SimpleNamespace(name='BCP'),
+				payroll_type='CUADRO DE PERSONAL',
+				legacy_tipo_documento='',
+			),
+			insurance_detail=None,
+			tregistro_detail=None,
+			indexed_at=datetime(2026, 4, 20, 9, 5, 0),
+			source_path_legacy='',
+		)
+
+		queryset = MagicMock()
+		queryset.select_related.return_value = queryset
+		queryset.order_by.return_value = queryset
+		queryset.count.return_value = 1
+		queryset.__getitem__.return_value = [record]
+		mock_document_filter.return_value = queryset
+
+		request = self._request(
+			query_params={
+				'page': '1',
+				'per_page': '50',
+				'sort': 'indexed_at',
+				'order': 'desc',
+			}
+		)
+		response = FilesListView().get(request)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['total'], 1)
+		self.assertEqual(len(response.data['files']), 1)
+		self.assertEqual(response.data['files'][0]['path'], '2025/RESGUARDO/01.ENERO/BCP/archivo_listado.pdf')
+		self.assertEqual(response.data['files'][0]['banco'], 'BCP')
+		self.assertEqual(response.data['files'][0]['tipo_documento'], 'CUADRO DE PERSONAL')
+
+	@patch('documents.views.Document.objects.filter')
+	def test_folders_list_groups_paths_by_current_level(self, mock_document_filter):
+		mock_document_filter.return_value.values_list.return_value = [
+			'2025/RESGUARDO/01.ENERO/BCP/archivo_1.pdf',
+			'2025/RESGUARDO/02.FEBRERO/BCP/archivo_2.pdf',
+			'2025/TREGISTRO/01.ENERO/MOV/doc_3.pdf',
+		]
+
+		request = self._request(query_params={'parent': '2025/'})
+		response = FoldersListView().get(request)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['current_path'], '2025/')
+		self.assertEqual(len(response.data['folders']), 2)
+		self.assertEqual(response.data['folders'][0]['name'], 'RESGUARDO')
+		self.assertEqual(response.data['folders'][0]['count'], 2)
+		self.assertEqual(response.data['folders'][1]['name'], 'TREGISTRO')
+		self.assertEqual(response.data['folders'][1]['count'], 1)
+
+	@patch('documents.views.Document.objects.filter')
+	def test_bulk_search_returns_hits_and_missing_codes(self, mock_document_filter):
+		record = SimpleNamespace(
+			id='doc-bulk-1',
+			domain=SimpleNamespace(code='CONSTANCIA_ABONO'),
+			company=SimpleNamespace(name='RESGUARDO'),
+			period=SimpleNamespace(year=2025, month=3),
+			storage_object=SimpleNamespace(
+				object_key='2025/RESGUARDO/03.MARZO/BCP/bulk_file.pdf',
+				size_bytes=3072,
+			),
+			constancia_detail=SimpleNamespace(
+				bank=SimpleNamespace(name='BCP'),
+				payroll_type='CUADRO DE PERSONAL',
+				legacy_tipo_documento='',
+			),
+			insurance_detail=None,
+			tregistro_detail=None,
+			employee_codes=SimpleNamespace(
+				all=lambda: [SimpleNamespace(employee_code='12345678')]
+			),
+		)
+
+		queryset = MagicMock()
+		queryset.select_related.return_value = queryset
+		queryset.prefetch_related.return_value = queryset
+		queryset.distinct.return_value = queryset
+		queryset.count.return_value = 1
+		queryset.__iter__.return_value = iter([record])
+		mock_document_filter.return_value = queryset
+
+		request = self._request(data={'codigos': '12345678,99999999'})
+		response = BulkSearchView().post(request)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['total'], 1)
+		self.assertIn('12345678', response.data['codigos_encontrados'])
+		self.assertIn('99999999', response.data['codigos_no_encontrados'])
+		self.assertEqual(response.data['results'][0]['codigos_match'], ['12345678'])
