@@ -2,7 +2,7 @@ const API = {
       me: '/api/me',
       logout: '/api/auth/logout/',
       loginUi: '/ui/login/',
-      filterOptions: '/api/filter-options',
+  filterOptions: '/api/v2/filter-options?domain=TREGISTRO',
       search: '/api/v2/search/tregistro',
       merge: '/api/merge-pdfs'
     };

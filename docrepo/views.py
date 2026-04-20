@@ -3,12 +3,14 @@ import time
 from typing import Any
 
 from django.conf import settings
+from django.http import StreamingHttpResponse
 from django.db.models import Q
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from documents.models import PDFIndex
+from documents.models import DownloadLog, PDFIndex
+from documents.utils import minio_client
 
 from .domain_inference import infer_domain_code
 from .models import Document
@@ -42,6 +44,21 @@ MONTH_MAP = {
     "dic": 12,
     "diciembre": 12,
 }
+
+MONTH_OPTIONS = [
+    {"value": "01", "label": "Enero"},
+    {"value": "02", "label": "Febrero"},
+    {"value": "03", "label": "Marzo"},
+    {"value": "04", "label": "Abril"},
+    {"value": "05", "label": "Mayo"},
+    {"value": "06", "label": "Junio"},
+    {"value": "07", "label": "Julio"},
+    {"value": "08", "label": "Agosto"},
+    {"value": "09", "label": "Septiembre"},
+    {"value": "10", "label": "Octubre"},
+    {"value": "11", "label": "Noviembre"},
+    {"value": "12", "label": "Diciembre"},
+]
 
 
 def _as_bool(value: Any) -> bool:
@@ -215,7 +232,8 @@ class BaseV2SearchView(APIView):
                 "mes": f"{document.period.month:02d}" if document.period else None,
                 **self._domain_metadata(document),
             },
-            "download_url": f"/api/download/{object_key}" if object_key else None,
+            "download_url": f"/api/v2/documents/{document.id}/download",
+            "download_legacy_url": f"/api/download/{object_key}" if object_key else None,
             "size_kb": round(size_bytes / 1024, 2) if size_bytes else 0,
             "indexed": index_state.is_indexed if index_state else False,
             "employee_codes": [code.employee_code for code in document.employee_codes.all()],
@@ -296,6 +314,111 @@ class BaseV2SearchView(APIView):
 
     def _domain_metadata(self, document: Document):
         return {}
+
+
+class FilterOptionsV2View(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        domain_filter = str(request.query_params.get("domain") or "").strip().upper()
+        valid_domains = {"SEGUROS", "TREGISTRO", "CONSTANCIA_ABONO"}
+
+        queryset = Document.objects.filter(is_active=True)
+        if domain_filter in valid_domains:
+            queryset = queryset.filter(domain__code=domain_filter)
+
+        years = [
+            str(year)
+            for year in queryset.exclude(period__isnull=True)
+            .values_list("period__year", flat=True)
+            .distinct()
+            .order_by("-period__year")
+            if year
+        ]
+
+        razones_sociales = [
+            name
+            for name in queryset.values_list("company__name", flat=True)
+            .distinct()
+            .order_by("company__name")
+            if name
+        ]
+
+        bancos = [
+            bank_name
+            for bank_name in queryset.values_list("constancia_detail__bank__name", flat=True)
+            .distinct()
+            .order_by("constancia_detail__bank__name")
+            if bank_name
+        ]
+
+        tipos_documento_values = set()
+        for value in queryset.values_list("constancia_detail__payroll_type", flat=True).distinct():
+            if value:
+                tipos_documento_values.add(value.strip())
+
+        for value in queryset.values_list("constancia_detail__legacy_tipo_documento", flat=True).distinct():
+            if value:
+                tipos_documento_values.add(value.strip())
+
+        for value in queryset.values_list("insurance_detail__insurance_type__name", flat=True).distinct():
+            if value:
+                tipos_documento_values.add(value.strip())
+
+        for value in queryset.values_list("tregistro_detail__movement_type__name", flat=True).distinct():
+            if value:
+                tipos_documento_values.add(value.strip())
+
+        tipos_documento = sorted(tipos_documento_values, key=str.casefold)
+
+        return Response(
+            {
+                "años": years,
+                "razones_sociales": razones_sociales,
+                "bancos": bancos,
+                "tipos_documento": tipos_documento,
+                "meses": MONTH_OPTIONS,
+                "source": "docrepo_v2",
+                "domain": domain_filter if domain_filter in valid_domains else "ALL",
+            }
+        )
+
+
+class DocumentDownloadV2View(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, document_id):
+        document = Document.objects.select_related("storage_object").filter(id=document_id, is_active=True).first()
+        if document is None:
+            return Response({"error": "Documento no encontrado."}, status=404)
+
+        storage = getattr(document, "storage_object", None)
+        object_key = ""
+        if storage is not None and storage.object_key:
+            object_key = storage.object_key
+        elif document.source_path_legacy:
+            object_key = document.source_path_legacy
+
+        if not object_key:
+            return Response({"error": "Documento sin referencia de storage."}, status=404)
+
+        try:
+            response = minio_client.get_object(settings.MINIO_BUCKET, object_key)
+        except Exception:
+            return Response({"error": "Archivo no encontrado en storage."}, status=404)
+
+        DownloadLog.objects.create(
+            user=request.user,
+            filename=object_key,
+            ip_address=request.META.get("REMOTE_ADDR"),
+        )
+
+        safe_filename = object_key.split("/")[-1] or f"{document.id}.pdf"
+        return StreamingHttpResponse(
+            response.stream(amt=8192),
+            content_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
+        )
 
 
 class SegurosV2SearchView(BaseV2SearchView):
