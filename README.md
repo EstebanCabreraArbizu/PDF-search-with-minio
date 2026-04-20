@@ -231,6 +231,10 @@ Como admin:
 
 - 📄 **[Guía de Migración Flask a Django](docs/GUIA_MIGRACION_DJANGO.md)**: Detalle del proceso de refactorización.
 - 🛠️ **[Detalles Técnicos de Migración](docs/MIGRATION_DETAILS.md)**: Cambios en el modelo y lógica de sincronización.
+- **[Arquitectura V2 - Overview](docs/architecture/overview.md)**: Estado actual implementado y mapa de transición legacy-v2.
+- **[Arquitectura modular](docs/architecture/modules.md)**: Responsabilidades por módulo, dependencias, acoplamientos y flujo de búsqueda.
+- **[Manejo de archivos](docs/architecture/file-handling.md)**: Flujo completo de carga, indexación, consulta y descarga.
+- **[Resumen de refactor](docs/changelog/refactor-summary.md)**: Resultados observables del rediseño, ER y estado implementado vs propuesto.
 - 📄 **[Manual de Usuario](docs/MANUAL_USUARIO.md)**: Guía detallada para usuarios y administradores.
 - 💰 **[Reporte de Costos AWS](docs/COSTOS_AWS.md)**: Estimación de costos para despliegue en la nube.
 
