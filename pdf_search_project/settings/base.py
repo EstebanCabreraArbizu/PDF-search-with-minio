@@ -37,6 +37,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'core',
+    'catalogs',
+    'docrepo',
+    'auditlog',
     'documents',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -146,6 +150,13 @@ MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY', 'password123')
 MINIO_BUCKET = os.environ.get('MINIO_BUCKET', 'planillas-pdfs')
 MINIO_USE_SSL = os.environ.get('MINIO_USE_SSL', 'False').lower() == 'true'
 MINIO_REGION = os.environ.get('MINIO_REGION', None)
+
+
+# =============================================================================
+# DOCREPO V2 FEATURES
+# =============================================================================
+DOCREPO_DUAL_READ_ENABLED = os.environ.get('DOCREPO_DUAL_READ_ENABLED', 'False').lower() == 'true'
+DOCREPO_MAX_RESULTS = int(os.environ.get('DOCREPO_MAX_RESULTS', '500'))
 
 
 # =============================================================================
