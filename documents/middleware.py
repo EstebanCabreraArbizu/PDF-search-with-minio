@@ -259,8 +259,8 @@ class SecurityHeadersMiddleware:
         directives = [
             "default-src 'self'",
             f"script-src {script_src}",
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-            "font-src 'self' https://fonts.gstatic.com",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
             "img-src 'self' data:",
             "connect-src 'self'",
             "frame-src 'self'",
