@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Buscador T-Registro - Mock Local</title>
+  <title>Buscador Constancias de Abono - Mock Local</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="{% static 'documents/vendor/corp-style.css' %}">
   <link rel="stylesheet" href="{% static 'documents/css/search-document.css' %}">
 </head>
-<body class="search-page-body tregistro-page">
+<body class="search-page-body constancias-page">
   <aside class="sidebar">
     <div class="sidebar-header">
       <div class="logo-box"><i class="ti ti-shield"></i></div>
@@ -25,8 +25,8 @@
     <nav class="sidebar-nav">
       <div class="nav-section-label">Modulos</div>
       <a class="nav-item" href="{% url 'search_seguros_ui' %}"><i class="ti ti-shield"></i> Seguros</a>
-      <a class="nav-item active" href="{% url 'search_tregistro_ui' %}"><i class="ti ti-file-certificate"></i> T-Registro</a>
-      <a class="nav-item" href="{% url 'search_constancias_ui' %}"><i class="ti ti-folders"></i> Constancias</a>
+      <a class="nav-item" href="{% url 'search_tregistro_ui' %}"><i class="ti ti-file-certificate"></i> T-Registro</a>
+      <a class="nav-item active" href="{% url 'search_constancias_ui' %}"><i class="ti ti-folders"></i> Constancias</a>
 
       <div class="nav-section-label">Administracion</div>
       <a class="nav-item" href="#"><i class="ti ti-folder-cog"></i> Gestion de Archivos</a>
@@ -58,54 +58,49 @@
 
     <main class="content-area">
       <div>
-        <h1 class="page-title"><span class="accent" style="color:var(--primary);">&#9670;</span>BUSCADOR DE DOCUMENTOS - T-REGISTRO</h1>
-        <p class="page-subtitle">BUSCA Y DESCARGA DOCUMENTOS DE ALTA Y BAJA DEL T-REGISTRO DEL REPOSITORIO DOCUMENTAL CORPORATIVO</p>
+        <h1 class="page-title"><span class="accent">&#9670;</span>BUSCADOR DE DOCUMENTOS - CONSTANCIAS DE ABONO</h1>
+        <p class="page-subtitle">BUSCA Y DESCARGA CONSTANCIAS DE ABONO DESDE EL REPOSITORIO DOCUMENTAL CORPORATIVO</p>
       </div>
 
-      <section class="stats-grid four" id="statsTRegistro"></section>
+      <section class="stats-grid four" id="statsConstancias"></section>
 
       <section class="search-panel acrylic-surface">
         <div class="search-mode-tabs" style="margin-bottom:12px;">
           <button class="mode-tab active" data-mode="simple"> <i class="ti ti-search"></i> Busqueda Simple</button>
-          <button class="mode-tab" data-mode="masiva"> <i class="ti ti-list-search"></i> Busqueda Masiva por DNI</button>
+          <button class="mode-tab" data-mode="masiva"> <i class="ti ti-list-search"></i> Busqueda Masiva por Codigo</button>
         </div>
 
         <div class="panel-title"><i class="ti ti-filter"></i> FILTROS DE BUSQUEDA</div>
 
-        <form id="tregistroForm" class="search-form">
+        <form id="constanciasForm" class="search-form">
           <div id="simpleMode" class="form-grid">
             <div class="form-group">
-              <label>DNI (opcional)</label>
+              <label>Codigo de Empleado (opcional)</label>
               <input id="dniInput" class="form-control" type="text" placeholder="Ej: 12345678">
             </div>
           </div>
 
           <div id="masivaMode" class="form-group hidden">
-            <label>DNIs de trabajadores (separados por coma, espacio o salto de linea)</label>
+            <label>Codigos (separados por coma, espacio o salto de linea)</label>
             <textarea id="dniMasivo" class="form-control" rows="3" placeholder="12345678&#10;87654321"></textarea>
           </div>
 
-          <div class="form-grid cols-3">
+          <div class="form-grid cols-4">
             <div class="form-group">
               <label>Razon Social</label>
               <select id="empresaSelect" class="form-select"></select>
             </div>
             <div class="form-group">
-              <label>Tipo de Documento</label>
-              <select id="tipoSelect" class="form-select">
-                <option value="">Alta y Baja</option>
-                <option value="Alta">Alta</option>
-                <option value="Baja">Baja</option>
-              </select>
+              <label>Banco</label>
+              <select id="bancoSelect" class="form-select"></select>
+            </div>
+            <div class="form-group">
+              <label>Tipo de Planilla</label>
+              <select id="planillaSelect" class="form-select"></select>
             </div>
             <div class="form-group">
               <label>Periodo (Mes Anio)</label>
-              <select id="periodoSelect" class="form-select">
-                <option value="">Todos</option>
-                <option value="Ene 2024">Ene 2024</option>
-                <option value="Feb 2024">Feb 2024</option>
-                <option value="Mar 2024">Mar 2024</option>
-              </select>
+              <select id="periodoSelect" class="form-select"></select>
             </div>
           </div>
 
@@ -125,7 +120,7 @@
         <div id="stateEmpty" class="empty-state">
           <div class="empty-icon"><i class="ti ti-search"></i></div>
           <h3 style="margin:0;">Sin consulta activa</h3>
-          <p style="margin:0;">Ejecuta una busqueda para listar documentos de T-Registro.</p>
+          <p style="margin:0;">Ejecuta una busqueda para listar constancias de abono.</p>
         </div>
 
         <div id="stateLoading" class="loading-state hidden">
@@ -139,10 +134,10 @@
               <tr>
                 <th>Documento</th>
                 <th>Razon Social</th>
-                <th>Tipo</th>
-                <th>DNI Trabajador</th>
+                <th>Banco</th>
+                <th>Tipo Planilla</th>
                 <th>Periodo</th>
-                <th>Fecha Carga</th>
+                <th>Estado</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -163,7 +158,6 @@
     </main>
   </section>
 
-    <script src="{% static 'documents/js/search_tregistro_v2.js' %}"></script>
+  <script src="{% static 'documents/js/search_constancias_v2.js' %}"></script>
 </body>
 </html>
-

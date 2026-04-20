@@ -15,7 +15,7 @@
 <body class="search-page-body seguros-page">
   <aside class="sidebar">
     <div class="sidebar-header">
-      <div class="logo-box"><i class="ti ti-shield-check"></i></div>
+      <div class="logo-box"><i class="ti ti-shield"></i></div>
       <div class="sidebar-title">
         <h4>DocSearch</h4>
         <span>V1.0.0</span>
@@ -26,7 +26,7 @@
       <div class="nav-section-label">Modulos</div>
       <a class="nav-item active" href="{% url 'search_seguros_ui' %}"><i class="ti ti-shield"></i> Seguros</a>
       <a class="nav-item" href="{% url 'search_tregistro_ui' %}"><i class="ti ti-file-certificate"></i> T-Registro</a>
-      <a class="nav-item" href="#"><i class="ti ti-folders"></i> Constancias</a>
+      <a class="nav-item" href="{% url 'search_constancias_ui' %}"><i class="ti ti-folders"></i> Constancias</a>
 
       <div class="nav-section-label">Administracion</div>
       <a class="nav-item" href="#"><i class="ti ti-folder-cog"></i> Gestion de Archivos</a>
@@ -37,12 +37,12 @@
       <div class="sidebar-user-main">
         <div class="sidebar-avatar">AD</div>
         <div>
-          <p class="sidebar-user-name">admin</p>
-          <p class="sidebar-user-role">ADMINISTRADOR</p>
+          <p class="sidebar-user-name" id="sidebarUserName">admin</p>
+          <p class="sidebar-user-role" id="sidebarUserRole">ADMINISTRADOR</p>
         </div>
       </div>
       <button class="sidebar-logout" type="button" id="logoutBtn" aria-label="CERRAR SESION" title="CERRAR SESION">
-        <i class="ti ti-logout-2"></i>
+        <i class="ti ti-logout"></i>
       </button>
     </div>
   </aside>
@@ -51,14 +51,14 @@
     <header class="topbar acrylic-surface topbar-minimal">
       <div class="topbar-actions">
         <button id="themeToggleBtn" class="theme-switcher theme-toggle-btn" type="button" aria-label="Cambiar tema" title="Cambiar tema">
-          <i id="themeToggleIcon" class="ti ti-palette"></i>
+          <i id="themeToggleIcon" class="ti ti-adjustments"></i>
         </button>
       </div>
     </header>
 
     <main class="content-area">
       <div>
-        <h1 class="page-title"><span class="accent">◆</span>BUSCADOR DE DOCUMENTOS - SEGUROS</h1>
+        <h1 class="page-title"><span class="accent">&#9670;</span>BUSCADOR DE DOCUMENTOS - SEGUROS</h1>
         <p class="page-subtitle">BUSCA Y DESCARGA POLIZAS Y DOCUMENTACION DE SEGUROS DEL REPOSITORIO DOCUMENTAL CORPORATIVO</p>
       </div>
 
@@ -157,246 +157,21 @@
             <tbody id="tableBody"></tbody>
           </table>
         </div>
+
+        <div id="paginationControls" class="table-pagination hidden">
+          <button type="button" class="pagination-btn" id="prevPageBtn" aria-label="Pagina anterior" title="Pagina anterior">
+            <i class="ti ti-chevron-left"></i>
+          </button>
+          <span class="pagination-info" id="paginationInfo">Pagina 1 de 1</span>
+          <button type="button" class="pagination-btn" id="nextPageBtn" aria-label="Pagina siguiente" title="Pagina siguiente">
+            <i class="ti ti-chevron-right"></i>
+          </button>
+        </div>
       </section>
     </main>
   </section>
 
-  <script>
-    const DATA_SEGUROS = [
-      { doc: 'POLIZA-VIDA-12345678-2024-01.pdf', empresa: 'EMPRESA ABC SAC', tipo: 'Vida', subtipo: 'Alta', dnis: ['12345678', '74125896', '96385274'], personasDetectadas: 3, periodo: 'Ene 2024', fecha: '05/01/2024' },
-      { doc: 'POLIZA-EPS-87654321-2024-02.pdf', empresa: 'EMPRESA ABC SAC', tipo: 'EPS', subtipo: 'Renovacion', dnis: ['87654321', '77889966'], personasDetectadas: 2, periodo: 'Feb 2024', fecha: '08/02/2024' },
-      { doc: 'POLIZA-SCTR-23456789-2024-02.pdf', empresa: 'EMPRESA SUR SRL', tipo: 'SCTR', subtipo: 'Ingreso', dnis: ['23456789', '55667744', '99887766', '11224488'], personasDetectadas: 4, periodo: 'Feb 2024', fecha: '10/02/2024' },
-      { doc: 'POLIZA-VEHICULAR-34567890-2024-03.pdf', empresa: 'EMPRESA NORTE SA', tipo: 'Vehicular', subtipo: 'Reemision', dnis: ['34567890'], personasDetectadas: 1, periodo: 'Mar 2024', fecha: '11/03/2024' },
-      { doc: 'POLIZA-VIDA-98765432-2024-03.pdf', empresa: 'EMPRESA SUR SRL', tipo: 'Vida', subtipo: 'Baja', dnis: ['98765432', '12344321', '55443322', '66778899', '10101010'], personasDetectadas: 5, periodo: 'Mar 2024', fecha: '19/03/2024' }
-    ];
-
-    const SUBTIPOS = {
-      Vida: ['Alta', 'Baja', 'Renovacion'],
-      EPS: ['Renovacion', 'Afiliacion', 'Exclusion'],
-      SCTR: ['Ingreso', 'Cese', 'Rectificacion'],
-      Vehicular: ['Reemision', 'Endoso', 'Anulacion']
-    };
-
-    const THEME_KEY = 'docsearch-theme';
-    const DEFAULT_THEME = 'corp';
-    const THEMES = [DEFAULT_THEME, 'corp-dark', 'dark', 'light'];
-    const THEME_META = {
-      corp: { label: 'Tema Corporativo', icon: 'ti ti-building-bank' },
-      'corp-dark': { label: 'Tema Corporativo Oscuro', icon: 'ti ti-building-castle' },
-      dark: { label: 'Tema Oscuro', icon: 'ti ti-moon-stars' },
-      light: { label: 'Tema Claro', icon: 'ti ti-sun-high' }
-    };
-
-    function applyTheme(theme) {
-      const safeTheme = THEMES.includes(theme) ? theme : DEFAULT_THEME;
-      document.documentElement.setAttribute('data-theme', safeTheme);
-      return safeTheme;
-    }
-
-    function syncThemeToggle(theme) {
-      const themeToggleBtn = document.getElementById('themeToggleBtn');
-      const themeToggleIcon = document.getElementById('themeToggleIcon');
-      if (!themeToggleBtn || !themeToggleIcon) {
-        return;
-      }
-
-      const meta = THEME_META[theme] || THEME_META[DEFAULT_THEME];
-      themeToggleIcon.className = meta.icon;
-      themeToggleBtn.title = `${meta.label} (clic para cambiar)`;
-      themeToggleBtn.setAttribute('aria-label', `Tema actual: ${meta.label}. Clic para cambiar.`);
-    }
-
-    function initTopbarControls() {
-      const themeToggleBtn = document.getElementById('themeToggleBtn');
-      const logoutBtn = document.getElementById('logoutBtn');
-
-      let storedTheme = DEFAULT_THEME;
-      try {
-        const themeFromStorage = localStorage.getItem(THEME_KEY);
-        storedTheme = themeFromStorage || DEFAULT_THEME;
-        if (!themeFromStorage) {
-          localStorage.setItem(THEME_KEY, DEFAULT_THEME);
-        }
-      } catch (error) {
-        storedTheme = DEFAULT_THEME;
-      }
-
-      const activeTheme = applyTheme(storedTheme);
-      syncThemeToggle(activeTheme);
-
-      if (themeToggleBtn) {
-        themeToggleBtn.addEventListener('click', () => {
-          const currentTheme = document.documentElement.getAttribute('data-theme') || DEFAULT_THEME;
-          const currentIndex = THEMES.indexOf(currentTheme);
-          const nextTheme = THEMES[(currentIndex + 1) % THEMES.length];
-          const selectedTheme = applyTheme(nextTheme);
-          syncThemeToggle(selectedTheme);
-          try {
-            localStorage.setItem(THEME_KEY, selectedTheme);
-          } catch (error) {
-            // No-op: localStorage may be blocked in some environments.
-          }
-        });
-      }
-
-      if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-          alert('Cierre de sesion (mock local).');
-        });
-      }
-    }
-
-    const form = document.getElementById('segurosForm');
-    const simpleMode = document.getElementById('simpleMode');
-    const masivaMode = document.getElementById('masivaMode');
-    const tableBody = document.getElementById('tableBody');
-    const resultCount = document.getElementById('resultCount');
-    const chipDni = document.getElementById('chipDni');
-    const stateEmpty = document.getElementById('stateEmpty');
-    const stateLoading = document.getElementById('stateLoading');
-    const stateTable = document.getElementById('stateTable');
-
-    function renderStats(data) {
-      const empresas = new Set(data.map(x => x.empresa)).size;
-      const tipos = new Set(data.map(x => x.tipo)).size;
-      document.getElementById('statsSeguros').innerHTML = `
-        <article class="stat-card acrylic-surface">
-          <div class="label">Total Documentos</div>
-          <div class="value">${data.length}</div>
-          <div class="hint">En el indice activo</div>
-        </article>
-        <article class="stat-card acrylic-surface">
-          <div class="label">Empresas</div>
-          <div class="value">${empresas}</div>
-          <div class="hint">Razones sociales registradas</div>
-        </article>
-        <article class="stat-card acrylic-surface">
-          <div class="label">Tipos de Seguro</div>
-          <div class="value">${tipos}</div>
-          <div class="hint">Vida, EPS, SCTR, etc.</div>
-        </article>
-      `;
-    }
-
-    function fillEmpresas(data) {
-      const select = document.getElementById('empresaSelect');
-      const empresas = Array.from(new Set(data.map(x => x.empresa))).sort();
-      select.innerHTML = '<option value="">- Todas las empresas -</option>' + empresas.map(e => `<option value="${e}">${e}</option>`).join('');
-    }
-
-    function setMode(mode) {
-      document.querySelectorAll('.mode-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
-      simpleMode.classList.toggle('hidden', mode !== 'simple');
-      masivaMode.classList.toggle('hidden', mode !== 'masiva');
-      chipDni.classList.add('hidden');
-    }
-
-    function parseMasivo(raw) {
-      return raw.split(/[\n,;\s]+/).map(v => v.trim()).filter(Boolean);
-    }
-
-    function renderRows(rows) {
-      resultCount.textContent = `${rows.length} documentos encontrados`;
-      if (rows.length === 0) {
-        stateEmpty.classList.remove('hidden');
-        stateTable.classList.add('hidden');
-        return;
-      }
-
-      stateEmpty.classList.add('hidden');
-      stateTable.classList.remove('hidden');
-      tableBody.innerHTML = rows.map(r => `
-        <tr>
-          <td>
-            <div class="fw-500">${r.doc}</div>
-            <div class="doc-meta">85 KB - Cargado por admin</div>
-          </td>
-          <td>${r.empresa}</td>
-          <td><span class="badge badge-blue">${r.tipo}</span></td>
-          <td><span class="badge badge-blue">${r.personasDetectadas} personas</span></td>
-          <td>${r.periodo}</td>
-          <td>${r.fecha}</td>
-          <td>
-            <div class="actions">
-              <button class="btn btn-sm btn-success-soft"><i class="ti ti-download"></i> Descargar</button>
-            </div>
-          </td>
-        </tr>
-      `).join('');
-    }
-
-    function searchData() {
-      const mode = document.querySelector('.mode-tab.active').dataset.mode;
-      const empresa = document.getElementById('empresaSelect').value;
-      const dni = document.getElementById('dniInput').value.trim();
-      const tipo = document.getElementById('tipoSelect').value;
-      const subtipo = document.getElementById('subtipoSelect').value;
-      const periodo = document.getElementById('periodoSelect').value;
-
-      let rows = DATA_SEGUROS.filter(r => {
-        const okEmpresa = !empresa || r.empresa === empresa;
-        const okTipo = !tipo || r.tipo === tipo;
-        const okSubtipo = !subtipo || r.subtipo === subtipo;
-        const okPeriodo = !periodo || r.periodo === periodo;
-        if (mode === 'simple') {
-          const okDni = !dni || r.dnis.some(d => d.includes(dni));
-          return okEmpresa && okTipo && okSubtipo && okPeriodo && okDni;
-        }
-        return okEmpresa && okTipo && okSubtipo && okPeriodo;
-      });
-
-      if (mode === 'masiva') {
-        const masivo = parseMasivo(document.getElementById('dniMasivo').value);
-        if (masivo.length === 0) {
-          alert('Ingresa al menos un DNI para busqueda masiva.');
-          return [];
-        }
-        const set = new Set(masivo);
-        rows = rows.filter(r => r.dnis.some(d => set.has(d)));
-        chipDni.textContent = `DNI: ${masivo.join(', ')}`;
-        chipDni.classList.remove('hidden');
-      } else if (dni) {
-        chipDni.textContent = `DNI: ${dni}`;
-        chipDni.classList.remove('hidden');
-      } else {
-        chipDni.classList.add('hidden');
-      }
-
-      return rows;
-    }
-
-    document.querySelectorAll('.mode-tab').forEach(btn => {
-      btn.addEventListener('click', () => setMode(btn.dataset.mode));
-    });
-
-    document.getElementById('tipoSelect').addEventListener('change', e => {
-      const list = SUBTIPOS[e.target.value] || [];
-      document.getElementById('subtipoSelect').innerHTML = '<option value="">- Seleccione Tipo primero -</option>' + list.map(x => `<option value="${x}">${x}</option>`).join('');
-    });
-
-    document.getElementById('limpiarBtn').addEventListener('click', () => {
-      form.reset();
-      document.getElementById('subtipoSelect').innerHTML = '<option value="">- Seleccione Tipo primero -</option>';
-      chipDni.classList.add('hidden');
-      renderRows([]);
-    });
-
-    form.addEventListener('submit', e => {
-      e.preventDefault();
-      stateLoading.classList.remove('hidden');
-      stateEmpty.classList.add('hidden');
-      stateTable.classList.add('hidden');
-      setTimeout(() => {
-        const rows = searchData();
-        stateLoading.classList.add('hidden');
-        renderRows(rows);
-      }, 360);
-    });
-
-    initTopbarControls();
-    renderStats(DATA_SEGUROS);
-    fillEmpresas(DATA_SEGUROS);
-    renderRows([]);
-  </script>
+    <script src="{% static 'documents/js/search_seguros_v2.js' %}"></script>
 </body>
 </html>
+

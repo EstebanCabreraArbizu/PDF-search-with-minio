@@ -6,12 +6,18 @@ from .views import (
     FilesListView, FilesUploadView, CreateFolderView, FilesDeleteView, FoldersListView,
     BulkSearchView, MergePdfsView, CurrentUserView, HealthCheckView
 )
+from .auth_views import AuthLoginView, AuthLogoutView
+from .ui_views import login_ui, constancias_ui
 
 urlpatterns = [
-    path('', seguros_ui, name='index'),
+    path('', login_ui, name='index'),
     path('legacy/', index, name='legacy_index'),
+    path('ui/login/', login_ui, name='login_ui'),
     path('ui/seguros/', seguros_ui, name='search_seguros_ui'),
     path('ui/tregistro/', tregistro_ui, name='search_tregistro_ui'),
+    path('ui/constancias/', constancias_ui, name='search_constancias_ui'),
+    path('api/auth/login/', AuthLoginView.as_view(), name='auth_login'),
+    path('api/auth/logout/', AuthLogoutView.as_view(), name='auth_logout'),
     path('api/search', SearchView.as_view(), name='search'),
     path('api/search/bulk', BulkSearchView.as_view(), name='bulk_search'),
     path('api/filter-options', FilterOptionsView.as_view(), name='filter_options'),
