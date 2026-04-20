@@ -30,6 +30,7 @@ class ThrottledTokenObtainPairView(TokenObtainPairView):
 
 urlpatterns = [
     path(f'{settings.DJANGO_ADMIN_URL}/', admin.site.urls),
+    path('api/v2/', include('docrepo.urls')),
     path('', include('documents.urls')),
     # 🔒 LOGIN con Rate Limiting (5 intentos/minuto)
     path('api/token/', ThrottledTokenObtainPairView.as_view(), name='token_obtain_pair'),
