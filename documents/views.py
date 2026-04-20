@@ -1,7 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from rest_framework import status
 from django.db.models import Q, Sum, Count
 from django.http import StreamingHttpResponse
 from auditlog.services import record_audit_event
@@ -18,73 +17,11 @@ import time
 from datetime import datetime
 import re
 from django.conf import settings
-import concurrent.futures
-
-# Cache simple en memoria para listado de MinIO (como en Flask app)
-_minio_list_cache = {'time': 0, 'data': None}
-
 from django.shortcuts import render
 from django.db import connection
 
-
-# ═══════════════════════════════════════════════════
-# UTILITY VIEWS (Auth/Health)
-# ═══════════════════════════════════════════════════
-
-class CurrentUserView(APIView):
-    """
-    Obtiene información del usuario actual.
-    GET /api/me
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request):
-        user = request.user
-        return Response({
-            'id': user.id,
-            'username': user.username,
-            'role': 'admin' if user.is_staff else 'user',
-            'is_active': user.is_active
-        })
-
-
-class HealthCheckView(APIView):
-    """
-    Health check para monitoreo (PostgreSQL + MinIO).
-    GET /health
-    """
-    permission_classes = []  # Sin autenticación
-    
-    def get(self, request):
-        from datetime import datetime
-        
-        # Verificar PostgreSQL
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute('SELECT 1')
-            db_status = 'ok'
-        except Exception as e:
-            db_status = f'error: {str(e)}'
-        
-        # Verificar MinIO
-        try:
-            minio_client.bucket_exists(settings.MINIO_BUCKET)
-            minio_status = 'ok'
-        except Exception as e:
-            minio_status = f'error: {str(e)}'
-        
-        overall_status = 'ok' if db_status == 'ok' and minio_status == 'ok' else 'degraded'
-        
-        return Response({
-            'status': overall_status,
-            'timestamp': datetime.utcnow().isoformat(),
-            'services': {
-                'database': db_status,
-                'storage': minio_status
-            }
-        }, status=200 if overall_status == 'ok' else 503)
-
-from django.db import connection
+# Cache simple en memoria para listado de MinIO (como en Flask app)
+_minio_list_cache = {'time': 0, 'data': None}
 
 
 # ═══════════════════════════════════════════════════
@@ -184,7 +121,6 @@ class FilterOptionsView(APIView):
                     'tipos_documento': [t for t in tipos if t],
                     'meses': meses,
                     'index_stats': {'total': total_indexed, 'indexed': True, 'source': 'postgresql_index'},
-                    'index_stats': {'total': total_indexed, 'indexed': True, 'source': 'postgresql_index'}
                 })
         except Exception as e:
             pass
@@ -195,45 +131,22 @@ class FilterOptionsView(APIView):
             'bancos': BANCOS_VALIDOS + ['GENERAL'],
             'meses': meses,
             'index_stats': {'total': 0, 'indexed': False, 'source': 'static_config'},
-            'index_stats': {'total': 0, 'indexed': False, 'source': 'static_config'}
         })
 
 class SearchView(APIView):
-    """
-    Búsqueda de PDFs con validaciones completas.
-    POST /api/search
-    """
-    """
-    Búsqueda de PDFs con validaciones completas.
-    POST /api/search
-    """
+    """Búsqueda de PDFs con validaciones completas. POST /api/search"""
     permission_classes = [IsAuthenticated]
     throttle_classes = [SearchRateThrottle]
 
     def post(self, request):
         from datetime import datetime
-        from datetime import datetime
+
         start_time = time.time()
         data = request.data
         codigo_empleado = str(data.get('codigo_empleado', '')).strip()
         use_index = data.get('use_index', True)
-        
-        # ═══════════════════════════════════════════════════
-        # VALIDACIONES COMPLETAS
-        # ═══════════════════════════════════════════════════
-        
-        # Validar código de empleado (obligatorio)
-        # ═══════════════════════════════════════════════════
-        # VALIDACIONES COMPLETAS
-        # ═══════════════════════════════════════════════════
-        
-        # Validar código de empleado (obligatorio)
+
         if not codigo_empleado:
-            return Response({
-                'error': 'El código de empleado es obligatorio para realizar la búsqueda.',
-                'hint': 'Los filtros adicionales (banco, mes, año, razon_social) son opcionales.',
-                'total': 0, 'results': []
-            }, status=400)
             return Response({
                 'error': 'El código de empleado es obligatorio para realizar la búsqueda.',
                 'hint': 'Los filtros adicionales (banco, mes, año, razon_social) son opcionales.',
@@ -283,54 +196,6 @@ class SearchView(APIView):
                 'total': 0, 'results': []
             }, status=400)
 
-        # ═══════════════════════════════════════════════════
-        # BÚSQUEDA INDEXADA (PostgreSQL)
-        # ═══════════════════════════════════════════════════
-            return Response({
-                'error': 'Código de empleado inválido. Debe contener entre 4 y 10 dígitos numéricos.',
-                'total': 0, 'results': []
-            }, status=400)
-        
-        # Validar banco
-        if data.get('banco') and data['banco'] not in BANCOS_VALIDOS + ['GENERAL']:
-            return Response({
-                'error': f'Banco inválido. Valores permitidos: {BANCOS_VALIDOS + ["GENERAL"]}',
-                'total': 0, 'results': []
-            }, status=400)
-        
-        # Validar mes (01-12)
-        if data.get('mes') and not re.match(r'^(0[1-9]|1[0-2])$', str(data['mes'])):
-            return Response({
-                'error': 'Mes inválido. Debe ser un valor entre 01 y 12.',
-                'total': 0, 'results': []
-            }, status=400)
-        
-        # Validar año (2019 - actual)
-        if data.get('año'):
-            try:
-                año_filtro = int(data['año'])
-                current_year = datetime.now().year
-                if año_filtro < 2019 or año_filtro > current_year:
-                    return Response({
-                        'error': f'Año inválido. Debe ser entre 2019 y {current_year}.',
-                        'total': 0, 'results': []
-                    }, status=400)
-            except ValueError:
-                return Response({
-                    'error': 'Año inválido. Debe ser un número (ej: 2024).',
-                    'total': 0, 'results': []
-                }, status=400)
-        
-        # Validar razón social
-        if data.get('razon_social') and data['razon_social'] not in RAZONES_SOCIALES_VALIDAS:
-            return Response({
-                'error': f'Razón social inválida. Valores permitidos: {RAZONES_SOCIALES_VALIDAS}',
-                'total': 0, 'results': []
-            }, status=400)
-
-        # ═══════════════════════════════════════════════════
-        # BÚSQUEDA INDEXADA (PostgreSQL)
-        # ═══════════════════════════════════════════════════
         if use_index:
             try:
                 query = Q(is_indexed=True)
@@ -353,16 +218,8 @@ class SearchView(APIView):
                     'source': 'postgresql_index'
                 })
             except Exception as e:
-                # Fallback to MinIO search (legacy)
-                # Fallback to MinIO search (legacy)
                 pass
 
-        # ═══════════════════════════════════════════════════
-        # FALLBACK: Búsqueda Directa MinIO (Legacy)
-        # ═══════════════════════════════════════════════════
-        # ═══════════════════════════════════════════════════
-        # FALLBACK: Búsqueda Directa MinIO (Legacy)
-        # ═══════════════════════════════════════════════════
         results = []
         try:
             objects = minio_client.list_objects(settings.MINIO_BUCKET, recursive=True)
@@ -385,24 +242,7 @@ class SearchView(APIView):
                         'download_url': f'/api/download/{obj.object_name}',
                         'size_kb': round(obj.size / 1024, 2)
                     })
-                
-                meta = extract_metadata(obj.object_name)
-                
-                # Aplicar filtros
-                if data.get('año') and meta['año'] != data['año']: continue
-                if data.get('banco') and meta['banco'] != data['banco']: continue
-                if data.get('mes') and meta['mes'] != data['mes']: continue
-                if data.get('razon_social') and meta['razon_social'] != data['razon_social']: continue
-                
-                # Buscar código en PDF
-                if search_in_pdf(obj.object_name, codigo_empleado):
-                    results.append({
-                        'filename': obj.object_name,
-                        'metadata': meta,
-                        'download_url': f'/api/download/{obj.object_name}',
-                        'size_kb': round(obj.size / 1024, 2)
-                    })
-                
+
         except Exception as e:
             return Response({'error': str(e), 'total': 0, 'results': []}, status=500)
         
@@ -442,12 +282,6 @@ class DownloadView(APIView):
             return Response({'error': 'Archivo no encontrado'}, status=404)
 
 class SyncIndexView(APIView):
-    """
-    Sincronización INTELIGENTE del índice con BATCH PROCESSING.
-    POST /api/index/sync
-    
-    DETECTA ARCHIVOS MOVIDOS usando tamaño + hash MD5.
-    """
     """
     Sincronización INTELIGENTE del índice con BATCH PROCESSING.
     POST /api/index/sync
@@ -704,15 +538,6 @@ class PopulateHashesView(APIView):
     - NO extrae texto
     - Solo lee el ETag de MinIO (ya contiene el MD5)
     """
-    """
-    Poblar SOLO los hashes MD5 de registros existentes.
-    POST /api/index/populate-hashes
-    
-    Este endpoint es RÁPIDO porque:
-    - NO descarga PDFs
-    - NO extrae texto
-    - Solo lee el ETag de MinIO (ya contiene el MD5)
-    """
     permission_classes = [IsAdminUser]
 
     def post(self, request):
@@ -854,10 +679,6 @@ class IndexStatsView(APIView):
     Estadísticas del índice de PDFs.
     GET /api/index/stats
     """
-    """
-    Estadísticas del índice de PDFs.
-    GET /api/index/stats
-    """
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
@@ -904,12 +725,6 @@ class IndexStatsView(APIView):
         })
 
 class ReindexView(APIView):
-    """
-    Reindexar todos los PDFs de MinIO en PostgreSQL.
-    POST /api/reindex
-    
-    INCLUYE: Eliminación de índices huérfanos (PDFs eliminados de MinIO)
-    """
     """
     Reindexar todos los PDFs de MinIO en PostgreSQL.
     POST /api/reindex
