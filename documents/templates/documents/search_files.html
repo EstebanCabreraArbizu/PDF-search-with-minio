@@ -37,6 +37,17 @@
   <section id="files-section" class="search-panel acrylic-surface">
     <div class="panel-title"><i class="ti ti-folder-open"></i> EXPLORADOR DE ARCHIVOS</div>
 
+    <!-- Breadcrumbs -->
+    <nav id="filesBreadcrumb" class="files-breadcrumb" aria-label="Navegación de carpetas">
+      <ol class="breadcrumb-list">
+        <li class="breadcrumb-item">
+          <a href="#" onclick="window._filesGoHome(); return false;" class="breadcrumb-link">
+            <i class="ti ti-home"></i> Inicio
+          </a>
+        </li>
+      </ol>
+    </nav>
+
     <!-- Filtros -->
     <div class="files-filter-toolbar">
       <div class="files-search-wrap">
@@ -258,5 +269,5 @@
 {% endblock %}
 
 {% block page_scripts %}
-  <script src="{% static 'documents/js/dist/search_files_v2.js' %}"></script>
+  <script src="{% static 'documents/js/search_files_v2.js' %}"></script>
 {% endblock %}
