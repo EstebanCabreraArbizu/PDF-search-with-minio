@@ -61,7 +61,12 @@
     </section>
   </main>
 
-  <script src="{% static 'documents/js/dist/shared/ui_core_v2.js' %}"></script>
-  <script src="{% static 'documents/js/dist/login_v2.js' %}"></script>
+  {% if DEBUG %}
+    <script src="{% static 'documents/js/shared/ui_core_v2.js' %}"></script>
+    <script src="{% static 'documents/js/login_v2.js' %}"></script>
+  {% else %}
+    <script src="{% static 'documents/js/dist/shared/ui_core_v2.js' %}"></script>
+    <script src="{% static 'documents/js/dist/login_v2.js' %}"></script>
+  {% endif %}
 </body>
 </html>
