@@ -32,6 +32,235 @@ CLASSIFICATION_DOMAIN_KEYWORDS = {
     'CONSTANCIA_ABONO': ['FIN DE MES', 'CUADRE', 'PLANILLA', 'ABONOS ENVIADOS', 'TELECREDITO'],
 }
 
+DOMAIN_ALIAS_MAP = {
+    'SEGUROS': 'SEGUROS',
+    'SEGURO': 'SEGUROS',
+    'TREGISTRO': 'TREGISTRO',
+    'TREG': 'TREGISTRO',
+    'CONSTANCIAABONO': 'CONSTANCIA_ABONO',
+    'CONSTANCIAS': 'CONSTANCIA_ABONO',
+    'CONSTANCIA': 'CONSTANCIA_ABONO',
+}
+
+DOMAIN_TIPOS_FALLBACK = {
+    'SEGUROS': ['SCTR', 'VIDA LEY', 'EPS', 'VEHICULAR'],
+    'TREGISTRO': ['ALTA', 'BAJA', 'T-REGISTRO'],
+    'CONSTANCIA_ABONO': ['CUADRO DE PERSONAL', 'FIN DE MES', 'PLANILLA'],
+}
+
+MONTH_NAME_TO_VALUE = {
+    'ENE': '01',
+    'ENERO': '01',
+    'FEB': '02',
+    'FEBRERO': '02',
+    'MAR': '03',
+    'MARZO': '03',
+    'ABR': '04',
+    'ABRIL': '04',
+    'MAY': '05',
+    'MAYO': '05',
+    'JUN': '06',
+    'JUNIO': '06',
+    'JUL': '07',
+    'JULIO': '07',
+    'AGO': '08',
+    'AGOSTO': '08',
+    'SEP': '09',
+    'SEPT': '09',
+    'SEPTIEMBRE': '09',
+    'SET': '09',
+    'SETIEMBRE': '09',
+    'OCT': '10',
+    'OCTUBRE': '10',
+    'NOV': '11',
+    'NOVIEMBRE': '11',
+    'DIC': '12',
+    'DICIEMBRE': '12',
+}
+
+
+def _extract_scalar(data, key, default=''):
+    value = data.get(key, default)
+    if isinstance(value, (list, tuple)):
+        return value[0] if value else default
+    return value
+
+
+def _safe_int(value, default=None):
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_domain_code(raw_domain):
+    normalized = re.sub(r'[^A-Z0-9]', '', str(raw_domain or '').strip().upper())
+    return DOMAIN_ALIAS_MAP.get(normalized, '')
+
+
+def _normalize_codigo_list(raw_value):
+    if isinstance(raw_value, str):
+        values = re.split(r'[\s,;\n]+', raw_value)
+    elif isinstance(raw_value, (list, tuple, set)):
+        values = [str(item) for item in raw_value]
+    else:
+        values = [str(raw_value)] if raw_value else []
+
+    codigos = [str(value).strip() for value in values if str(value).strip()]
+    return list(dict.fromkeys(codigos))
+
+
+def _parse_periodo_value(raw_periodo):
+    periodo = str(raw_periodo or '').strip()
+    if not periodo:
+        return '', ''
+
+    compact_match = re.match(r'^(\d{4})(\d{2})$', periodo)
+    if compact_match:
+        year, month = compact_match.groups()
+        if 1 <= int(month) <= 12:
+            return year, month
+
+    iso_match = re.match(r'^(\d{4})[-/](\d{1,2})$', periodo)
+    if iso_match:
+        year, month = iso_match.groups()
+        month_value = str(month).zfill(2)
+        if 1 <= int(month_value) <= 12:
+            return year, month_value
+
+    label_match = re.match(r'^([A-Za-zÁÉÍÓÚÜÑáéíóúüñ\.]+)\s+(\d{4})$', periodo)
+    if label_match:
+        month_token, year = label_match.groups()
+        cleaned_token = re.sub(r'[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]', '', month_token).upper()
+        month_value = MONTH_NAME_TO_VALUE.get(cleaned_token, '')
+        if month_value:
+            return year, month_value
+
+    return '', ''
+
+
+def _tipo_matches_domain(tipo_documento, domain_code):
+    if not domain_code:
+        return True
+
+    normalized_tipo = str(tipo_documento or '').strip().upper()
+    if not normalized_tipo:
+        return False
+
+    seguros_match = any(token in normalized_tipo for token in CLASSIFICATION_DOMAIN_KEYWORDS['SEGUROS'])
+    tregistro_match = any(token in normalized_tipo for token in CLASSIFICATION_DOMAIN_KEYWORDS['TREGISTRO'])
+    constancia_match = any(token in normalized_tipo for token in CLASSIFICATION_DOMAIN_KEYWORDS['CONSTANCIA_ABONO'])
+
+    if domain_code == 'SEGUROS':
+        return seguros_match
+    if domain_code == 'TREGISTRO':
+        return tregistro_match
+    if domain_code == 'CONSTANCIA_ABONO':
+        if constancia_match:
+            return True
+        return not seguros_match and not tregistro_match
+    return True
+
+
+def _filter_tipos_by_domain(tipos_documento, domain_code):
+    tipos = [str(tipo).strip() for tipo in tipos_documento if str(tipo).strip()]
+    if not domain_code:
+        return tipos
+
+    filtered = [tipo for tipo in tipos if _tipo_matches_domain(tipo, domain_code)]
+    if filtered:
+        return filtered
+    return DOMAIN_TIPOS_FALLBACK.get(domain_code, [])
+
+
+def _normalize_search_payload(raw_data, domain_hint=''):
+    domain_code = _normalize_domain_code(_extract_scalar(raw_data, 'domain') or domain_hint)
+
+    año = str(_extract_scalar(raw_data, 'año') or _extract_scalar(raw_data, 'anio') or '').strip()
+    mes = str(_extract_scalar(raw_data, 'mes') or '').strip()
+    periodo = _extract_scalar(raw_data, 'periodo')
+    periodo_year, periodo_month = _parse_periodo_value(periodo)
+
+    if not año and periodo_year:
+        año = periodo_year
+    if not mes and periodo_month:
+        mes = periodo_month
+    if mes and re.match(r'^\d{1,2}$', mes):
+        mes = mes.zfill(2)
+
+    razon_social = str(_extract_scalar(raw_data, 'razon_social') or _extract_scalar(raw_data, 'empresa') or '').strip()
+    banco = str(_extract_scalar(raw_data, 'banco') or '').strip()
+
+    tipo_documento = str(_extract_scalar(raw_data, 'tipo_documento') or '').strip()
+    tipo = str(_extract_scalar(raw_data, 'tipo') or '').strip()
+    subtipo = str(_extract_scalar(raw_data, 'subtipo') or '').strip()
+    if not tipo_documento and tipo:
+        tipo_documento = f'{tipo} - {subtipo}' if subtipo else tipo
+
+    codigos = _normalize_codigo_list(raw_data.get('codigos', []))
+    codigo_empleado = str(_extract_scalar(raw_data, 'codigo_empleado') or '').strip()
+    if not codigo_empleado and len(codigos) == 1:
+        codigo_empleado = codigos[0]
+
+    use_index = _extract_scalar(raw_data, 'use_index', True)
+    if isinstance(use_index, str):
+        use_index = use_index.strip().lower() not in {'0', 'false', 'no', 'off'}
+    elif use_index in (None, ''):
+        use_index = True
+    else:
+        use_index = bool(use_index)
+
+    payload = {
+        'codigo_empleado': codigo_empleado,
+        'año': año,
+        'mes': mes,
+        'banco': banco,
+        'razon_social': razon_social,
+        'tipo_documento': tipo_documento,
+        'use_index': use_index,
+    }
+    if codigos:
+        payload['codigos'] = codigos
+    if domain_code:
+        payload['domain'] = domain_code
+    return payload
+
+
+def _resolve_tipo_documento(doc):
+    domain_code = getattr(getattr(doc, 'domain', None), 'code', '')
+    if domain_code == 'CONSTANCIA_ABONO':
+        constancia = getattr(doc, 'constancia_detail', None)
+        if constancia is None:
+            return ''
+        return constancia.payroll_type or constancia.legacy_tipo_documento or ''
+    if domain_code == 'SEGUROS':
+        insurance = getattr(doc, 'insurance_detail', None)
+        if insurance is None or insurance.insurance_type is None:
+            return ''
+        if insurance.insurance_subtype is not None:
+            return f"{insurance.insurance_type.name} - {insurance.insurance_subtype.name}"
+        return insurance.insurance_type.name
+    if domain_code == 'TREGISTRO':
+        treg = getattr(doc, 'tregistro_detail', None)
+        if treg is None or treg.movement_type is None:
+            return ''
+        return treg.movement_type.name
+    return ''
+
+
+def _build_domain_metadata_aliases(domain_code, tipo_documento, codigos_match, is_indexed=True):
+    aliases = {}
+    if domain_code == 'CONSTANCIA_ABONO':
+        aliases['tipo_planilla'] = tipo_documento
+        aliases['estado_indexacion'] = 'INDEXED' if is_indexed else 'PENDING'
+    elif domain_code == 'SEGUROS':
+        aliases['tipo_seguro'] = tipo_documento
+        aliases['asegurados'] = len(codigos_match)
+    elif domain_code == 'TREGISTRO':
+        aliases['tipo_movimiento'] = tipo_documento
+        aliases['dni'] = codigos_match[0] if codigos_match else ''
+    return aliases
+
 
 def _build_upload_hints(request):
     return {
@@ -1089,12 +1318,23 @@ class FilesListView(APIView):
         order = request.query_params.get('order', 'desc')
 
         try:
+            import re
             query = Q(is_active=True, index_state__is_indexed=True)
 
-            if folder_filter:
-                query &= Q(storage_object__object_key__startswith=folder_filter)
-            if search_query:
-                query &= Q(storage_object__object_key__icontains=search_query)
+            is_filtering = any([search_query, año, mes, banco, razon_social, tipo_documento])
+
+            if is_filtering:
+                if folder_filter:
+                    query &= Q(storage_object__object_key__startswith=folder_filter)
+                if search_query:
+                    query &= Q(storage_object__object_key__icontains=search_query)
+            else:
+                if folder_filter:
+                    query &= Q(storage_object__object_key__startswith=folder_filter)
+                    query &= Q(storage_object__object_key__regex=rf'^{re.escape(folder_filter)}[^/]+$')
+                else:
+                    query &= ~Q(storage_object__object_key__contains='/')
+            
             if año:
                 year_value = safe_int(año)
                 if year_value is not None:
@@ -1705,35 +1945,73 @@ class FilesDeleteView(APIView):
 class FoldersListView(APIView):
     """
     Lista carpetas disponibles usando el índice de PostgreSQL.
-    GET /api/folders
+    Maneja filtros dinámicos y compatibilidad con objetos legacy.
+    GET /api/folders/list
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        import time
+        from django.db.models import Q
+
+        def safe_int(value, default=None):
+            try:
+                return int(str(value).strip())
+            except (TypeError, ValueError):
+                return default
+
         start_time = time.time()
-        parent = request.query_params.get('parent', '').strip()
+        # 1. Compatibilidad: Atrapamos 'folder' (del JS) o 'parent'
+        parent = request.query_params.get('folder', request.query_params.get('parent', '')).strip()
 
         if parent and not parent.endswith('/'):
             parent += '/'
 
         try:
-            # Obtener paths que empiezan con parent
-            if parent:
-                paths = Document.objects.filter(
-                    is_active=True,
-                    index_state__is_indexed=True,
-                    storage_object__object_key__startswith=parent,
-                ).values_list('storage_object__object_key', flat=True)
-            else:
-                paths = Document.objects.filter(
-                    is_active=True,
-                    index_state__is_indexed=True,
-                ).values_list('storage_object__object_key', flat=True)
+            # 2. Sincronizar la búsqueda base con FilesListView
+            query = Q(is_active=True, index_state__is_indexed=True)
 
-            # Extraer carpetas únicas del nivel actual
+            if parent:
+                query &= Q(storage_object__object_key__startswith=parent) | Q(source_path_legacy__startswith=parent)
+
+            # Sincronizar filtros visuales
+            año = request.query_params.get('año', '').strip()
+            mes = request.query_params.get('mes', '').strip()
+            banco = request.query_params.get('banco', '').strip()
+            razon_social = request.query_params.get('razon_social', '').strip()
+            tipo_documento = request.query_params.get('tipo_documento', '').strip()
+
+            if año:
+                year_value = safe_int(año)
+                if year_value is not None:
+                    query &= Q(period__year=year_value)
+            if mes:
+                month_value = safe_int(mes)
+                if month_value is not None:
+                    query &= Q(period__month=month_value)
+            if banco:
+                query &= Q(constancia_detail__bank__name__iexact=banco) | Q(constancia_detail__bank__code__iexact=banco)
+            if razon_social:
+                query &= Q(company__name__iexact=razon_social) | Q(company__code__iexact=razon_social)
+            if tipo_documento:
+                query &= (
+                    Q(constancia_detail__payroll_type__icontains=tipo_documento)
+                    | Q(constancia_detail__legacy_tipo_documento__icontains=tipo_documento)
+                    | Q(insurance_detail__insurance_type__name__icontains=tipo_documento)
+                    | Q(insurance_detail__insurance_subtype__name__icontains=tipo_documento)
+                    | Q(tregistro_detail__movement_type__name__icontains=tipo_documento)
+                )
+
+            # 3. Obtener rutas reales (evitando el error de INNER JOIN y protegiendo de Nulos)
+            docs = Document.objects.filter(query).values('storage_object__object_key', 'source_path_legacy')
+
             folders = {}
 
-            for path in paths:
+            for doc in docs:
+                path = doc['storage_object__object_key'] or doc['source_path_legacy']
+                if not path:
+                    continue  # Si el registro no tiene ruta, saltamos para evitar que colapse
+
                 relative_path = path[len(parent):] if parent else path
                 parts = relative_path.split('/')
 

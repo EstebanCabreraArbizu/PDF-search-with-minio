@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from .views import (
     SearchView, ReindexView, FilterOptionsView, 
     DownloadView, SyncIndexView, PopulateHashesView, IndexStatsView, index,
@@ -8,9 +8,9 @@ from .views import (
 )
 from .auth_views import AuthLoginView, AuthLogoutView
 from .ui_views import login_ui, constancias_ui, files_ui
-
 urlpatterns = [
     path('', login_ui, name='index'),
+    path('api/v2/', include('docrepo.urls')),
     path('legacy/', index, name='legacy_index'),
     path('ui/login/', login_ui, name='login_ui'),
     path('ui/seguros/', seguros_ui, name='search_seguros_ui'),
@@ -39,5 +39,5 @@ urlpatterns = [
     path('api/files/upload', FilesUploadView.as_view(), name='files_upload'),
     path('api/files/create-folder', CreateFolderView.as_view(), name='create_folder'),
     path('api/files/delete', FilesDeleteView.as_view(), name='files_delete'),
-    path('api/folders', FoldersListView.as_view(), name='folders_list'),
+    path('api/folders/list', FoldersListView.as_view(), name='folders_list'),
 ]

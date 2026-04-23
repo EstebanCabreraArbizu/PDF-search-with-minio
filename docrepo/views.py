@@ -153,6 +153,25 @@ class BaseV2SearchView(APIView):
                 status=400,
             )
 
+        # Validate that at least one search filter is provided (excluding pagination)
+        if not any([
+            payload.get("razon_social") or payload.get("company"),
+            payload.get("periodo"),
+            payload.get("año") or payload.get("anio") or payload.get("year"),
+            payload.get("mes") or payload.get("month"),
+            payload.get("banco") or payload.get("bank"),
+            payload.get("payroll_type") or payload.get("tipo_documento") or payload.get("tipo"),
+            payload.get("tipo") or payload.get("insurance_type"),
+            payload.get("subtipo") or payload.get("insurance_subtype"),
+            payload.get("movement_type") or payload.get("tipo_documento"),
+        ]):
+            return Response({
+                "error": "No se proporcionaron filtros de búsqueda.",
+                "hint": "Incluya al menos un criterio de filtro.",
+                "total": 0,
+                "results": [],
+            }, status=400)
+
         queryset = self._build_v2_queryset(payload, employee_codes)
         max_results = int(getattr(settings, "DOCREPO_MAX_RESULTS", 500))
         documents = list(queryset[:max_results])
@@ -571,11 +590,13 @@ class ConstanciasV2SearchView(BaseV2SearchView):
     def _domain_query(self, payload: dict[str, Any]):
         query = Q()
 
+        # New contract parameter: banco (supports legacy bank alias)
         bank = str(payload.get("banco") or payload.get("bank") or "").strip()
         if bank:
             query &= Q(constancia_detail__bank__name__iexact=bank) | Q(constancia_detail__bank__code__iexact=bank)
 
-        payroll_type = str(payload.get("payroll_type") or payload.get("tipo_documento") or "").strip()
+        # New contract parameter: payroll_type (supports legacy tipo_documento/tipo aliases)
+        payroll_type = str(payload.get("payroll_type") or payload.get("tipo_documento") or payload.get("tipo") or "").strip()
         if payroll_type:
             query &= Q(constancia_detail__payroll_type__icontains=payroll_type) | Q(
                 constancia_detail__legacy_tipo_documento__icontains=payroll_type

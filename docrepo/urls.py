@@ -11,8 +11,11 @@ from .views import (
 
 urlpatterns = [
     path("filter-options", FilterOptionsV2View.as_view(), name="v2_filter_options"),
-    path("search/seguros", SegurosV2SearchView.as_view(), name="v2_search_seguros"),
-    path("search/tregistro", TRegistroV2SearchView.as_view(), name="v2_search_tregistro"),
-    path("search/constancias", ConstanciasV2SearchView.as_view(), name="v2_search_constancias"),
+    path("seguros/search/", SegurosV2SearchView.as_view(), name="v2_search_seguros"),
+    path("seguros/search/legacy/", SegurosV2SearchView.as_view(), name="v2_search_seguros_legacy"),
+    path("tregistro/search/", TRegistroV2SearchView.as_view(), name="v2_search_tregistro"),
+    path("tregistro/search/legacy/", TRegistroV2SearchView.as_view(), name="v2_search_tregistro_legacy"),
+    path("constancias/search/", ConstanciasV2SearchView.as_view(), name="v2_search_constancias"),
+    path("constancias/search/legacy/", ConstanciasV2SearchView.as_view(), name="v2_search_constancias_legacy"),
     path("documents/<uuid:document_id>/download", DocumentDownloadV2View.as_view(), name="v2_document_download"),
 ]
