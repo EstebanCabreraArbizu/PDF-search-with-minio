@@ -133,6 +133,27 @@ def _extract_year_month_from_text(text):
     return '', ''
 
 
+def _extract_tregistro_dates(text):
+    """
+    Especializado para T-Registro: busca Fecha de Inicio o Cese.
+    """
+    text_upper = str(text or '').upper()
+    
+    # 1. Buscar Fecha de Inicio (Alta)
+    inicio_match = re.search(r'FECHA\s+DE\s+INICIO\s+(\d{2})[/-](\d{2})[/-](20\d{2})', text_upper)
+    if inicio_match:
+        _, mes, año = inicio_match.groups()
+        return año, mes
+        
+    # 2. Buscar Fecha de Cese (Baja)
+    cese_match = re.search(r'FECHA\s+DE\s+CESE\s+(\d{2})[/-](\d{2})[/-](20\d{2})', text_upper)
+    if cese_match:
+        _, mes, año = cese_match.groups()
+        return año, mes
+
+    return None, None
+
+
 def _extract_month_token(text):
     text_upper = str(text or '').upper()
     for token, month in MESES_TOKEN_MAP.items():
@@ -214,6 +235,19 @@ def infer_upload_metadata(filename, pdf_text=None, hints=None):
     filename_year, filename_month = _extract_year_month_from_text(filename_upper)
     text_year, text_month = _extract_year_month_from_text(text_upper)
 
+    tipo_documento = clean_tipo_documento(hint_tipo) if hint_tipo else ''
+    if not tipo_documento:
+        tipo_documento = _detect_tipo_documento_from_content(filename_upper, text_upper)
+
+    from docrepo.domain_inference import infer_domain_code
+    domain_code = infer_domain_code(f"{filename_upper} {text_upper}", tipo_documento)
+
+    # Lógica especial para T-Registro: prioridad a Fecha de Inicio/Cese
+    if domain_code == 'TREGISTRO':
+        treg_year, treg_month = _extract_tregistro_dates(text_upper)
+        if treg_year and treg_month:
+            text_year, text_month = treg_year, treg_month
+
     year = hint_year or filename_year or text_year or str(base_meta.get('año') or datetime.now().year)
 
     month = _normalize_month(hint_month)
@@ -239,14 +273,6 @@ def infer_upload_metadata(filename, pdf_text=None, hints=None):
         bank = base_bank if base_bank in BANCOS_VALIDOS else ''
     if not bank:
         bank = _detect_bank_from_text(f"{filename_upper} {text_upper}") or 'GENERAL'
-
-    tipo_documento = clean_tipo_documento(hint_tipo) if hint_tipo else ''
-    if not tipo_documento:
-        tipo_documento = _detect_tipo_documento_from_content(filename_upper, text_upper)
-
-    from docrepo.domain_inference import infer_domain_code
-
-    domain_code = infer_domain_code(f"{filename_upper} {text_upper}", tipo_documento)
 
     return {
         'año': str(year),
