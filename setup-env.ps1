@@ -15,7 +15,7 @@ if (Test-Path $envFile) {
         }
     }
 } else {
-    Write-Host "⚠️ .env file not found" -ForegroundColor Yellow
+    Write-Host "WARNING: .env file not found" -ForegroundColor Yellow
 }
 
 # Configurar .npmrc con el token directamente
@@ -24,13 +24,13 @@ if (Test-Path $npmrcFile) {
     $content = Get-Content $npmrcFile -Raw
     if ($env:NPM_GITHUB_TOKEN) {
         $content = $content -replace '\${NPM_GITHUB_TOKEN}', $env:NPM_GITHUB_TOKEN
-        Set-Content -Path $npmrcFile -Value $content
-        Write-Host "✓ .npmrc configured with token" -ForegroundColor Green
+        Set-Content -Path $npmrcFile -Value $content -NoNewline
+        Write-Host "OK .npmrc configured with token" -ForegroundColor Green
     } else {
-        Write-Host "⚠️ NPM_GITHUB_TOKEN not found in env" -ForegroundColor Yellow
+        Write-Host "WARNING: NPM_GITHUB_TOKEN not found in env" -ForegroundColor Yellow
     }
 } else {
-    Write-Host "⚠️ .npmrc file not found" -ForegroundColor Yellow
+    Write-Host "WARNING: .npmrc file not found" -ForegroundColor Yellow
 }
 
 Write-Host "`nReady! Now run: npm install" -ForegroundColor Cyan
