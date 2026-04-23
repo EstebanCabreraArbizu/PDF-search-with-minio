@@ -16,7 +16,9 @@ const OBFUSCATOR_CONFIG = {
     splitStrings: true,
     stringArrayThreshold: 0.75,
     deadCodeInjection: true,
-    deadCodeInjectionThreshold: 0.4
+    deadCodeInjectionThreshold: 0.4,
+    sourceMap: true,
+    sourceMapMode: 'separate'
 };
 
 /**
@@ -76,6 +78,15 @@ filesToObfuscate.forEach(filePath => {
     try {
         const obfuscationResult = JavaScriptObfuscator.obfuscate(fileContent, OBFUSCATOR_CONFIG);
         fs.writeFileSync(outputPath, obfuscationResult.getObfuscatedCode());
+        
+        // Write source map if available
+        const sourceMap = obfuscationResult.getSourceMap();
+        if (sourceMap) {
+            const sourceMapPath = outputPath + '.map';
+            fs.writeFileSync(sourceMapPath, sourceMap);
+            console.log(`  └─ Source map: ${path.relative(JS_ROOT, sourceMapPath)}`);
+        }
+        
         console.log(`✓ [OK] ${relativePath}`);
     } catch (err) {
         console.error(`✗ [ERROR] Failed to obfuscate ${relativePath}:`, err.message);
