@@ -113,11 +113,11 @@ def _parse_period(period_value: Any) -> tuple[int | None, int | None]:
 def _parse_employee_codes(payload: dict[str, Any]) -> list[str]:
     codes: list[str] = []
 
-    single = str(payload.get("codigo_empleado", "")).strip()
+    single = str(payload.get("codigo_empleado") or payload.get("dni") or payload.get("cuit") or "").strip()
     if single:
         codes.append(single)
 
-    bulk = payload.get("codigos", [])
+    bulk = payload.get("codigos") or payload.get("dni_list") or []
     if isinstance(bulk, str):
         codes.extend([c.strip() for c in re.split(r"[,;\s\n]+", bulk) if c.strip()])
     elif isinstance(bulk, list):
@@ -164,6 +164,8 @@ class BaseV2SearchView(APIView):
             payload.get("tipo") or payload.get("insurance_type"),
             payload.get("subtipo") or payload.get("insurance_subtype"),
             payload.get("movement_type") or payload.get("tipo_documento"),
+            payload.get("dni") or payload.get("cuit") or payload.get("certificado"),
+            employee_codes,
         ]):
             return Response({
                 "error": "No se proporcionaron filtros de búsqueda.",

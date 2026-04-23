@@ -54,8 +54,8 @@ function safeText(v) {
 }
 
 function updateURLFromPath() {
-  const fullPath = rutaActiva.map(p => encodeURIComponent(p)).join('/');
-  const hash = fullPath ? `#files/${fullPath}` : '#files';
+  const fullPath = rutaActiva.join('/');
+  const hash = fullPath ? `#files/${encodeURI(fullPath)}` : '#files';
   history.pushState({ ruta: [...rutaActiva] }, '', hash);
 }
 
@@ -113,11 +113,12 @@ function renderBreadcrumbs() {
   for (let idx = 0; idx < rutaActiva.length; idx++) {
     const folder = rutaActiva[idx];
     const isLast = idx === rutaActiva.length - 1;
+    const label = formatPathLabel(folder);
     if (isLast) {
-      html += `<li class="breadcrumb-item active" aria-current="page" title="${safeText(folder)}">${safeText(formatPathLabel(folder))}</li>`;
+      html += `<li class="breadcrumb-item active" aria-current="page" title="${safeText(label)}">${safeText(label)}</li>`;
     } else {
       html += `<li class="breadcrumb-item">
-        <a href="#" onclick="window._filesGoTo(${idx}); return false;" class="breadcrumb-link" title="${safeText(folder)}">${safeText(formatPathLabel(folder))}</a>
+        <a href="#" onclick="window._filesGoTo(${idx}); return false;" class="breadcrumb-link" title="${safeText(label)}">${safeText(label)}</a>
       </li>`;
     }
   }
@@ -426,7 +427,7 @@ function renderFilesTable(files) {
           <span class="files-name" title="${safeText(file.path)}">${safeText(file.name)}</span>
         </td>
         <td class="files-folder-cell">
-          <span class="files-folder-path" title="${safeText(file.folder || '/')}">${safeText(formatPathLabel(file.folder || '/'))}</span>
+          <span class="files-folder-path" title="${safeText(formatPathLabel(file.folder || '/'))}">${safeText(formatPathLabel(file.folder || '/'))}</span>
         </td>
         <td>${safeText(periodo)}</td>
         <td>${razon}</td>

@@ -1,156 +1,158 @@
 /**
- * T-REGISTRO v2 Search - Refactored to use DocSearchCore
+ * T-REGISTRO v2 Search - Refactored to use DocSearchCore App Factory
  */
+document.addEventListener('DOMContentLoaded', () => {
+    const { createSearchApp, safeText, formatPeriodo, API_PATHS } = window.DocSearchCore;
 
-const UI_CONFIG = {
-  formId: 'tregistroForm',
-  statsId: 'statsTRegistro',
-  domain: 'TREGISTRO',
-  pageSize: 12
-};
+    const app = createSearchApp({
+        type: 'tregistro',
+        apiPaths: API_PATHS,
+        formId: 'tregistroForm',
+        resultsTableId: 'stateTable',
+        resultsTableBodyId: 'tableBody',
+        paginationContainerId: 'paginationControls',
+        emptyStateId: 'stateEmpty',
+        loaderId: 'stateLoading',
+        simpleFiltersId: 'simpleMode',
+        masivoFiltersId: 'masivaMode',
+        masivoInputId: 'dniMasivo',
+        
+        columns: [
+            {
+                label: 'Documento',
+                render: doc => {
+                    const fileNameOnly = doc.filename.split('/').pop() || doc.filename;
+                    const sizeText = `${Number(doc.size_kb || 0).toFixed(2)} KB`;
+                    const estado = doc.indexed ? 'Indexado' : 'Pendiente';
+                    return `
+                        <div class="fw-500">${safeText(fileNameOnly)}</div>
+                        <div class="doc-meta">${safeText(sizeText)} - ${safeText(estado)}</div>
+                    `;
+                }
+            },
+            {
+                label: 'Razon Social',
+                render: doc => safeText(doc.metadata.razon_social || '—')
+            },
+            {
+                label: 'Movimiento',
+                render: doc => {
+                    const mov = (doc.metadata.tipo_movimiento || '—').toUpperCase();
+                    const badge = mov === 'ALTA' ? 'badge-green' : (mov === 'BAJA' ? 'badge-red' : 'badge-blue');
+                    return `<span class="badge ${badge}">${safeText(mov)}</span>`;
+                }
+            },
+            {
+                label: 'Persona',
+                render: doc => {
+                    const detail = doc.metadata || {};
+                    const titular = detail.nombre_trabajador || detail.titular || '—';
+                    const dni = detail.dni || '—';
+                    return `
+                        <div class="fw-500">${safeText(titular)}</div>
+                        <div class="doc-meta">DNI: <span class="badge badge-blue">${safeText(dni)}</span></div>
+                    `;
+                }
+            },
+            {
+                label: 'Periodo',
+                render: doc => formatPeriodo(doc.metadata)
+            },
+            {
+                label: 'Acciones',
+                render: doc => {
+                    const fileNameOnly = doc.filename.split('/').pop() || doc.filename;
+                    return `
+                        <div class="actions">
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-success-soft js-download"
+                                data-url="${safeText(doc.download_url)}"
+                                data-name="${safeText(fileNameOnly)}"
+                                ${doc.download_url ? '' : 'disabled'}
+                            >
+                                <i class="ti ti-download"></i> Descargar
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        ],
 
-// Instance of Core using centralized API paths
-const core = new window.DocSearchCore(UI_CONFIG, window.DocSearchCore.API_PATHS);
+        onBeforeSearch: (params, isMasivo) => {
+            const payload = {};
+            
+            const empresa = document.getElementById('empresaSelect')?.value;
+            const tipo = document.getElementById('tipoSelect')?.value;
+            const periodo = document.getElementById('periodoSelect')?.value;
 
-/**
- * Format metadata for the table
- */
-function toRow(result) {
-  const metadata = result.metadata || {};
-  const filename = result.filename || '-';
-  const empresa = metadata.razon_social || '-';
-  const tipoMovimiento = metadata.tipo_movimiento || '-';
-  const dni = metadata.dni || '-';
-  const periodo = core.formatPeriodo(metadata);
-  const estado = result.indexed ? 'Indexado' : 'Pendiente';
-  const sizeText = `${Number(result.size_kb || 0).toFixed(2)} KB`;
+            if (empresa) payload.razon_social = empresa;
+            if (tipo) payload.tipo = tipo;
+            if (periodo) payload.periodo = periodo;
 
-  return {
-    filename,
-    empresa,
-    tipoMovimiento,
-    dni,
-    periodo,
-    estado,
-    downloadUrl: result.download_url || '',
-    sizeText
-  };
-}
+            if (isMasivo) {
+                const massInput = document.getElementById('dniMasivo')?.value || '';
+                const codes = massInput.split(/[\s,;\n]+/).map(c => c.trim()).filter(c => c.length >= 4);
+                if (codes.length === 0) {
+                    window.DocSearchCore.showToast('Ingresa al menos un DNI para busqueda masiva.', 'warning');
+                    return null;
+                }
+                payload.codigos = codes;
+            } else {
+                const dniSimple = document.getElementById('dniInput')?.value;
+                if (dniSimple) payload.codigo_empleado = dniSimple.trim();
+            }
 
-/**
- * Custom stats rendering
- */
-function renderStats(results) {
-  const rows = results.map(toRow);
-  const altas = rows.filter(item => item.tipoMovimiento.toUpperCase() === 'ALTA').length;
-  const bajas = rows.filter(item => item.tipoMovimiento.toUpperCase() === 'BAJA').length;
-  const empresas = new Set(rows.map(item => item.empresa).filter(Boolean)).size;
+            Object.keys(payload).forEach(key => {
+                if (Array.isArray(payload[key])) {
+                    payload[key].forEach(val => params.append(key, val));
+                } else {
+                    params.append(key, payload[key]);
+                }
+            });
 
-  const html = `
-    <article class="stat-card acrylic-surface stat-border-1">
-      <div class="label">Total</div>
-      <div class="value">${rows.length}</div>
-      <div class="hint">Documentos encontrados</div>
-    </article>
-    <article class="stat-card acrylic-surface stat-border-2">
-      <div class="label">Altas</div>
-      <div class="value">${altas}</div>
-      <div class="hint">Movimientos de alta</div>
-    </article>
-    <article class="stat-card acrylic-surface stat-border-3">
-      <div class="label">Bajas</div>
-      <div class="value">${bajas}</div>
-      <div class="hint">Movimientos de baja</div>
-    </article>
-    <article class="stat-card acrylic-surface stat-border-4">
-      <div class="label">Empresas</div>
-      <div class="value">${empresas}</div>
-      <div class="hint">Con resultados</div>
-    </article>
-  `;
-  
-  const statsContainer = document.getElementById(UI_CONFIG.statsId);
-  if (statsContainer) statsContainer.innerHTML = html;
-}
+            return params;
+        }
+    });
 
-/**
- * Custom table rendering
- */
-function renderTable(results, page) {
-  const tableBody = document.getElementById('tableBody');
-  if (!tableBody) return;
+    // Custom Stats for T-Registro
+    const originalRenderResults = app.renderResults;
+    app.renderResults = (results, page) => {
+        originalRenderResults(results, page);
+        renderStats(results);
+    };
 
-  const rows = results.map(toRow);
-  const startIndex = (page - 1) * UI_CONFIG.pageSize;
-  const pageRows = rows.slice(startIndex, startIndex + UI_CONFIG.pageSize);
+    function renderStats(results) {
+        const altas = results.filter(r => (r.metadata.tipo_movimiento || '').toUpperCase() === 'ALTA').length;
+        const bajas = results.filter(r => (r.metadata.tipo_movimiento || '').toUpperCase() === 'BAJA').length;
+        const empresas = new Set(results.map(r => r.metadata.razon_social).filter(Boolean)).size;
 
-  tableBody.innerHTML = pageRows.map(row => {
-    const fileNameOnly = row.filename.split('/').pop() || row.filename;
-    const isAlta = row.tipoMovimiento.toUpperCase() === 'ALTA';
-    return `
-      <tr>
-        <td>
-          <div class="fw-500">${core.safeText(fileNameOnly)}</div>
-          <div class="doc-meta">${core.safeText(row.sizeText)} - ${core.safeText(row.estado)}</div>
-        </td>
-        <td>${core.safeText(row.empresa)}</td>
-        <td>${isAlta ? '<span class="badge badge-green">ALTA</span>' : '<span class="badge badge-red">BAJA</span>'}</td>
-        <td><span class="badge badge-blue">${core.safeText(row.dni)}</span></td>
-        <td>${core.safeText(row.periodo)}</td>
-        <td>${core.safeText(row.estado)}</td>
-        <td>
-          <div class="actions">
-            <button
-              type="button"
-              class="btn btn-sm btn-success-soft js-download"
-              data-url="${core.safeText(row.downloadUrl)}"
-              data-name="${core.safeText(fileNameOnly)}"
-              ${row.downloadUrl ? '' : 'disabled'}
-            >
-              <i class="ti ti-download"></i> Descargar
-            </button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
-}
+        const html = `
+            <article class="stat-card acrylic-surface stat-border-1">
+                <div class="label">Total</div>
+                <div class="value">${results.length}</div>
+                <div class="hint">Documentos encontrados</div>
+            </article>
+            <article class="stat-card acrylic-surface stat-border-2">
+                <div class="label">Altas</div>
+                <div class="value">${altas}</div>
+                <div class="hint">Movimientos de alta</div>
+            </article>
+            <article class="stat-card acrylic-surface stat-border-3">
+                <div class="label">Bajas</div>
+                <div class="value">${bajas}</div>
+                <div class="hint">Movimientos de baja</div>
+            </article>
+            <article class="stat-card acrylic-surface stat-border-4">
+                <div class="label">Empresas</div>
+                <div class="value">${empresas}</div>
+                <div class="hint">Con resultados</div>
+            </article>
+        `;
+        
+        const statsContainer = document.getElementById('statsTRegistro');
+        if (statsContainer) statsContainer.innerHTML = html;
+    }
 
-/**
- * Build search payload from form
- */
-function buildPayload() {
-  const mode = document.querySelector('.mode-tab.active').dataset.mode;
-  const empresa = document.getElementById('empresaSelect')?.value || '';
-  const tipo = document.getElementById('tipoSelect')?.value || '';
-  const dniSimple = document.getElementById('dniInput')?.value || '';
-  const periodo = document.getElementById('periodoSelect')?.value || '';
-
-  const payload = {};
-  if (empresa) payload.razon_social = empresa;
-  if (tipo) payload.tipo = tipo;
-  if (periodo) payload.periodo = periodo;
-
-  if (mode === 'masiva') {
-    const massInput = document.getElementById('dniMasivo')?.value || '';
-    const codes = core.validateCodes(core.parseMasivo(massInput));
-    if (codes.length === 0) throw new Error('Ingresa al menos un DNI para busqueda masiva.');
-    payload.codigos = codes;
-  } else if (dniSimple) {
-    const codes = core.validateCodes([dniSimple]);
-    payload.codigo_empleado = codes[0];
-  }
-
-  return payload;
-}
-
-// Wire up events and initialize
-core.onRenderResults = (results, page) => {
-  renderTable(results, page);
-  renderStats(results);
-};
-
-core.onBuildPayload = buildPayload;
-
-// Initialize
-core.init();
+    app.init();
+});

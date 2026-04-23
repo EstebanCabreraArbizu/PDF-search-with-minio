@@ -147,11 +147,19 @@
 
         // --- App Factory ---
         createSearchApp(config) {
-            const {
-                type, // 'seguros', 'constancias', 'tregistro'
-                columns = [],
-                onBeforeSearch,
-                resultsPerPage = 15
+                resultsPerPage = 15,
+                // ID Overrides
+                formId = 'searchForm',
+                resultsTableId = 'resultsTable',
+                resultsTableBodyId = 'resultsTableBody',
+                paginationContainerId = 'paginationContainer',
+                emptyStateId = 'emptyState',
+                loaderId = 'loader',
+                tabSimpleId = 'tabSimple',
+                tabMasivoId = 'tabMasivo',
+                masivoInputId = 'masivoInput',
+                simpleFiltersId = 'simpleFilters',
+                masivoFiltersId = 'masivoFilters'
             } = config;
 
             const state = {
@@ -163,15 +171,16 @@
             };
 
             // DOM Elements
-            const form = document.getElementById('searchForm');
-            const resultsTable = document.getElementById('resultsTable');
-            const resultsTableBody = document.getElementById('resultsTableBody');
-            const paginationContainer = document.getElementById('paginationContainer');
-            const emptyState = document.getElementById('emptyState');
-            const loader = document.getElementById('loader');
-            const tabSimple = document.getElementById('tabSimple');
-            const tabMasivo = document.getElementById('tabMasivo');
-            const masivoInput = document.getElementById('masivoInput');
+            // DOM Elements with fallbacks
+            const form = document.getElementById(formId) || document.querySelector('.search-form');
+            const resultsTable = document.getElementById(resultsTableId) || document.querySelector('.table');
+            const resultsTableBody = document.getElementById(resultsTableBodyId) || document.getElementById('tableBody');
+            const paginationContainer = document.getElementById(paginationContainerId) || document.getElementById('paginationControls');
+            const emptyState = document.getElementById(emptyStateId) || document.getElementById('stateEmpty');
+            const loader = document.getElementById(loaderId) || document.getElementById('stateLoading');
+            const tabSimple = document.getElementById(tabSimpleId) || document.querySelector('.mode-tab[data-mode="simple"]');
+            const tabMasivo = document.getElementById(tabMasivoId) || document.querySelector('.mode-tab[data-mode="masiva"]');
+            const masivoInput = document.getElementById(masivoInputId) || document.getElementById('dniMasivo');
 
             const init = async () => {
                 await DocSearchCore.ensureAuth();
@@ -235,8 +244,15 @@
                 state.isMasivo = masivo;
                 tabSimple?.classList.toggle('active', !masivo);
                 tabMasivo?.classList.toggle('active', masivo);
-                document.getElementById('simpleFilters')?.classList.toggle('d-none', masivo);
-                document.getElementById('masivoFilters')?.classList.toggle('d-none', !masivo);
+                
+                // Flexible container toggling
+                const simpleCont = document.getElementById(simpleFiltersId) || document.getElementById('simpleMode');
+                const masivoCont = document.getElementById(masivoFiltersId) || document.getElementById('masivaMode');
+                
+                simpleCont?.classList.toggle('hidden', masivo);
+                simpleCont?.classList.toggle('d-none', masivo);
+                masivoCont?.classList.toggle('hidden', !masivo);
+                masivoCont?.classList.toggle('d-none', !masivo);
             };
 
             const search = async (page = 1) => {
