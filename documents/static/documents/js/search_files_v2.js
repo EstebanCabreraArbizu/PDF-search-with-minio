@@ -54,9 +54,18 @@ function safeText(v) {
 }
 
 function updateURLFromPath() {
-  const fullPath = rutaActiva.join('/');
-  const hash = fullPath ? `#files/${encodeURIComponent(fullPath)}` : '#files';
+  const fullPath = rutaActiva.map(p => encodeURIComponent(p)).join('/');
+  const hash = fullPath ? `#files/${fullPath}` : '#files';
   history.pushState({ ruta: [...rutaActiva] }, '', hash);
+}
+
+function formatPathLabel(rawPath) {
+  if (!rawPath) return rawPath;
+  let clean = String(rawPath);
+  try { clean = decodeURIComponent(clean); } catch (e) {}
+  clean = clean.replace(/%#/g, ' - ').replace(/#/g, ' - ').replace(/_/g, ' ');
+  clean = clean.replace(/([a-zA-Z])(\d{4})/g, '$1 $2');
+  return clean.replace(/\s+/g, ' ').trim();
 }
 
 function restorePathFromHash() {
@@ -105,10 +114,10 @@ function renderBreadcrumbs() {
     const folder = rutaActiva[idx];
     const isLast = idx === rutaActiva.length - 1;
     if (isLast) {
-      html += `<li class="breadcrumb-item active" aria-current="page">${safeText(folder)}</li>`;
+      html += `<li class="breadcrumb-item active" aria-current="page" title="${safeText(folder)}">${safeText(formatPathLabel(folder))}</li>`;
     } else {
       html += `<li class="breadcrumb-item">
-        <a href="#" onclick="window._filesGoTo(${idx}); return false;" class="breadcrumb-link">${safeText(folder)}</a>
+        <a href="#" onclick="window._filesGoTo(${idx}); return false;" class="breadcrumb-link" title="${safeText(folder)}">${safeText(formatPathLabel(folder))}</a>
       </li>`;
     }
   }
@@ -381,9 +390,9 @@ function renderFilesTable(files) {
         <td></td>
         <td class="files-filename-cell">
           <i class="ti ti-folder" style="color: #f6c23e; font-size: 1.3rem; margin-right: 8px;"></i>
-          <span class="files-name" style="font-weight: 600;">${safeText(file.name)}</span>
+          <span class="files-name" style="font-weight: 600;" title="${safeText(file.name)}">${safeText(formatPathLabel(file.name))}</span>
         </td>
-        <td class="files-folder-cell"><span class="files-folder-path">${safeText(file.path)}</span></td>
+        <td class="files-folder-cell"><span class="files-folder-path" title="${safeText(file.path)}">${safeText(formatPathLabel(file.path))}</span></td>
         <td colspan="5" style="color: var(--text-muted); font-size: 0.9em; text-align: left;">
           Carpeta de archivos (${file.count || 0} elementos)
         </td>
@@ -417,7 +426,7 @@ function renderFilesTable(files) {
           <span class="files-name" title="${safeText(file.path)}">${safeText(file.name)}</span>
         </td>
         <td class="files-folder-cell">
-          <span class="files-folder-path">${safeText(file.folder || '/')}</span>
+          <span class="files-folder-path" title="${safeText(file.folder || '/')}">${safeText(formatPathLabel(file.folder || '/'))}</span>
         </td>
         <td>${safeText(periodo)}</td>
         <td>${razon}</td>
@@ -425,9 +434,9 @@ function renderFilesTable(files) {
         <td>${safeText(formatSize(file.size_bytes))}</td>
         <td>${statusBadge}</td>
         <td class="files-actions-cell">
-          <a class="btn-icon download-link" href="${safeText(file.download_url)}" target="_blank" title="Descargar PDF" rel="noopener noreferrer">
+          <button type="button" class="btn-icon download-link" data-url="${safeText(file.download_url)}" data-name="${safeText(file.name)}" title="Descargar PDF">
             <i class="ti ti-download"></i>
-          </a>
+          </button>
           ${deleteBtn}
         </td>
       `;
@@ -450,6 +459,20 @@ function renderFilesTable(files) {
 
   tbody.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', () => openDeleteModal(btn.dataset.path));
+  });
+
+  tbody.querySelectorAll('.download-link').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const url = btn.getAttribute('data-url');
+      const name = btn.getAttribute('data-name');
+      try {
+        await SHARED.downloadWithAuth(url, { fallbackName: name });
+      } catch (err) {
+        alert(err.message || 'Error al descargar');
+      }
+    });
   });
 }
 
@@ -608,7 +631,7 @@ async function triggerClassifyPreview(files) {
       body: formData
     });
 
-    const items = data.items || [];
+    const items = data.files || [];
     items.forEach((item, i) => {
       if (item.status !== 'INVALID_FILE' && item.status !== 'DUPLICATE') {
         pendingUploadMap.set(item.filename, { file: files[i], previewItem: item });

@@ -197,10 +197,29 @@
                         const btn = e.target.closest('.js-download');
                         if (btn) {
                             const id = btn.dataset.id;
+                            const url = btn.dataset.url;
                             const name = btn.dataset.name;
                             try {
                                 DocSearchCore.showToast('Iniciando descarga...', 'info');
-                                await DocSearchCore.downloadFile(id, name);
+                                if (url) {
+                                    if (window.DocSearchShared && window.DocSearchShared.downloadWithAuth) {
+                                        await window.DocSearchShared.downloadWithAuth(url, { fallbackName: name });
+                                    } else {
+                                        const response = await fetch(url, { headers: DocSearchCore.getAuthHeaders() });
+                                        if (!response.ok) throw new Error('Error al descargar');
+                                        const blob = await response.blob();
+                                        const dlUrl = window.URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = dlUrl;
+                                        a.download = name;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        window.URL.revokeObjectURL(dlUrl);
+                                        a.remove();
+                                    }
+                                } else {
+                                    await DocSearchCore.downloadFile(id, name);
+                                }
                             } catch (err) {
                                 DocSearchCore.showToast(err.message, 'error');
                             }
