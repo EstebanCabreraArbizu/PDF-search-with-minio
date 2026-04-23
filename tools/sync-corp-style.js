@@ -38,8 +38,8 @@ fs.mkdirSync(targetDir, { recursive: true });
 // Django + WhiteNoise manifest parsing also scans CSS comments for url(...),
 // so we sanitize bare package specifiers that are docs/examples, not assets.
 let css = fs.readFileSync(sourcePath, 'utf8');
-css = css.replace(/@import\s+url\((['"]@liderman\/corp-style\1\);?/g, '/* @import removed for Django static manifest */');
-css = css.replace(/url\((['"]@liderman\/[\s\S]*?\1\)/g, 'url("https://example.invalid/")');
+css = css.replace(/@import\s+url\((['"])@liderman\/corp-style\1\);?/g, '/* @import removed for Django static manifest */');
+css = css.replace(/url\((['"])@liderman\/[\s\S]*?\1\)/g, 'url("https://example.invalid/")');
 
 fs.writeFileSync(targetPath, css, 'utf8');
 
