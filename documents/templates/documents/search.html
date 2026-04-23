@@ -520,7 +520,11 @@
     </div>
 
         <script src="{% static 'documents/js/vendor/bootstrap.bundle.min.js' %}"></script>
-    <script src="{% static 'documents/js/dist/app.js' %}"></script>
+    {% if DEBUG %}
+      <script src="{% static 'documents/js/app.js' %}"></script>
+    {% else %}
+      <script src="{% static 'documents/js/dist/app.js' %}"></script>
+    {% endif %}
 
     <!-- Modal: Explorador de Carpetas -->
     <div class="modal fade" id="folderBrowserModal" tabindex="-1" aria-labelledby="folderBrowserModalLabel"

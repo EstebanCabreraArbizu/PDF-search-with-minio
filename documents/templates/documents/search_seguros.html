@@ -117,6 +117,10 @@
 {% endblock %}
 
 {% block page_scripts %}
-  <script src="{% static 'documents/js/dist/search_seguros_v2.js' %}"></script>
+  {% if DEBUG %}
+    <script src="{% static 'documents/js/search_seguros_v2.js' %}"></script>
+  {% else %}
+    <script src="{% static 'documents/js/dist/search_seguros_v2.js' %}"></script>
+  {% endif %}
 {% endblock %}
 
