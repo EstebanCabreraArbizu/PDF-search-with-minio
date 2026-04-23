@@ -9,9 +9,6 @@
         "lint": "echo \"Linting... (no linter configured)\" && exit 0",
         "test": "npm run lint && npm run build"
     },
-    "dependencies": {
-        "@richard-paredes-1/corp-style": "1.2.3"
-    },
     "devDependencies": {
         "javascript-obfuscator": "4.1.0"
     }
