@@ -217,7 +217,7 @@
             const init = async () => {
                 await DocSearchCore.ensureAuth();
                 setupListeners();
-                renderTheme();
+                DocSearchCore.initTheme();
                 renderUser();
             };
 
@@ -408,10 +408,6 @@
                 paginationContainer.innerHTML = html;
             };
 
-            const renderTheme = () => {
-                const theme = localStorage.getItem(STORAGE_KEYS.THEME) || 'light';
-                document.documentElement.setAttribute('data-theme', theme);
-            };
 
             const renderUser = () => {
                 const user = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_DATA) || '{}');
@@ -451,13 +447,15 @@
         },
 
         initGlobalUI() {
-            const btnTheme = document.getElementById('btnThemeToggle');
+            // Check for both possible IDs for compatibility
+            const btnTheme = document.getElementById('themeToggleBtn') || document.getElementById('btnThemeToggle');
             if (btnTheme) {
                 btnTheme.onclick = () => {
                     const current = document.documentElement.getAttribute('data-theme');
-                    const next = current === 'dark' ? 'light' : 'dark';
+                    const next = current === 'dark' ? 'corp' : 'dark';
                     document.documentElement.setAttribute('data-theme', next);
                     localStorage.setItem(STORAGE_KEYS.THEME, next);
+                    this.syncThemeToggle();
                 };
             }
 
