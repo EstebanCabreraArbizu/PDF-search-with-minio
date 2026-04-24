@@ -60,12 +60,7 @@ function updateURLFromPath() {
 }
 
 function formatPathLabel(rawPath) {
-  if (!rawPath) return rawPath;
-  let clean = String(rawPath);
-  try { clean = decodeURIComponent(clean); } catch (e) {}
-  clean = clean.replace(/%#/g, ' - ').replace(/#/g, ' - ').replace(/_/g, ' ');
-  clean = clean.replace(/([a-zA-Z])(\d{4})/g, '$1 $2');
-  return clean.replace(/\s+/g, ' ').trim();
+  return window.DocSearchCore ? window.DocSearchCore.formatPathLabel(rawPath) : rawPath;
 }
 
 function restorePathFromHash() {

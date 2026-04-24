@@ -1319,7 +1319,7 @@ class FilesListView(APIView):
 
         try:
             import re
-            query = Q(is_active=True, index_state__is_indexed=True)
+            query = Q(is_active=True)
 
             is_filtering = any([search_query, año, mes, banco, razon_social, tipo_documento])
 
