@@ -18,7 +18,8 @@ const OBFUSCATOR_CONFIG = {
     deadCodeInjection: true,
     deadCodeInjectionThreshold: 0.4,
     sourceMap: true,
-    sourceMapMode: 'separate'
+    sourceMapMode: 'separate',
+    reservedNames: ['DocSearchCore', 'DocSearchShared', 'state', 'results', 'count', 'init', 'search', 'renderResults', 'renderPagination', 'isLoading', 'metadata']
 };
 
 /**
