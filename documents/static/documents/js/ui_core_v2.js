@@ -39,12 +39,15 @@
             return localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
         },
 
-        getAuthHeaders() {
+        getAuthHeaders(includeContentType = true) {
             const token = this.getAuthToken();
-            return {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+            const headers = {
+                'Authorization': `Bearer ${token}`
             };
+            if (includeContentType) {
+                headers['Content-Type'] = 'application/json';
+            }
+            return headers;
         },
 
         async ensureAuth() {
@@ -71,7 +74,9 @@
 
         // --- HTTP ---
         async fetchJson(url, options = {}) {
-            const headers = { ...this.getAuthHeaders(), ...(options.headers || {}) };
+            const isFormData = options.body instanceof FormData;
+            const authHeaders = this.getAuthHeaders(!isFormData);
+            const headers = { ...authHeaders, ...(options.headers || {}) };
             const response = await fetch(url, { ...options, headers });
             
             if (response.status === 401 || response.status === 403) {
@@ -89,7 +94,7 @@
         async validateToken(meUrl, token) {
             try {
                 const response = await fetch(meUrl, {
-                    headers: { 'Authorization': `Token ${token}` }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 return response.ok;
             } catch (e) {

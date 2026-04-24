@@ -21,12 +21,12 @@ const API = {
   foldersList: '/api/folders/list'
 };
 
-const TOKEN_KEY = 'docsearch_v2_access_token';
-const REFRESH_TOKEN_KEY = 'docsearch_v2_refresh_token';
-const USER_KEY = 'docsearch_v2_user';
-
 const SHARED = window.DocSearchShared;
 if (!SHARED) throw new Error('DocSearchShared no disponible. Verifica la carga de scripts base.');
+
+const TOKEN_KEY = SHARED.STORAGE_KEYS.AUTH_TOKEN;
+const REFRESH_TOKEN_KEY = SHARED.STORAGE_KEYS.REFRESH_TOKEN;
+const USER_KEY = SHARED.STORAGE_KEYS.USER_DATA;
 
 /* ── Estado global ──────────────────────────────────────────────────── */
 let authToken = null;
@@ -43,8 +43,8 @@ let syncRunning = false;
 let syncShouldStop = false;
 
 /* ── Helpers de autenticación ───────────────────────────────────────── */
-function getAuthHeaders(withJson = false) {
-  return SHARED.getAuthHeaders(authToken, withJson);
+function getAuthHeaders(includeContentType = true) {
+  return SHARED.getAuthHeaders(includeContentType);
 }
 
 function safeText(v) {
@@ -153,20 +153,21 @@ async function fetchJson(url, options = {}) { return SHARED.fetchJson(url, optio
 async function validateToken(token) { return SHARED.validateToken(API.me, token); }
 
 async function restoreSession() {
-  const stored = localStorage.getItem(TOKEN_KEY);
+  const stored = SHARED.getAuthToken();
   if (!stored) return false;
+  
   const isValid = await validateToken(stored);
   if (!isValid) { clearSession(); return false; }
+  
   authToken = stored;
   setAuthState(true);
   renderSidebarUser();
 
-  // Leer datos del usuario para saber si es admin
   try {
     const raw = localStorage.getItem(USER_KEY);
     if (raw) {
       currentUser = JSON.parse(raw);
-      isAdmin = currentUser?.is_staff === true || currentUser?.role === 'admin';
+      isAdmin = currentUser?.role === 'admin' || currentUser?.is_staff === true;
     }
   } catch (_) { }
 
@@ -349,6 +350,11 @@ async function loadFiles(page = 1) {
     hide(loadingEl);
     show(emptyEl);
     console.error('❌ Error fatal en loadFiles:', e);
+    // Mostrar feedback en el UI si es posible
+    const emptyTitle = emptyEl.querySelector('h3');
+    if (emptyTitle) emptyTitle.textContent = "Error al cargar datos";
+    const emptyMsg = emptyEl.querySelector('p');
+    if (emptyMsg) emptyMsg.textContent = e.message || "No se pudo conectar con el servidor.";
   }
 }
 
