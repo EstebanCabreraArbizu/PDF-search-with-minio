@@ -2,24 +2,24 @@
 html[data-theme="corp"] {
   --fa-color-bg-surface-1: #f5f5f5;
   --fa-color-text-primary: #222222;
-  background-color: var(--fa-color-bg-surface-1);
-  color: var(--fa-color-text-primary);
+  background-color: var(--fa-color-bg-surface-1) !important;
+  color: var(--fa-color-text-primary) !important;
 }
 html[data-theme="dark"] {
   --fa-color-bg-surface-1: #121212;
   --fa-color-text-primary: #e0e0e0;
-  background-color: var(--fa-color-bg-surface-1);
-  color: var(--fa-color-text-primary);
+  background-color: var(--fa-color-bg-surface-1) !important;
+  color: var(--fa-color-text-primary) !important;
 }
 html[data-theme="light"] {
   --fa-color-bg-surface-1: #ffffff;
   --fa-color-text-primary: #111111;
-  background-color: var(--fa-color-bg-surface-1);
-  color: var(--fa-color-text-primary);
+  background-color: var(--fa-color-bg-surface-1) !important;
+  color: var(--fa-color-text-primary) !important;
 }
 html[data-theme="corp-dark"] {
   --fa-color-bg-surface-1: #101010;
   --fa-color-text-primary: #dddddd;
-  background-color: var(--fa-color-bg-surface-1);
-  color: var(--fa-color-text-primary);
+  background-color: var(--fa-color-bg-surface-1) !important;
+  color: var(--fa-color-text-primary) !important;
 }
