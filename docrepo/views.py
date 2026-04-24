@@ -136,9 +136,12 @@ class BaseV2SearchView(APIView):
     domain_code: str = ""
     detail_select_related: tuple[str, ...] = ()
 
+    def get(self, request):
+        return self.post(request)
+
     def post(self, request):
         start_time = time.time()
-        payload = request.data or {}
+        payload = request.data if request.method == "POST" else request.query_params
 
         try:
             employee_codes = _parse_employee_codes(payload)
@@ -168,8 +171,8 @@ class BaseV2SearchView(APIView):
             employee_codes,
         ]):
             return Response({
-                "error": "No se proporcionaron filtros de búsqueda.",
-                "hint": "Incluya al menos un criterio de filtro.",
+                "error": "Debe proporcionar al menos un filtro de búsqueda.",
+                "hint": "Puede buscar por Empresa, Periodo o Tipo de documento. El DNI es opcional.",
                 "total": 0,
                 "results": [],
             }, status=400)

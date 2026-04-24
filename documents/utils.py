@@ -118,9 +118,17 @@ def _extract_year_month_from_text(text):
 
     slash_dates = re.findall(r'(?<!\d)(\d{2})[/-](\d{2})[/-](20\d{2})(?!\d)', text_upper)
     if slash_dates:
+        # Priorizar fechas que NO sean de nacimiento si es posible
+        # Pero esta es una función genérica. La lógica específica va en infer_upload_metadata.
+        for dd, month, year in slash_dates:
+            if _normalize_month(month):
+                # Evitar fechas muy antiguas que podrían ser de nacimiento
+                if int(year) > 1990: 
+                    return year, month
+        
+        # Si no hay mejores, devolver la primera
         _, month, year = slash_dates[0]
-        if _normalize_month(month):
-            return year, month
+        return year, month
 
     year_match = re.search(r'\b(20\d{2})\b', text_upper)
     month_token = _extract_month_token(text_upper)
@@ -136,20 +144,37 @@ def _extract_year_month_from_text(text):
 def _extract_tregistro_dates(text):
     """
     Especializado para T-Registro: busca Fecha de Inicio o Cese.
+    Prioriza estas fechas sobre cualquier otra encontrada en el documento.
     """
     text_upper = str(text or '').upper()
     
-    # 1. Buscar Fecha de Inicio (Alta)
-    inicio_match = re.search(r'FECHA\s+DE\s+INICIO\s+(\d{2})[/-](\d{2})[/-](20\d{2})', text_upper)
-    if inicio_match:
-        _, mes, año = inicio_match.groups()
-        return año, mes
-        
-    # 2. Buscar Fecha de Cese (Baja)
-    cese_match = re.search(r'FECHA\s+DE\s+CESE\s+(\d{2})[/-](\d{2})[/-](20\d{2})', text_upper)
-    if cese_match:
-        _, mes, año = cese_match.groups()
-        return año, mes
+    # Patrones para Fecha de Inicio (Alta)
+    # Ejemplo: "FECHA DE INICIO: 01/01/2026", "FECHA INICIO 01-01-2026", "FECHA DE INICIO DE LA RELACION LABORAL: 01/01/2026"
+    inicio_patterns = [
+        r'FECHA\s+DE\s+INICIO\s+DE\s+LA\s+RELACION\s+LABORAL[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'FECHA\s+DE\s+INICIO[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'FECHA\s+INICIO[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'F\.\s*INICIO[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})'
+    ]
+    
+    for pattern in inicio_patterns:
+        match = re.search(pattern, text_upper)
+        if match:
+            _, mes, año = match.groups()
+            return año, mes
+            
+    # Patrones para Fecha de Cese (Baja)
+    cese_patterns = [
+        r'FECHA\s+DE\s+CESE[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'FECHA\s+CESE[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'F\.\s*CESE[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})'
+    ]
+    
+    for pattern in cese_patterns:
+        match = re.search(pattern, text_upper)
+        if match:
+            _, mes, año = match.groups()
+            return año, mes
 
     return None, None
 
