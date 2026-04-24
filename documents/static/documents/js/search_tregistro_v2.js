@@ -21,13 +21,11 @@ document.addEventListener('DOMContentLoaded', () => {
             {
                 label: 'Documento',
                 render: doc => {
-                    const decodedPath = decodeURIComponent(doc.filename || '');
-                    const fileNameOnly = decodedPath.split('/').pop() || decodedPath;
+                    const name = window.DocSearchCore.formatPathLabel(doc.filename);
                     const sizeText = `${Number(doc.size_kb || 0).toFixed(2)} KB`;
-                    const estado = doc.indexed ? 'Indexado' : 'Pendiente';
                     return `
-                        <div class="fw-500">${safeText(fileNameOnly)}</div>
-                        <div class="doc-meta">${safeText(sizeText)} - ${safeText(estado)}</div>
+                        <div class="fw-500">${safeText(name)}</div>
+                        <div class="doc-meta text-xs opacity-70">${safeText(sizeText)}</div>
                     `;
                 }
             },
@@ -50,8 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const titular = detail.nombre_trabajador || detail.titular || '—';
                     const dni = detail.dni || '—';
                     return `
-                        <div class="fw-500">${safeText(titular)}</div>
-                        <div class="doc-meta">DNI: <span class="badge badge-blue">${safeText(dni)}</span></div>
+                        <div class="text-sm font-medium">${safeText(titular)}</div>
+                        <div class="text-xs opacity-70">DNI: <span class="badge badge-blue-soft">${safeText(dni)}</span></div>
                     `;
                 }
             },
@@ -60,24 +58,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 render: doc => formatPeriodo(doc.metadata)
             },
             {
-                label: 'Acciones',
-                render: doc => {
-                    const decodedPath = decodeURIComponent(doc.filename || '');
-                    const fileNameOnly = decodedPath.split('/').pop() || decodedPath;
-                    return `
-                        <div class="actions">
-                            <button
-                                type="button"
-                                class="btn btn-sm btn-success-soft js-download"
-                                data-url="${safeText(doc.download_url)}"
-                                data-name="${safeText(fileNameOnly)}"
-                                ${doc.download_url ? '' : 'disabled'}
-                            >
-                                <i class="ti ti-download"></i> Descargar
-                            </button>
-                        </div>
-                    `;
-                }
+                label: 'Estado',
+                render: doc => doc.indexed 
+                    ? `<span class="badge badge-success">✓ Indexado</span>` 
+                    : `<span class="badge badge-warning">⚠ Pendiente</span>`
             }
         ],
 

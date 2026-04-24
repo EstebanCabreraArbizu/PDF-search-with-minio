@@ -106,8 +106,18 @@
         safeText(text) {
             if (text === null || text === undefined) return '';
             const div = document.createElement('div');
-            div.textContent = text;
+            div.textContent = String(text);
             return div.innerHTML;
+        },
+
+        formatPathLabel(rawPath) {
+            if (!rawPath) return '';
+            let clean = String(rawPath);
+            try { clean = decodeURIComponent(clean); } catch (e) {}
+            // Extraer solo el nombre del archivo y limpiar caracteres legacy
+            clean = clean.split('/').pop() || clean;
+            clean = clean.replace(/%#/g, ' - ').replace(/#/g, ' - ').replace(/_/g, ' ');
+            return clean.replace(/\s+/g, ' ').trim();
         },
 
         formatPeriodo(m, map = MESES_MAP) {
@@ -357,23 +367,33 @@
                 emptyState?.classList.add('hidden');
 
                 resultsTableBody.innerHTML = results.map(doc => {
-                    const decodedPath = decodeURIComponent(doc.filename || '');
-                    const name = decodedPath.split('/').pop() || 'documento.pdf';
+                    const filename = this.formatPathLabel(doc.filename);
                     return `
-                        <tr>
-                            <td>
-                                <div class="doc-title" title="${DocSearchCore.safeText(decodedPath)}">${DocSearchCore.safeText(name)}</div>
-                                <div class="doc-sub">${DocSearchCore.safeText(doc.size_human || '')}</div>
-                            </td>
+                        <tr data-id="${doc.id}">
                             ${columns.map(col => `<td>${col.render(doc)}</td>`).join('')}
                             <td>
-                                <button class="btn btn-icon btn-primary js-download" data-id="${doc.id}" data-name="${name}">
-                                    <i class="ti ti-download"></i>
-                                </button>
+                                <div class="flex gap-2">
+                                    <button class="btn-icon btn-primary js-download" data-id="${doc.id}" data-name="${this.safeText(filename)}">
+                                        <i class="ti ti-download"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     `;
                 }).join('');
+
+                // Delegate download event
+                resultsTableBody.onclick = (e) => {
+                    const btn = e.target.closest('.js-download');
+                    if (btn) {
+                        e.preventDefault();
+                        const { id, name } = btn.dataset;
+                        this.downloadFile(id, name).catch(err => {
+                            console.error('Download error:', err);
+                            alert('Error al descargar el archivo: ' + err.message);
+                        });
+                    }
+                };
 
                 renderPagination();
             };

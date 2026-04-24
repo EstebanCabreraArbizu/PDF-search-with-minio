@@ -21,13 +21,11 @@ document.addEventListener('DOMContentLoaded', () => {
             {
                 label: 'Documento',
                 render: doc => {
-                    const decodedPath = decodeURIComponent(doc.filename || '');
-                    const fileNameOnly = decodedPath.split('/').pop() || decodedPath;
+                    const name = window.DocSearchCore.formatPathLabel(doc.filename);
                     const sizeText = `${Number(doc.size_kb || 0).toFixed(2)} KB`;
-                    const estado = doc.indexed ? 'Indexado' : 'Pendiente';
                     return `
-                        <div class="fw-500">${safeText(fileNameOnly)}</div>
-                        <div class="doc-meta">${safeText(sizeText)} - ${safeText(estado)}</div>
+                        <div class="fw-500">${safeText(name)}</div>
+                        <div class="doc-meta text-xs opacity-70">${safeText(sizeText)}</div>
                     `;
                 }
             },
@@ -40,20 +38,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 render: doc => {
                     const detail = doc.metadata || {};
                     return `
-                        <div class="fw-500">${safeText(detail.tipo_seguro || '—')}</div>
-                        <div class="doc-meta">${safeText(detail.subtipo_seguro || '')}</div>
+                        <div class="text-sm font-medium">${safeText(detail.tipo_seguro || '—')}</div>
+                        <div class="text-xs opacity-70">${safeText(detail.subtipo_seguro || '')}</div>
                     `;
                 }
             },
             {
-                label: 'PERSONAS DETECTADAS',
+                label: 'Titular',
                 render: doc => {
                     const detail = doc.metadata || {};
                     const titular = detail.titular || '—';
                     const dni = detail.dni || '—';
                     return `
-                        <div class="fw-500">${safeText(titular)}</div>
-                        <div class="doc-meta">DNI: ${safeText(dni)}</div>
+                        <div class="text-sm font-medium">${safeText(titular)}</div>
+                        <div class="text-xs opacity-70">DNI: ${safeText(dni)}</div>
                     `;
                 }
             },
@@ -62,8 +60,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 render: doc => formatPeriodo(doc.metadata)
             },
             {
-                label: 'Fecha Carga',
-                render: doc => doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '—'
+                label: 'Estado',
+                render: doc => doc.indexed 
+                    ? `<span class="badge badge-success">✓ Indexado</span>` 
+                    : `<span class="badge badge-warning">⚠ Pendiente</span>`
             }
         ],
 

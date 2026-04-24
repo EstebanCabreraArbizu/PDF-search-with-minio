@@ -261,6 +261,8 @@ class BaseV2SearchView(APIView):
             "download_legacy_url": f"/api/download/{object_key}" if object_key else None,
             "size_kb": round(size_bytes / 1024, 2) if size_bytes else 0,
             "indexed": index_state.is_indexed if index_state else False,
+            "created_at": document.created_at.isoformat() if document.created_at else None,
+            "indexed_at": document.indexed_at.isoformat() if document.indexed_at else None,
             "employee_codes": [code.employee_code for code in document.employee_codes.all()],
         }
         return result
