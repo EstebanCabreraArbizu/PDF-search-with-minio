@@ -6,15 +6,15 @@
     'use strict';
 
     const STORAGE_KEYS = {
-        AUTH_TOKEN: 'docsearch_token',
-        USER_DATA: 'docsearch_user',
+        AUTH_TOKEN: 'docsearch_v2_access_token',
+        USER_DATA: 'docsearch_v2_user',
         THEME: 'docsearch_theme'
     };
 
     const API_PATHS = {
-        login: '/api/v2/login/',
-        logout: '/api/v2/logout/',
-        me: '/api/v2/me/',
+        login: '/api/auth/login/',
+        logout: '/api/auth/logout/',
+        me: '/api/me',
         search: {
             seguros: '/api/v2/seguros/search/',
             constancias: '/api/v2/constancias/search/',
@@ -42,7 +42,7 @@
         getAuthHeaders() {
             const token = this.getAuthToken();
             return {
-                'Authorization': `Token ${token}`,
+                'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             };
         },
@@ -58,8 +58,8 @@
 
         redirectToLogin() {
             const current = window.location.pathname;
-            if (current !== '/v2/login/') {
-                window.location.href = `/v2/login/?next=${encodeURIComponent(current)}`;
+            if (current !== '/ui/login/') {
+                window.location.href = `/ui/login/?next=${encodeURIComponent(current)}`;
             }
         },
 
@@ -84,6 +84,17 @@
                 throw new Error(err.detail || err.error || `HTTP ${response.status}`);
             }
             return response.json();
+        },
+
+        async validateToken(meUrl, token) {
+            try {
+                const response = await fetch(meUrl, {
+                    headers: { 'Authorization': `Token ${token}` }
+                });
+                return response.ok;
+            } catch (e) {
+                return false;
+            }
         },
 
         // --- UI Helpers ---
@@ -133,6 +144,20 @@
             setTimeout(remove, 5000);
         },
 
+        initTheme() {
+            const current = localStorage.getItem(STORAGE_KEYS.THEME) || 'corp';
+            document.documentElement.setAttribute('data-theme', current);
+            this.syncThemeToggle();
+            return current;
+        },
+
+        syncThemeToggle() {
+            const icon = document.getElementById('themeToggleIcon');
+            if (!icon) return;
+            const current = document.documentElement.getAttribute('data-theme');
+            icon.className = current === 'dark' ? 'ti ti-moon' : 'ti ti-adjustments';
+        },
+
         setLoading(btn, isLoading, text = 'Cargando...') {
             const el = typeof btn === 'string' ? document.getElementById(btn) : btn;
             if (!el) return;
@@ -147,7 +172,14 @@
 
         // --- App Factory ---
         createSearchApp(config) {
+            const {
+                type,
+                baseUrl,
                 resultsPerPage = 15,
+                columns = [],
+                // Custom overrides
+                renderResults: customRenderResults,
+                onBeforeSearch,
                 // ID Overrides
                 formId = 'searchForm',
                 resultsTableId = 'resultsTable',
@@ -250,9 +282,7 @@
                 const masivoCont = document.getElementById(masivoFiltersId) || document.getElementById('masivaMode');
                 
                 simpleCont?.classList.toggle('hidden', masivo);
-                simpleCont?.classList.toggle('d-none', masivo);
                 masivoCont?.classList.toggle('hidden', !masivo);
-                masivoCont?.classList.toggle('d-none', !masivo);
             };
 
             const search = async (page = 1) => {
@@ -260,7 +290,7 @@
                 state.loading = true;
                 state.currentPage = page;
 
-                if (loader) loader.classList.remove('d-none');
+                if (loader) loader.classList.remove('hidden');
                 DocSearchCore.setLoading('btnSubmit', true);
 
                 try {
@@ -289,36 +319,45 @@
                     const data = await DocSearchCore.fetchJson(url);
 
                     state.results = data.results || [];
-                    state.count = data.count || 0;
-                    renderResults();
+                    state.count = data.total !== undefined ? data.total : (data.count || 0);
+                    
+                    if (!Array.isArray(state.results)) {
+                        console.error('API results is not an array:', data);
+                        state.results = [];
+                    }
+                    
+                    app.renderResults(state.results, state.currentPage);
                 } catch (err) {
                     DocSearchCore.showToast(err.message, 'error');
                 } finally {
                     state.loading = false;
-                    if (loader) loader.classList.add('d-none');
+                    if (loader) loader.classList.add('hidden');
                     DocSearchCore.setLoading('btnSubmit', false);
                 }
             };
 
-            const renderResults = () => {
+            const renderResults = (customResults) => {
                 if (!resultsTableBody) return;
+                
+                const results = customResults || state.results || [];
 
-                if (state.results.length === 0) {
-                    resultsTable?.classList.add('d-none');
-                    emptyState?.classList.remove('d-none');
+                if (results.length === 0) {
+                    resultsTable?.classList.add('hidden');
+                    emptyState?.classList.remove('hidden');
                     if (paginationContainer) paginationContainer.innerHTML = '';
                     return;
                 }
 
-                resultsTable?.classList.remove('d-none');
-                emptyState?.classList.add('d-none');
+                resultsTable?.classList.remove('hidden');
+                emptyState?.classList.add('hidden');
 
-                resultsTableBody.innerHTML = state.results.map(doc => {
-                    const name = doc.filename?.split('/').pop() || 'documento.pdf';
+                resultsTableBody.innerHTML = results.map(doc => {
+                    const decodedPath = decodeURIComponent(doc.filename || '');
+                    const name = decodedPath.split('/').pop() || 'documento.pdf';
                     return `
                         <tr>
                             <td>
-                                <div class="doc-title" title="${DocSearchCore.safeText(doc.filename)}">${DocSearchCore.safeText(name)}</div>
+                                <div class="doc-title" title="${DocSearchCore.safeText(decodedPath)}">${DocSearchCore.safeText(name)}</div>
                                 <div class="doc-sub">${DocSearchCore.safeText(doc.size_human || '')}</div>
                             </td>
                             ${columns.map(col => `<td>${col.render(doc)}</td>`).join('')}
@@ -390,13 +429,13 @@
                 }
             };
 
-            const app = { init, search, state };
+            const app = { init, search, state, renderResults, renderPagination };
             window._currentApp = app; // For pagination callbacks
             return app;
         },
 
         async downloadFile(id, filename) {
-            const url = `${this.API_PATHS.download}${id}/`;
+            const url = `${this.API_PATHS.download}${id}/download`;
             const response = await fetch(url, { headers: this.getAuthHeaders() });
             if (!response.ok) throw new Error('Error al descargar');
             
@@ -430,6 +469,7 @@
     };
 
     global.DocSearchCore = DocSearchCore;
+    global.DocSearchShared = DocSearchCore; // Compatibility alias
 
 })(window);
 
