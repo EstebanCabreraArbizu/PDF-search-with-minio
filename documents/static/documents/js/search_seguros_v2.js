@@ -21,7 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
             {
                 label: 'Documento',
                 render: doc => {
-                    const fileNameOnly = doc.filename.split('/').pop() || doc.filename;
+                    const decodedPath = decodeURIComponent(doc.filename || '');
+                    const fileNameOnly = decodedPath.split('/').pop() || decodedPath;
                     const sizeText = `${Number(doc.size_kb || 0).toFixed(2)} KB`;
                     const estado = doc.indexed ? 'Indexado' : 'Pendiente';
                     return `

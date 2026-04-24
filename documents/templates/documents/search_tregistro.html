@@ -1,7 +1,7 @@
 {% extends 'documents/base_search.html' %}
 {% load static %}
 
-{% block page_title_text %}Buscador T-Registro - Mock Local{% endblock %}
+{% block page_title_text %}Buscador T-Registro - v2.1 TEST{% endblock %}
 {% block body_class %}search-page-body tregistro-page{% endblock %}
 
 {% block page_title %}<span class="accent" style="color:var(--primary);">&#9670;</span>BUSCADOR DE DOCUMENTOS - T-REGISTRO{% endblock %}
@@ -12,8 +12,8 @@
 
   <section class="search-panel acrylic-surface">
     <div class="search-mode-tabs" style="margin-bottom:12px;">
-      <button class="mode-tab active" data-mode="simple"> <i class="ti ti-search"></i> Busqueda Simple</button>
-      <button class="mode-tab" data-mode="masiva"> <i class="ti ti-list-search"></i> Busqueda Masiva por DNI</button>
+      <button class="mode-tab active" data-mode="simple" id="tabSimple"> <i class="ti ti-search"></i> Busqueda Simple</button>
+      <button class="mode-tab" data-mode="masiva" id="tabMasivo"> <i class="ti ti-list-search"></i> Busqueda Masiva por DNI</button>
     </div>
 
     <div class="panel-title"><i class="ti ti-filter"></i> FILTROS DE BUSQUEDA</div>
