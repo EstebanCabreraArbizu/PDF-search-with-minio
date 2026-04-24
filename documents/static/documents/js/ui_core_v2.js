@@ -318,11 +318,15 @@
                     if (!state.isMasivo && form) {
                         const formData = new FormData(form);
                         for (let [key, value] of formData.entries()) {
-                            if (value && key !== 'masivo_input') params.append(key, value);
+                            if (value && key !== 'masivo_input') {
+                                // Map 'dni' or other common inputs to 'codigo_empleado' if needed
+                                const finalKey = key === 'dni' ? 'codigo_empleado' : key;
+                                params.append(finalKey, value);
+                            }
                         }
                     } else if (state.isMasivo && masivoInput) {
                         const lines = masivoInput.value.split(/[\n,;]/).map(s => s.trim()).filter(Boolean);
-                        lines.forEach(l => params.append('q_masivo', l));
+                        lines.forEach(l => params.append('codigos', l));
                     }
 
                     let finalParams = params;

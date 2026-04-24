@@ -161,7 +161,9 @@ def _extract_tregistro_dates(text):
         match = re.search(pattern, text_upper)
         if match:
             _, mes, año = match.groups()
-            return año, mes
+            # Validar que sea un año coherente para inicio laboral (no nacimiento)
+            if int(año) >= 1990:
+                return año, mes
             
     # Patrones para Fecha de Cese (Baja)
     cese_patterns = [
@@ -267,11 +269,15 @@ def infer_upload_metadata(filename, pdf_text=None, hints=None):
     from docrepo.domain_inference import infer_domain_code
     domain_code = infer_domain_code(f"{filename_upper} {text_upper}", tipo_documento)
 
-    # Lógica especial para T-Registro: prioridad a Fecha de Inicio/Cese
+    # Lógica especial para T-Registro: prioridad absoluta a Fecha de Inicio/Cese
     if domain_code == 'TREGISTRO':
         treg_year, treg_month = _extract_tregistro_dates(text_upper)
         if treg_year and treg_month:
             text_year, text_month = treg_year, treg_month
+        else:
+            # Si es T-Registro y no hay fecha clara de inicio/cese, 
+            # NO usar fechas genéricas (que podrían ser de nacimiento)
+            text_year, text_month = '', ''
 
     year = hint_year or filename_year or text_year or str(base_meta.get('año') or datetime.now().year)
 
