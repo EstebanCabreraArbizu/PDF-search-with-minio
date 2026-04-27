@@ -605,6 +605,12 @@ PDF-search-with-minio/
 - Consultas SQL con `LIMIT` y `OFFSET`
 - No carga todos los datos en memoria
 
+### 7. **Corrección de Gestión de Archivos V2**
+- El módulo `search_files_v2.js` ya no colapsa durante la carga si el core compartido no está listo; muestra un error controlado y mantiene la inicialización dentro de `bootstrap()`.
+- El core compartido `ui_core_v2.js` expone los helpers de sesión usados por Gestión de Archivos: estado de autenticación, render de usuario, limpieza de sesión y logout con redirección.
+- El alternador de tema recorre los 4 temas (`corp`, `light`, `dark`, `corp-dark`) y persiste la selección en `localStorage` con la clave `docsearch_theme`.
+- Validación: `docker compose ps`, `node --check` en assets JS y smoke Playwright autenticado para `/ui/files/` verificando API de carpetas, render de carpetas, navegación y cambio de temas.
+
 ---
 
 ## 🔐 Seguridad
