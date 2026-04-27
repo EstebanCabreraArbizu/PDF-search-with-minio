@@ -611,6 +611,13 @@ PDF-search-with-minio/
 - El alternador de tema recorre los 4 temas (`corp`, `light`, `dark`, `corp-dark`) y persiste la selección en `localStorage` con la clave `docsearch_theme`.
 - Validación: `docker compose ps`, `node --check` en assets JS y smoke Playwright autenticado para `/ui/files/` verificando API de carpetas, render de carpetas, navegación y cambio de temas.
 
+### 8. **Validación y Corrección de Búsqueda Documental V2**
+- Los buscadores V2 cargan filtros dinámicos sin perder el contexto de `DocSearchCore` cuando los métodos se usan desestructurados desde los módulos.
+- Constancias de Abono envía correctamente filtros de razón social, banco, tipo de planilla, periodo y códigos simples o masivos.
+- La descarga total de resultados usa ZIP en lugar de fusionar PDFs; el endpoint `POST /api/v2/documents/download-zip` empaqueta documentos seleccionados respetando rutas `Planillas 20XX/`.
+- Los resultados V2 y el explorador de carpetas excluyen rutas raíz sueltas tipo `2026/`; la ruta documental válida es `Planillas 202X/`.
+- Validación: `manage.py check`, `node --check` y Playwright autenticado para Seguros, T-Registro, Constancias, ZIP de resultados y no regresión de Gestión de Archivos.
+
 ---
 
 ## 🔐 Seguridad
