@@ -3,11 +3,28 @@
  * Powered by UI Core Framework
  */
 document.addEventListener('DOMContentLoaded', () => {
-    const { createSearchApp, safeText, formatPeriodo, API_PATHS, initTheme, syncThemeToggle } = window.DocSearchCore;
+    const { createSearchApp, safeText, formatPeriodo, API_PATHS, initTheme, syncThemeToggle, loadFilterOptions, populateSelect } = window.DocSearchCore;
     
     // Initialize theme system
     initTheme();
     syncThemeToggle();
+
+    // Load dynamic filters
+    loadFilterOptions('CONSTANCIA_ABONO').then(filters => {
+        if (filters) {
+            if (filters.razon_social) populateSelect('empresaSelect', filters.razon_social);
+            if (filters.banco) populateSelect('bancoSelect', filters.banco);
+            if (filters.tipo_documento) populateSelect('planillaSelect', filters.tipo_documento);
+        }
+    });
+
+    // Setup filter change listeners for fresh data fetch
+    const bancoSelect = document.getElementById('bancoSelect');
+    if (bancoSelect) {
+        bancoSelect.addEventListener('change', () => {
+            sessionStorage.removeItem('filter_options_CONSTANCIA_ABONO');
+        });
+    }
 
     const mesesMap = {
         '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',

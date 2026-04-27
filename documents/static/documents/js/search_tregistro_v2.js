@@ -2,11 +2,27 @@
  * T-REGISTRO v2 Search - Refactored to use DocSearchCore App Factory
  */
 document.addEventListener('DOMContentLoaded', () => {
-    const { createSearchApp, safeText, formatPeriodo, API_PATHS, initTheme, syncThemeToggle } = window.DocSearchCore;
+    const { createSearchApp, safeText, formatPeriodo, API_PATHS, initTheme, syncThemeToggle, loadFilterOptions, populateSelect } = window.DocSearchCore;
     
     // Initialize theme system
     initTheme();
     syncThemeToggle();
+
+    // Load dynamic filters
+    loadFilterOptions('TREGISTRO').then(filters => {
+        if (filters) {
+            if (filters.razon_social) populateSelect('empresaSelect', filters.razon_social);
+            if (filters.movimiento) populateSelect('tipoSelect', filters.movimiento);
+        }
+    });
+
+    // Setup filter change listeners for fresh data fetch
+    const tipoSelect = document.getElementById('tipoSelect');
+    if (tipoSelect) {
+        tipoSelect.addEventListener('change', () => {
+            sessionStorage.removeItem('filter_options_TREGISTRO');
+        });
+    }
 
     const app = createSearchApp({
         type: 'tregistro',

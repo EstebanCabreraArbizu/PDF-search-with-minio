@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django.db.models import Q, Sum, Count
 from django.http import StreamingHttpResponse
+from django.core.cache import cache
 from auditlog.services import record_audit_event
 from docrepo.models import Document, StorageObject
 from docrepo.services import deactivate_document_by_storage_key, upsert_document_from_upload
@@ -507,8 +508,152 @@ class FilterOptionsView(APIView):
             'razones_sociales': RAZONES_SOCIALES_VALIDAS,
             'bancos': BANCOS_VALIDOS + ['GENERAL'],
             'meses': meses,
-            'index_stats': {'total': 0, 'indexed': False, 'source': 'static_config'},
+                'index_stats': {'total': 0, 'indexed': False, 'source': 'static_config'},
         })
+
+class FilterOptionsForBulkView(APIView):
+    """
+    Get dynamic filter options for bulk search.
+    GET /api/filter-options-bulk?document_type=SEGUROS|TREGISTRO|CONSTANCIA_ABONO
+    
+    Returns distinct filter options from the database, with fallback to static config.
+    Client-side cacheable - uses HTTP cache headers.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    CACHE_TIMEOUT = 3600  # 1 hour cache
+    
+    def get(self, request):
+        document_type = request.query_params.get('document_type', '').upper()
+        
+        # Validate document type
+        valid_types = {'SEGUROS', 'TREGISTRO', 'CONSTANCIA_ABONO'}
+        if document_type not in valid_types:
+            return Response({
+                'error': f'Invalid document_type. Must be one of: {", ".join(valid_types)}',
+                'filters': {}
+            }, status=400)
+        
+        # Try to get from cache first
+        cache_key = f'filter_options_{document_type}'
+        cached_options = cache.get(cache_key)
+        if cached_options:
+            return Response(cached_options)
+        
+        # Build filter options from database
+        filter_options = self._build_filter_options(document_type)
+        
+        # Cache the result
+        cache.set(cache_key, filter_options, self.CACHE_TIMEOUT)
+        
+        return Response(filter_options)
+    
+    def _build_filter_options(self, document_type):
+        """Build filter options based on document type."""
+        meses = [
+            {'value': '01', 'label': 'Enero'}, {'value': '02', 'label': 'Febrero'},
+            {'value': '03', 'label': 'Marzo'}, {'value': '04', 'label': 'Abril'},
+            {'value': '05', 'label': 'Mayo'}, {'value': '06', 'label': 'Junio'},
+            {'value': '07', 'label': 'Julio'}, {'value': '08', 'label': 'Agosto'},
+            {'value': '09', 'label': 'Septiembre'}, {'value': '10', 'label': 'Octubre'},
+            {'value': '11', 'label': 'Noviembre'}, {'value': '12', 'label': 'Diciembre'},
+        ]
+        
+        base_filters = {
+            'meses': meses,
+            'document_type': document_type,
+            'cached': False
+        }
+        
+        try:
+            # Query distinct values from PDFIndex
+            # Note: This assumes PDFIndex is used for all document types
+            queryset = PDFIndex.objects.filter(is_indexed=True)
+            
+            if document_type == 'SEGUROS':
+                return {
+                    **base_filters,
+                    'razon_social': self._get_distinct_values(queryset, 'razon_social'),
+                    'tipo_documento': DOMAIN_TIPOS_FALLBACK.get('SEGUROS', []),
+                    'años': self._get_distinct_years(queryset),
+                }
+            
+            elif document_type == 'TREGISTRO':
+                return {
+                    **base_filters,
+                    'razon_social': self._get_distinct_values(queryset, 'razon_social'),
+                    'movimiento': ['ALTA', 'BAJA'],  # T-Registro specific
+                    'años': self._get_distinct_years(queryset),
+                }
+            
+            elif document_type == 'CONSTANCIA_ABONO':
+                return {
+                    **base_filters,
+                    'razon_social': self._get_distinct_values(queryset, 'razon_social'),
+                    'banco': BANCOS_VALIDOS + ['GENERAL'],
+                    'tipo_documento': DOMAIN_TIPOS_FALLBACK.get('CONSTANCIA_ABONO', []),
+                    'años': self._get_distinct_years(queryset),
+                }
+        
+        except Exception as e:
+            # Fall back to static config on any database error
+            return self._get_static_filters(document_type, base_filters)
+        
+        return base_filters
+    
+    @staticmethod
+    def _get_distinct_values(queryset, field, exclude_empty=True):
+        """Get distinct values for a field from queryset."""
+        values = queryset.values_list(field, flat=True).distinct().order_by(field)
+        if exclude_empty:
+            return [v for v in values if v]
+        return list(values)
+    
+    @staticmethod
+    def _get_distinct_years(queryset):
+        """Get distinct years from queryset, sorted descending."""
+        years = queryset.values_list('año', flat=True).distinct().order_by('-año')
+        valid_years = [y for y in years if y and str(y).strip()]
+        if valid_years:
+            return valid_years
+        # Fallback: last 5 years
+        current_year = datetime.now().year
+        return list(range(current_year, current_year - 5, -1))
+    
+    def _get_static_filters(self, document_type, base_filters):
+        """Return static fallback filters when database fails."""
+        if document_type == 'SEGUROS':
+            return {
+                **base_filters,
+                'razon_social': RAZONES_SOCIALES_VALIDAS,
+                'tipo_documento': DOMAIN_TIPOS_FALLBACK.get('SEGUROS', []),
+                'años': [str(y) for y in range(datetime.now().year, 2018, -1)],
+                'cached': False,
+                'source': 'static_fallback'
+            }
+        
+        elif document_type == 'TREGISTRO':
+            return {
+                **base_filters,
+                'razon_social': RAZONES_SOCIALES_VALIDAS,
+                'movimiento': ['ALTA', 'BAJA'],
+                'años': [str(y) for y in range(datetime.now().year, 2018, -1)],
+                'cached': False,
+                'source': 'static_fallback'
+            }
+        
+        elif document_type == 'CONSTANCIA_ABONO':
+            return {
+                **base_filters,
+                'razon_social': RAZONES_SOCIALES_VALIDAS,
+                'banco': BANCOS_VALIDOS + ['GENERAL'],
+                'tipo_documento': DOMAIN_TIPOS_FALLBACK.get('CONSTANCIA_ABONO', []),
+                'años': [str(y) for y in range(datetime.now().year, 2018, -1)],
+                'cached': False,
+                'source': 'static_fallback'
+            }
+        
+        return base_filters
 
 class SearchView(APIView):
     """Búsqueda de PDFs con validaciones completas. POST /api/search"""

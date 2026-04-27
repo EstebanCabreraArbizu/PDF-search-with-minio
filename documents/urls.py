@@ -1,6 +1,6 @@
 from django.urls import path, include
 from .views import (
-    SearchView, ReindexView, FilterOptionsView, 
+    SearchView, ReindexView, FilterOptionsView, FilterOptionsForBulkView,
     DownloadView, SyncIndexView, PopulateHashesView, IndexStatsView, index,
     seguros_ui, tregistro_ui,
     FilesListView, FilesClassifyPreviewView, FilesUploadView, CreateFolderView, FilesDeleteView, FoldersListView,
@@ -22,6 +22,7 @@ urlpatterns = [
     path('api/search', SearchView.as_view(), name='search'),
     path('api/search/bulk', BulkSearchView.as_view(), name='bulk_search'),
     path('api/filter-options', FilterOptionsView.as_view(), name='filter_options'),
+    path('api/filter-options-bulk', FilterOptionsForBulkView.as_view(), name='filter_options_bulk'),
     path('api/merge-pdfs', MergePdfsView.as_view(), name='merge_pdfs'),
     path('api/download/<path:filename>', DownloadView.as_view(), name='download'),
     path('api/index/sync', SyncIndexView.as_view(), name='sync_index'),

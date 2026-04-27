@@ -492,6 +492,73 @@
             if (btnLogout) {
                 btnLogout.onclick = () => this.logout();
             }
+        },
+
+        /**
+         * Load dynamic filter options for bulk search
+         * Uses client-side caching to avoid repeated requests
+         * @param {string} documentType - SEGUROS|TREGISTRO|CONSTANCIA_ABONO
+         * @returns {Promise<Object>} Filter options with meses, razon_social, etc.
+         */
+        async loadFilterOptions(documentType) {
+            // Check local storage cache first
+            const cacheKey = `filter_options_${documentType}`;
+            const cachedData = sessionStorage.getItem(cacheKey);
+            if (cachedData) {
+                try {
+                    return JSON.parse(cachedData);
+                } catch (e) {
+                    sessionStorage.removeItem(cacheKey);
+                }
+            }
+
+            try {
+                const url = `/api/filter-options-bulk?document_type=${encodeURIComponent(documentType)}`;
+                const response = await fetch(url, { headers: this.getAuthHeaders(false) });
+                
+                if (!response.ok) {
+                    console.error(`Failed to load filter options: ${response.status}`);
+                    return null;
+                }
+
+                const data = await response.json();
+                // Cache in sessionStorage for the session duration
+                sessionStorage.setItem(cacheKey, JSON.stringify(data));
+                return data;
+            } catch (error) {
+                console.error('Error loading filter options:', error);
+                return null;
+            }
+        },
+
+        /**
+         * Populate a select element with options
+         * @param {string} selectId - ID of select element
+         * @param {Array} options - Array of option values
+         * @param {string} selectedValue - Value to pre-select
+         */
+        populateSelect(selectId, options = [], selectedValue = '') {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+
+            // Keep the first option (placeholder) if it exists
+            const firstOption = select.options[0];
+            select.innerHTML = '';
+            if (firstOption) {
+                select.appendChild(firstOption);
+            }
+
+            options.forEach(optionValue => {
+                if (optionValue) {
+                    const opt = document.createElement('option');
+                    opt.value = optionValue;
+                    opt.textContent = optionValue;
+                    if (optionValue === selectedValue) {
+                        opt.selected = true;
+                    }
+                    select.appendChild(opt);
+                }
+            });
         }
     };
 

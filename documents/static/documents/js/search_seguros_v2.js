@@ -2,11 +2,28 @@
  * SEGUROS v2 Search - Refactored to use DocSearchCore App Factory
  */
 document.addEventListener('DOMContentLoaded', () => {
-    const { createSearchApp, safeText, formatPeriodo, API_PATHS, initTheme, syncThemeToggle } = window.DocSearchCore;
+    const { createSearchApp, safeText, formatPeriodo, API_PATHS, initTheme, syncThemeToggle, loadFilterOptions, populateSelect } = window.DocSearchCore;
     
     // Initialize theme system
     initTheme();
     syncThemeToggle();
+
+    // Load dynamic filters
+    loadFilterOptions('SEGUROS').then(filters => {
+        if (filters) {
+            if (filters.razon_social) populateSelect('empresaSelect', filters.razon_social);
+            if (filters.tipo_documento) populateSelect('tipoSelect', filters.tipo_documento);
+        }
+    });
+
+    // Setup filter change listeners for fresh data fetch (re-fetch when user changes filters)
+    const tipoSelect = document.getElementById('tipoSelect');
+    if (tipoSelect) {
+        tipoSelect.addEventListener('change', () => {
+            // User changed filter - fresh data could be needed on next search
+            sessionStorage.removeItem('filter_options_SEGUROS');
+        });
+    }
 
     const app = createSearchApp({
         type: 'seguros',
