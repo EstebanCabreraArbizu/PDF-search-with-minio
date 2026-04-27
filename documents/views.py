@@ -568,7 +568,7 @@ class FilterOptionsForBulkView(APIView):
         try:
             # Query distinct values from PDFIndex
             # Note: This assumes PDFIndex is used for all document types
-            queryset = PDFIndex.objects.filter(is_indexed=True)
+            queryset = PDFIndex.objects.filter(is_indexed=True).exclude(minio_object_name__regex=r'^20\d{2}/')
             
             if document_type == 'SEGUROS':
                 return {
@@ -2096,6 +2096,7 @@ class FoldersListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        import re
         import time
         from django.db.models import Q
 
@@ -2162,6 +2163,8 @@ class FoldersListView(APIView):
 
                 if len(parts) > 1:
                     folder_name = parts[0]
+                    if not parent and re.fullmatch(r'20\d{2}', folder_name):
+                        continue
                     folder_path = parent + folder_name + '/'
 
                     if folder_path not in folders:
