@@ -7,6 +7,7 @@
 
     const STORAGE_KEYS = {
         AUTH_TOKEN: 'docsearch_v2_access_token',
+        REFRESH_TOKEN: 'docsearch_v2_refresh_token',
         USER_DATA: 'docsearch_v2_user',
         THEME: 'docsearch_theme'
     };
@@ -59,17 +60,74 @@
             return token;
         },
 
-        redirectToLogin() {
-            const current = window.location.pathname;
-            if (current !== '/ui/login/') {
-                window.location.href = `/ui/login/?next=${encodeURIComponent(current)}`;
+        redirectToLogin(loginUrl = '/ui/login/', options = {}) {
+            const loginPath = new URL(loginUrl, window.location.origin).pathname;
+            const current = options.includeHash
+                ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+                : window.location.pathname;
+            if (window.location.pathname !== loginPath) {
+                window.location.href = `${loginUrl}?next=${encodeURIComponent(current)}`;
             }
         },
 
         logout() {
-            localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-            localStorage.removeItem(STORAGE_KEYS.USER_DATA);
+            this.clearSession();
             this.redirectToLogin();
+        },
+
+        clearSession(options = {}) {
+            const tokenKey = options.tokenKey || STORAGE_KEYS.AUTH_TOKEN;
+            const refreshTokenKey = options.refreshTokenKey || STORAGE_KEYS.REFRESH_TOKEN;
+            const userKey = options.userKey || STORAGE_KEYS.USER_DATA;
+            localStorage.removeItem(tokenKey);
+            localStorage.removeItem(refreshTokenKey);
+            localStorage.removeItem(userKey);
+            if (options.updateUi !== false) {
+                this.setAuthState(false);
+                this.renderSidebarUser({ userKey });
+            }
+        },
+
+        setAuthState(connected) {
+            document.body.classList.toggle('is-authenticated', Boolean(connected));
+            document.body.classList.toggle('is-anonymous', !connected);
+        },
+
+        renderSidebarUser(options = {}) {
+            const userKey = options.userKey || STORAGE_KEYS.USER_DATA;
+            let user = {};
+            try {
+                user = JSON.parse(localStorage.getItem(userKey) || '{}');
+            } catch (_) {
+                user = {};
+            }
+
+            const username = user.username || 'admin';
+            const isStaff = user.is_staff === true || user.role === 'admin';
+            const nameEl = document.getElementById('sidebarUserName');
+            const roleEl = document.getElementById('sidebarUserRole');
+            const avatarEl = document.querySelector('.sidebar-avatar');
+
+            if (nameEl) nameEl.textContent = username;
+            if (roleEl) roleEl.textContent = isStaff ? 'ADMINISTRADOR' : 'USUARIO';
+            if (avatarEl && username) avatarEl.textContent = username.slice(0, 2).toUpperCase();
+        },
+
+        async logoutAndRedirect(options = {}) {
+            const token = options.authToken || this.getAuthToken();
+            if (options.apiUrl && token) {
+                await fetch(options.apiUrl, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }).catch(() => null);
+            }
+            this.clearSession({
+                tokenKey: options.tokenKey,
+                refreshTokenKey: options.refreshTokenKey,
+                userKey: options.userKey,
+                updateUi: false
+            });
+            this.redirectToLogin(options.loginUiUrl || '/ui/login/', { includeHash: options.includeHash });
         },
 
         // --- HTTP ---
@@ -169,13 +227,35 @@
         syncThemeToggle() {
             const icon = document.getElementById('themeToggleIcon');
             if (!icon) return;
+            const button = document.getElementById('themeToggleBtn') || document.getElementById('btnThemeToggle');
             const current = document.documentElement.getAttribute('data-theme');
-            icon.className = current === 'dark' ? 'ti ti-moon' : 'ti ti-adjustments';
+            const themeIcons = {
+                'corp': 'ti ti-adjustments',
+                'light': 'ti ti-sun',
+                'dark': 'ti ti-moon',
+                'corp-dark': 'ti ti-moon-2'
+            };
+            const themeNames = {
+                'corp': 'Tema Corporativo',
+                'light': 'Tema Claro',
+                'dark': 'Tema Oscuro',
+                'corp-dark': 'Tema Corporativo Oscuro'
+            };
+
+            icon.className = themeIcons[current] || themeIcons.corp;
+            if (button) {
+                button.title = themeNames[current] || 'Cambiar tema';
+                button.setAttribute('aria-label', button.title);
+            }
         },
 
         toggleTheme() {
-            const current = document.documentElement.getAttribute('data-theme');
-            const next = current === 'dark' ? 'corp' : 'dark';
+            const current = document.documentElement.getAttribute('data-theme') || 'corp';
+            const themeSequence = ['corp', 'light', 'dark', 'corp-dark'];
+            const currentIndex = themeSequence.indexOf(current);
+            const nextIndex = (currentIndex + 1) % themeSequence.length;
+            const next = themeSequence[nextIndex];
+
             document.documentElement.setAttribute('data-theme', next);
             localStorage.setItem(STORAGE_KEYS.THEME, next);
             this.syncThemeToggle();

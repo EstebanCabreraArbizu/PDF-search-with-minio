@@ -22,11 +22,10 @@ const API = {
 };
 
 const SHARED = window.DocSearchShared;
-if (!SHARED) throw new Error('DocSearchShared no disponible. Verifica la carga de scripts base.');
 
-const TOKEN_KEY = SHARED.STORAGE_KEYS.AUTH_TOKEN;
-const REFRESH_TOKEN_KEY = SHARED.STORAGE_KEYS.REFRESH_TOKEN;
-const USER_KEY = SHARED.STORAGE_KEYS.USER_DATA;
+const TOKEN_KEY = SHARED?.STORAGE_KEYS?.AUTH_TOKEN || 'docsearch_v2_access_token';
+const REFRESH_TOKEN_KEY = SHARED?.STORAGE_KEYS?.REFRESH_TOKEN || 'docsearch_v2_refresh_token';
+const USER_KEY = SHARED?.STORAGE_KEYS?.USER_DATA || 'docsearch_v2_user';
 
 /* ── Estado global ──────────────────────────────────────────────────── */
 let authToken = null;
@@ -980,6 +979,20 @@ function focusSectionFromQuery() {
 
 /* ── BOOTSTRAP ──────────────────────────────────────────────────────── */
 async function bootstrap() {
+  if (!SHARED) {
+    console.error('DocSearchShared no disponible. Verifica la carga de scripts base.');
+    const container = document.getElementById('filesStateLoading');
+    if (container) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: #dc3545;">
+          <i class="ti ti-alert-circle" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
+          <h3>Error de carga</h3>
+          <p>No se pudo cargar el módulo de búsqueda. Por favor recarga la página o contacta al administrador.</p>
+        </div>
+      `;
+    }
+    return;
+  }
   SHARED.initTheme();
   SHARED.initGlobalUI();  // 🎨 Wire up theme toggle button and other global UI elements
   renderSidebarUser();
