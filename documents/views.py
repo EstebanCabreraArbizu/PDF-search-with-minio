@@ -2113,8 +2113,8 @@ class FoldersListView(APIView):
             parent += '/'
 
         try:
-            # 2. Sincronizar la búsqueda base con FilesListView
-            query = Q(is_active=True, index_state__is_indexed=True)
+             # 2. Sincronizar la búsqueda base con FilesListView
+            query = Q(is_active=True)
 
             if parent:
                 query &= Q(storage_object__object_key__startswith=parent) | Q(source_path_legacy__startswith=parent)

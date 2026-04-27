@@ -173,6 +173,15 @@
             icon.className = current === 'dark' ? 'ti ti-moon' : 'ti ti-adjustments';
         },
 
+        toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            const next = current === 'dark' ? 'corp' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem(STORAGE_KEYS.THEME, next);
+            this.syncThemeToggle();
+            return next;
+        },
+
         setLoading(btn, isLoading, text = 'Cargando...') {
             const el = typeof btn === 'string' ? document.getElementById(btn) : btn;
             if (!el) return;
@@ -480,11 +489,7 @@
             const btnTheme = document.getElementById('themeToggleBtn') || document.getElementById('btnThemeToggle');
             if (btnTheme) {
                 btnTheme.onclick = () => {
-                    const current = document.documentElement.getAttribute('data-theme');
-                    const next = current === 'dark' ? 'corp' : 'dark';
-                    document.documentElement.setAttribute('data-theme', next);
-                    localStorage.setItem(STORAGE_KEYS.THEME, next);
-                    this.syncThemeToggle();
+                    this.toggleTheme();
                 };
             }
 

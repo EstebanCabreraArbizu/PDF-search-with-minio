@@ -1,12 +1,32 @@
 /**
  * SEGUROS v2 Search - Refactored to use DocSearchCore App Factory
  */
-document.addEventListener('DOMContentLoaded', () => {
-    const { createSearchApp, safeText, formatPeriodo, API_PATHS, initTheme, syncThemeToggle, loadFilterOptions, populateSelect } = window.DocSearchCore;
+
+// Ensure DocSearchCore is available, or wait for it
+console.log('[search_seguros] Script loaded, checking DocSearchCore availability...');
+if (typeof window.DocSearchCore === 'undefined') {
+    console.warn('[search_seguros] DocSearchCore not loaded yet, waiting for DOMContentLoaded...');
+    document.addEventListener('DOMContentLoaded', initializeSegurosSearch);
+} else {
+    // DocSearchCore is already loaded, initialize immediately
+    console.log('[search_seguros] DocSearchCore is available, initializing immediately...');
+    initializeSegurosSearch();
+}
+
+function initializeSegurosSearch() {
+    // Get destructured functions from DocSearchCore
+    const { createSearchApp, safeText, formatPeriodo, API_PATHS, loadFilterOptions, populateSelect } = window.DocSearchCore;
     
-    // Initialize theme system
-    initTheme();
-    syncThemeToggle();
+    try {
+        console.log('[search_seguros] Initializing theme system...');
+        // Initialize theme system - call as methods to preserve 'this' context
+        window.DocSearchCore.initTheme();
+        window.DocSearchCore.initGlobalUI();  // 🎨 Wire up theme toggle button and other global UI elements
+        window.DocSearchCore.syncThemeToggle();
+        console.log('[search_seguros] Theme initialization complete');
+    } catch (error) {
+        console.error('[search_seguros] Error initializing theme:', error);
+    }
 
     // Load dynamic filters
     loadFilterOptions('SEGUROS').then(filters => {
@@ -162,4 +182,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     app.init();
-});
+}

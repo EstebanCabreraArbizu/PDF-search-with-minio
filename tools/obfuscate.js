@@ -19,7 +19,13 @@ const OBFUSCATOR_CONFIG = {
     deadCodeInjectionThreshold: 0.4,
     sourceMap: true,
     sourceMapMode: 'separate',
-    reservedNames: ['DocSearchCore', 'DocSearchShared', 'state', 'results', 'count', 'init', 'search', 'renderResults', 'renderPagination', 'isLoading', 'metadata']
+    reservedNames: [
+        'DocSearchCore', 'DocSearchShared', 
+        'state', 'results', 'count', 'init', 'search', 'renderResults', 'renderPagination', 'isLoading', 'metadata',
+        'toggleTheme', 'initTheme', 'syncThemeToggle', 'initGlobalUI', 'getAuthToken', 'getAuthHeaders', 'ensureAuth',
+        'redirectToLogin', 'logout', 'fetchJson', 'validateToken', 'safeText', 'formatPathLabel', 'formatPeriodo',
+        'showToast', 'setLoading', 'createSearchApp', 'downloadFile', 'loadFilterOptions', 'populateSelect'
+    ]
 };
 
 /**
@@ -39,7 +45,10 @@ const getAllJSFiles = (dirPath, arrayOfFiles = []) => {
                 getAllJSFiles(fullPath, arrayOfFiles);
             }
         } else if (file.endsWith('.js')) {
-            arrayOfFiles.push(fullPath);
+            // Skip ui_core_v2.js and search modules for debugging/consistency
+            if (!fullPath.endsWith('ui_core_v2.js') && !fullPath.includes('search_') && !fullPath.includes('login_v2.js')) {
+                arrayOfFiles.push(fullPath);
+            }
         }
     });
 
@@ -91,6 +100,25 @@ filesToObfuscate.forEach(filePath => {
         console.log(`✓ [OK] ${relativePath}`);
     } catch (err) {
         console.error(`✗ [ERROR] Failed to obfuscate ${relativePath}:`, err.message);
+    }
+});
+
+// Copy ui_core_v2.js and search modules without obfuscation (for debugging and consistency)
+const filesToCopy = [
+    'ui_core_v2.js',
+    'login_v2.js',
+    'search_seguros_v2.js',
+    'search_constancias_v2.js',
+    'search_tregistro_v2.js',
+    'search_files_v2.js'
+];
+
+filesToCopy.forEach(fileName => {
+    const source = path.join(JS_ROOT, fileName);
+    const dest = path.join(OUTPUT_DIR, fileName);
+    if (fs.existsSync(source)) {
+        fs.copyFileSync(source, dest);
+        console.log(`✓ [OK] ${fileName} (copied without obfuscation)`);
     }
 });
 

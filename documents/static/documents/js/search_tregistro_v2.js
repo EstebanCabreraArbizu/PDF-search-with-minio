@@ -1,12 +1,23 @@
 /**
  * T-REGISTRO v2 Search - Refactored to use DocSearchCore App Factory
  */
-document.addEventListener('DOMContentLoaded', () => {
-    const { createSearchApp, safeText, formatPeriodo, API_PATHS, initTheme, syncThemeToggle, loadFilterOptions, populateSelect } = window.DocSearchCore;
+
+// Ensure DocSearchCore is available, or wait for it
+if (typeof window.DocSearchCore === 'undefined') {
+    console.warn('DocSearchCore not loaded yet, waiting...');
+    document.addEventListener('DOMContentLoaded', initializeTregistroSearch);
+} else {
+    // DocSearchCore is already loaded, initialize immediately
+    initializeTregistroSearch();
+}
+
+function initializeTregistroSearch() {
+    const { createSearchApp, safeText, formatPeriodo, API_PATHS, loadFilterOptions, populateSelect } = window.DocSearchCore;
     
-    // Initialize theme system
-    initTheme();
-    syncThemeToggle();
+    // Initialize theme system - call as methods to preserve 'this' context
+    window.DocSearchCore.initTheme();
+    window.DocSearchCore.initGlobalUI();  // 🎨 Wire up theme toggle button and other global UI elements
+    window.DocSearchCore.syncThemeToggle();
 
     // Load dynamic filters
     loadFilterOptions('TREGISTRO').then(filters => {
@@ -161,4 +172,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     app.init();
-});
+}

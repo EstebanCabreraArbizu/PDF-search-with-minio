@@ -883,7 +883,7 @@ function bindAllEvents() {
   });
 
   /* Logout */
-  document.getElementById('logoutBtn')?.addEventListener('click', logout);
+  document.getElementById('btnLogout')?.addEventListener('click', logout);
 
   /* Paginación */
   document.getElementById('filesPrevBtn')?.addEventListener('click', () => {
@@ -981,6 +981,7 @@ function focusSectionFromQuery() {
 /* ── BOOTSTRAP ──────────────────────────────────────────────────────── */
 async function bootstrap() {
   SHARED.initTheme();
+  SHARED.initGlobalUI();  // 🎨 Wire up theme toggle button and other global UI elements
   renderSidebarUser();
 
   const hasSession = await restoreSession();

@@ -131,6 +131,7 @@ form.addEventListener('submit', async event => {
 
 (async function init() {
   SHARED.initTheme();
+  SHARED.initGlobalUI();  // 🎨 Setup theme toggle button and other global UI elements
   const nextPath = parseNextPath();
   if (nextHintNode) {
     nextHintNode.textContent = 'Ingresa tus credenciales para continuar.';
