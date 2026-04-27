@@ -2,7 +2,11 @@
  * T-REGISTRO v2 Search - Refactored to use DocSearchCore App Factory
  */
 document.addEventListener('DOMContentLoaded', () => {
-    const { createSearchApp, safeText, formatPeriodo, API_PATHS } = window.DocSearchCore;
+    const { createSearchApp, safeText, formatPeriodo, API_PATHS, initTheme, syncThemeToggle } = window.DocSearchCore;
+    
+    // Initialize theme system
+    initTheme();
+    syncThemeToggle();
 
     const app = createSearchApp({
         type: 'tregistro',

@@ -3,7 +3,11 @@
  * Powered by UI Core Framework
  */
 document.addEventListener('DOMContentLoaded', () => {
-    const { createSearchApp, safeText, formatPeriodo, API_PATHS } = window.DocSearchCore;
+    const { createSearchApp, safeText, formatPeriodo, API_PATHS, initTheme, syncThemeToggle } = window.DocSearchCore;
+    
+    // Initialize theme system
+    initTheme();
+    syncThemeToggle();
 
     const mesesMap = {
         '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
