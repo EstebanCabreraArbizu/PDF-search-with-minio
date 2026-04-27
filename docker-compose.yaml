@@ -1,6 +1,7 @@
-version: '3.8'
+# version: '3.8'
 
 services:
+  
   # ═══════════════════════════════════════════════════
   # NUEVO: PostgreSQL para usuarios
   # ═══════════════════════════════════════════════════
@@ -49,7 +50,7 @@ services:
   # SERVICIO 2: Flask (API de búsqueda)
   # ═══════════════════════════════════════════════════
   flask-app:
-    build: ./flask-app  # 🏗️ Construye desde Dockerfile local
+    build: ./flask_project  # 🏗️ Construye desde Dockerfile local
     container_name: flask-api
     ports:
       - "5000:5000"  # Tu API estará en http://localhost:5000
@@ -68,7 +69,49 @@ services:
       minio:
         condition: service_healthy #⏳ Espera a que MinIO inicie
     volumes:
-      - ./flask-app:/app  # 🔄 Hot-reload: cambios en código se reflejan al instante
+      - ./flask_project:/app  # 🔄 Hot-reload: cambios en código se reflejan al instante
+    networks:
+      - pdf-network
+
+  django-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NPM_GITHUB_TOKEN: ${NPM_GITHUB_TOKEN}
+    container_name: django-api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    environment:
+      # ═══════════════════════════════════════════════════
+      # 🆕 CONFIGURACIÓN DE SEGURIDAD
+      # ═══════════════════════════════════════════════════
+      - DJANGO_ENV=${DJANGO_ENV:-production}  # Permite controlar entorno desde .env
+      # ⚠️ IMPORTANTE: Genera una clave única y segura con:
+      # python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+      - DJANGO_SECRET_KEY=tu-clave-super-secreta-generada-aqui-cambiar-en-produccion
+      # ═══════════════════════════════════════════════════
+      # Base de datos
+      # ═══════════════════════════════════════════════════
+      - POSTGRES_DB=pdf_search
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password123  # ⚠️ Cambiar en producción
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      # ═══════════════════════════════════════════════════
+      # MinIO / S3
+      # ═══════════════════════════════════════════════════
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password123  # ⚠️ Cambiar en producción
+      - DEBUG=True
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     networks:
       - pdf-network
 

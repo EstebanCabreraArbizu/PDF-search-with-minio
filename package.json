@@ -1,0 +1,18 @@
+{
+    "name": "pdf-search-frontend",
+    "version": "1.0.0",
+    "description": "Frontend assets build and obfuscation",
+    "scripts": {
+        "obfuscate": "node tools/obfuscate.js",
+        "sync:corp-style": "node tools/sync-corp-style.js",
+        "build": "npm run sync:corp-style && npm run obfuscate",
+        "lint": "echo \"Linting... (no linter configured)\" && exit 0",
+        "test": "npm run lint && npm run build"
+    },
+    "dependencies": {
+        "@richard-paredes-1/corp-style": "1.0.0"
+    },
+    "devDependencies": {
+        "javascript-obfuscator": "4.1.0"
+    }
+}

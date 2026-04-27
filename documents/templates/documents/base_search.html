@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es" data-theme="corp">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block page_title_text %}LIDERMAN v2.1 TEST{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <link rel="stylesheet" href="{% static 'documents/vendor/corp-style.css' %}">
+  <link rel="stylesheet" href="{% static 'documents/css/theme.css' %}">
+  <link rel="stylesheet" href="{% static 'documents/css/search-document.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}search-page-body{% endblock %}">
+  {% include 'documents/partials/sidebar.html' %}
+
+  <section class="workspace">
+    {% include 'documents/partials/topbar.html' %}
+
+    <main class="content-area">
+      <div>
+        <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+        <p class="page-subtitle">{% block page_subtitle %}{% endblock %}</p>
+      </div>
+
+      {% block main_content %}{% endblock %}
+    </main>
+  </section>
+
+  {% if DEBUG %}
+    <script src="{% static 'documents/js/ui_core_v2.js' %}"></script>
+  {% else %}
+    <script src="{% static 'documents/js/dist/ui_core_v2.js' %}"></script>
+  {% endif %}
+  {% block page_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,6955 @@
+/*!
+ * @richard-paredes-1/corp-style v1.0.0
+ * Liderman Cyber-Midnight — CSS-only tokens, themes, and component styles with glassmorphism effects
+ * MIT License
+ */
+
+/* ==========================================================================
+   @liderman/corp-style — Main Entry Point
+   ==========================================================================
+   Import this single file to get the full design system:
+
+     CSS:  /* @import removed for Django static manifest */
+     JS:   import "@liderman/corp-style";
+
+   Load order matters:
+     1. Tokens (custom properties — layout, typography, spacing, motion)
+     2. Dark theme (default color tokens)
+     3. Light theme (overrides when [data-theme="light"])
+     4. Base reset & typography
+     5. Acrylic utilities
+     6. General utilities
+     7. Component styles
+   ========================================================================== */
+
+/* ==========================================================================
+   @acme/fluent-acrylic — Design Tokens
+   ==========================================================================
+   All design decisions live here as CSS custom properties.
+   Components MUST reference tokens — never hardcode values.
+
+   Naming convention:
+     --fa-{category}-{property}-{variant}
+     fa = fluent-acrylic prefix to avoid collisions.
+
+   Color decisions:
+     • Primary accent is Cyan-Teal (#00e5ff → #00ffff range)
+     • Secondary accent is Magenta for warnings/support (#e040fb)
+     • Neutrals derived from deep navy, not pure gray
+     • Text uses off-white (#e0e6ed) for body — not #fff — to reduce glare
+     • All accent colors tested for WCAG AA on dark surfaces
+   ========================================================================== */
+
+:root {
+  /* --------------------------------------------------------------------------
+     TYPOGRAPHY
+     System stack: Segoe UI (Windows) → SF Pro (macOS) → system fallbacks.
+     Monospace for code/labels matches the "cyber" aesthetic.
+     -------------------------------------------------------------------------- */
+  --fa-font-family-sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --fa-font-family-mono: "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", "SF Mono", monospace;
+  --fa-font-family-display: "Segoe UI", sans-serif;
+
+  /* Typographic scale — minor third (1.2) */
+  --fa-font-size-xs: 0.75rem;    /* 12px */
+  --fa-font-size-sm: 0.833rem;   /* ~13px */
+  --fa-font-size-base: 1rem;     /* 16px  */
+  --fa-font-size-md: 1.125rem;   /* 18px  */
+  --fa-font-size-lg: 1.35rem;    /* ~22px */
+  --fa-font-size-xl: 1.62rem;    /* ~26px */
+  --fa-font-size-2xl: 1.944rem;  /* ~31px */
+  --fa-font-size-3xl: 2.488rem;  /* ~40px */
+
+  --fa-font-weight-normal: 400;
+  --fa-font-weight-medium: 500;
+  --fa-font-weight-semibold: 600;
+  --fa-font-weight-bold: 700;
+
+  --fa-line-height-tight: 1.2;
+  --fa-line-height-normal: 1.5;
+  --fa-line-height-relaxed: 1.75;
+
+  --fa-letter-spacing-tight: -0.01em;
+  --fa-letter-spacing-normal: 0;
+  --fa-letter-spacing-wide: 0.04em;
+  --fa-letter-spacing-caps: 0.07em;
+
+  /* --------------------------------------------------------------------------
+     SPACING (4px base grid)
+     -------------------------------------------------------------------------- */
+  --fa-space-0: 0;
+  --fa-space-1: 0.25rem;  /* 4px  */
+  --fa-space-2: 0.5rem;   /* 8px  */
+  --fa-space-3: 0.75rem;  /* 12px */
+  --fa-space-4: 1rem;     /* 16px */
+  --fa-space-5: 1.25rem;  /* 20px */
+  --fa-space-6: 1.5rem;   /* 24px */
+  --fa-space-8: 2rem;     /* 32px */
+  --fa-space-10: 2.5rem;  /* 40px */
+  --fa-space-12: 3rem;    /* 48px */
+  --fa-space-16: 4rem;    /* 64px */
+
+  /* --------------------------------------------------------------------------
+     RADII
+     -------------------------------------------------------------------------- */
+  --fa-radius-sm: 0;
+  --fa-radius-md: 0;
+  --fa-radius-lg: 0;
+  --fa-radius-xl: 0;
+  --fa-radius-full: 9999px;
+
+  /* --------------------------------------------------------------------------
+     BORDERS
+     -------------------------------------------------------------------------- */
+  --fa-border-width: 1px;
+  --fa-border-width-thick: 2px;
+
+  /* --------------------------------------------------------------------------
+     SHADOWS
+     -------------------------------------------------------------------------- */
+  --fa-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --fa-shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.35);
+  --fa-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --fa-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --fa-shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.6);
+  --fa-shadow-glow-cyan: 0 0 15px rgba(0, 229, 255, 0.35);
+  --fa-shadow-glow-cyan-strong: 0 0 20px rgba(0, 229, 255, 0.55), 0 0 40px rgba(0, 229, 255, 0.15);
+
+  /* --------------------------------------------------------------------------
+     MOTION / TRANSITIONS
+     All transitions respect prefers-reduced-motion (handled in base.css).
+     -------------------------------------------------------------------------- */
+  --fa-duration-instant: 75ms;
+  --fa-duration-fast: 120ms;
+  --fa-duration-normal: 200ms;
+  --fa-duration-slow: 350ms;
+  --fa-duration-slower: 500ms;
+
+  --fa-easing-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --fa-easing-in: cubic-bezier(0.4, 0, 1, 1);
+  --fa-easing-out: cubic-bezier(0, 0, 0.2, 1);
+  --fa-easing-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  --fa-transition-colors: color var(--fa-duration-fast) var(--fa-easing-default),
+    background-color var(--fa-duration-fast) var(--fa-easing-default),
+    border-color var(--fa-duration-fast) var(--fa-easing-default),
+    box-shadow var(--fa-duration-fast) var(--fa-easing-default);
+  --fa-transition-transform: transform var(--fa-duration-normal) var(--fa-easing-out);
+  --fa-transition-opacity: opacity var(--fa-duration-normal) var(--fa-easing-default);
+  --fa-transition-all: all var(--fa-duration-normal) var(--fa-easing-default);
+
+  /* --------------------------------------------------------------------------
+     Z-INDEX
+     -------------------------------------------------------------------------- */
+  --fa-z-base: 0;
+  --fa-z-dropdown: 100;
+  --fa-z-sticky: 200;
+  --fa-z-overlay: 300;
+  --fa-z-modal: 400;
+  --fa-z-toast: 500;
+  --fa-z-tooltip: 600;
+
+  /* --------------------------------------------------------------------------
+     ACRYLIC
+     -------------------------------------------------------------------------- */
+  --fa-acrylic-blur: 20px;
+  --fa-acrylic-blur-strong: 40px;
+  --fa-acrylic-blur-subtle: 10px;
+  --fa-acrylic-saturation: 180%;
+  --fa-acrylic-noise-opacity: 0.03;
+
+  /* --------------------------------------------------------------------------
+     FOCUS
+     Visible focus ring — Fluent-style double ring (inner + outer).
+     -------------------------------------------------------------------------- */
+  --fa-focus-ring-width: 2px;
+  --fa-focus-ring-offset: 2px;
+}
+
+/* ==========================================================================
+   @acme/fluent-acrylic — Dark Theme (DEFAULT)
+   ==========================================================================
+   Applied to :root and [data-theme="dark"].
+   Colors calibrated against deep navy backgrounds for WCAG AA compliance.
+
+   Color rationale:
+     • bg-base (#050a0f) — near-black with blue tint for depth
+     • bg-surface-1/2/3 — layered surfaces, each brighter than the last
+     • text-primary (#e0e6ed) on bg-base = ~14.5:1 contrast ratio ✓
+     • accent (#00e5ff) on bg-surface-1 = ~8.2:1 contrast ratio ✓
+     • danger (#ff4d6a) on bg-surface-1 = ~5.1:1 contrast ratio ✓
+   ========================================================================== */
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* --- Neutrals / Backgrounds --- */
+  --fa-color-bg-base: #050a0f;
+  --fa-color-bg-surface-0: #080e14;
+  --fa-color-bg-surface-1: #0c1620;
+  --fa-color-bg-surface-2: #111d2b;
+  --fa-color-bg-surface-3: #172536;
+  --fa-color-bg-elevated: #1a2a3c;
+  --fa-color-bg-overlay: rgba(5, 10, 15, 0.75);
+
+  /* --- Text --- */
+  --fa-color-text-primary: #e0e6ed;
+  --fa-color-text-secondary: #8b9bb4;
+  --fa-color-text-tertiary: #5a6f8a;
+  --fa-color-text-disabled: #3a4a5e;
+  --fa-color-text-inverse: #050a0f;
+  --fa-color-text-on-accent: #050a0f;
+
+  /* --- Accent (Cyan-Teal) --- */
+  --fa-color-accent: #00e5ff;
+  --fa-color-accent-hover: #33ebff;
+  --fa-color-accent-active: #00bcd4;
+  --fa-color-accent-subtle: rgba(0, 229, 255, 0.1);
+  --fa-color-accent-subtle-hover: rgba(0, 229, 255, 0.18);
+  --fa-color-accent-muted: rgba(0, 229, 255, 0.55);
+
+  /* --- Secondary (Magenta) --- */
+  --fa-color-secondary: #e040fb;
+  --fa-color-secondary-hover: #e76dfc;
+  --fa-color-secondary-subtle: rgba(224, 64, 251, 0.12);
+
+  /* --- Semantic — Success --- */
+  --fa-color-success: #00e676;
+  --fa-color-success-subtle: rgba(0, 230, 118, 0.12);
+  --fa-color-success-text: #00e676;
+
+  /* --- Semantic — Warning --- */
+  --fa-color-warning: #ffab40;
+  --fa-color-warning-subtle: rgba(255, 171, 64, 0.12);
+  --fa-color-warning-text: #ffab40;
+
+  /* --- Semantic — Danger --- */
+  --fa-color-danger: #ff4d6a;
+  --fa-color-danger-hover: #ff6680;
+  --fa-color-danger-active: #e0334d;
+  --fa-color-danger-subtle: rgba(255, 77, 106, 0.12);
+  --fa-color-danger-text: #ff4d6a;
+
+  /* --- Semantic — Info --- */
+  --fa-color-info: #40c4ff;
+  --fa-color-info-subtle: rgba(64, 196, 255, 0.12);
+  --fa-color-info-text: #40c4ff;
+
+  /* --- Borders --- */
+  --fa-color-border: rgba(255, 255, 255, 0.06);
+  --fa-color-border-hover: rgba(255, 255, 255, 0.12);
+  --fa-color-border-accent: rgba(0, 229, 255, 0.2);
+  --fa-color-border-accent-strong: rgba(0, 229, 255, 0.45);
+  --fa-color-border-danger: rgba(255, 77, 106, 0.3);
+
+  /* --- Acrylic specific backgrounds --- */
+  --fa-acrylic-bg: rgba(8, 14, 20, 0.65);
+  --fa-acrylic-bg-strong: rgba(5, 10, 15, 0.8);
+  --fa-acrylic-bg-subtle: rgba(12, 22, 32, 0.45);
+  --fa-acrylic-border: rgba(0, 229, 255, 0.08);
+  --fa-acrylic-tint: rgba(0, 229, 255, 0.03);
+
+  /* --- Focus ring --- */
+  --fa-focus-ring-color: rgba(0, 229, 255, 0.7);
+  --fa-focus-ring-color-outer: rgba(0, 229, 255, 0.25);
+
+  /* --- Scrollbar --- */
+  --fa-scrollbar-thumb: rgba(0, 229, 255, 0.25);
+  --fa-scrollbar-thumb-hover: rgba(0, 229, 255, 0.5);
+  --fa-scrollbar-track: rgba(255, 255, 255, 0.04);
+
+  /* --- Background blobs (stronger opacity — filter:blur diffuses the color) --- */
+  --fa-bg-blob-1: rgba(0, 229, 255, 0.4);
+  --fa-bg-blob-2: rgba(0, 100, 220, 0.3);
+  --fa-bg-blob-3: rgba(0, 200, 255, 0.22);
+
+  /* --- Glow --- */
+  --fa-glow-text: 0 0 8px rgba(0, 229, 255, 0.5), 0 0 16px rgba(0, 229, 255, 0.2);
+  --fa-glow-text-strong: 0 0 10px rgba(0, 229, 255, 0.8), 0 0 24px rgba(0, 229, 255, 0.35);
+  --fa-glow-box: 0 0 12px rgba(0, 229, 255, 0.3);
+  --fa-glow-box-strong: 0 0 20px rgba(0, 229, 255, 0.5), 0 0 40px rgba(0, 229, 255, 0.15);
+}
+
+/* ==========================================================================
+   @acme/fluent-acrylic — Light Theme
+   ==========================================================================
+   Activated via [data-theme="light"] on <html> or any container.
+   Maintains the same token names, swapped to light-friendly values.
+   The acrylic effect adapts to lighter tints.
+
+   Contrast ratios (on bg-base #f0f3f7):
+     • text-primary (#111820) = ~15:1 ✓
+     • accent (#007a8a) = ~4.7:1 ✓ (darkened cyan for readability)
+     • danger (#c62040) = ~5.8:1 ✓
+   ========================================================================== */
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* --- Neutrals / Backgrounds --- */
+  --fa-color-bg-base: #f0f3f7;
+  --fa-color-bg-surface-0: #e8ecf2;
+  --fa-color-bg-surface-1: #ffffff;
+  --fa-color-bg-surface-2: #f6f8fa;
+  --fa-color-bg-surface-3: #edf0f5;
+  --fa-color-bg-elevated: #ffffff;
+  --fa-color-bg-overlay: rgba(240, 243, 247, 0.8);
+
+  /* --- Text --- */
+  --fa-color-text-primary: #111820;
+  --fa-color-text-secondary: #4a5568;
+  --fa-color-text-tertiary: #8795a8;
+  --fa-color-text-disabled: #b0bec5;
+  --fa-color-text-inverse: #e0e6ed;
+  --fa-color-text-on-accent: #ffffff;
+
+  /* --- Accent (Cyan-Teal — darkened for light surfaces) --- */
+  --fa-color-accent: #007a8a;
+  --fa-color-accent-hover: #009aab;
+  --fa-color-accent-active: #005f6b;
+  --fa-color-accent-subtle: rgba(0, 122, 138, 0.08);
+  --fa-color-accent-subtle-hover: rgba(0, 122, 138, 0.14);
+  --fa-color-accent-muted: rgba(0, 122, 138, 0.55);
+
+  /* --- Secondary (Magenta — darkened) --- */
+  --fa-color-secondary: #a020c0;
+  --fa-color-secondary-hover: #b640d8;
+  --fa-color-secondary-subtle: rgba(160, 32, 192, 0.08);
+
+  /* --- Semantic — Success --- */
+  --fa-color-success: #1b8a40;
+  --fa-color-success-subtle: rgba(27, 138, 64, 0.08);
+  --fa-color-success-text: #1b8a40;
+
+  /* --- Semantic — Warning --- */
+  --fa-color-warning: #c67a00;
+  --fa-color-warning-subtle: rgba(198, 122, 0, 0.08);
+  --fa-color-warning-text: #c67a00;
+
+  /* --- Semantic — Danger --- */
+  --fa-color-danger: #c62040;
+  --fa-color-danger-hover: #d83858;
+  --fa-color-danger-active: #a51030;
+  --fa-color-danger-subtle: rgba(198, 32, 64, 0.08);
+  --fa-color-danger-text: #c62040;
+
+  /* --- Semantic — Info --- */
+  --fa-color-info: #0070c0;
+  --fa-color-info-subtle: rgba(0, 112, 192, 0.08);
+  --fa-color-info-text: #0070c0;
+
+  /* --- Borders --- */
+  --fa-color-border: rgba(0, 0, 0, 0.08);
+  --fa-color-border-hover: rgba(0, 0, 0, 0.15);
+  --fa-color-border-accent: rgba(0, 122, 138, 0.25);
+  --fa-color-border-accent-strong: rgba(0, 122, 138, 0.5);
+  --fa-color-border-danger: rgba(198, 32, 64, 0.3);
+
+  /* --- Acrylic --- */
+  --fa-acrylic-bg: rgba(255, 255, 255, 0.6);
+  --fa-acrylic-bg-strong: rgba(255, 255, 255, 0.78);
+  --fa-acrylic-bg-subtle: rgba(255, 255, 255, 0.4);
+  --fa-acrylic-border: rgba(0, 122, 138, 0.1);
+  --fa-acrylic-tint: rgba(0, 122, 138, 0.02);
+
+  /* --- Focus ring --- */
+  --fa-focus-ring-color: rgba(0, 122, 138, 0.7);
+  --fa-focus-ring-color-outer: rgba(0, 122, 138, 0.2);
+
+  /* --- Scrollbar --- */
+  --fa-scrollbar-thumb: rgba(0, 150, 170, 0.35);
+  --fa-scrollbar-thumb-hover: rgba(0, 150, 170, 0.6);
+  --fa-scrollbar-track: rgba(0, 0, 0, 0.05);
+
+  /* --- Background blobs (stronger opacity — filter:blur diffuses the color) --- */
+  --fa-bg-blob-1: rgba(0, 122, 138, 0.22);
+  --fa-bg-blob-2: rgba(0, 80, 180, 0.16);
+  --fa-bg-blob-3: rgba(0, 160, 180, 0.12);
+
+  /* --- Glow (muted in light mode) --- */
+  --fa-glow-text: none;
+  --fa-glow-text-strong: 0 0 6px rgba(0, 122, 138, 0.25);
+  --fa-glow-box: 0 0 8px rgba(0, 122, 138, 0.12);
+  --fa-glow-box-strong: 0 0 14px rgba(0, 122, 138, 0.2);
+
+  /* --- Shadows (softer for light) --- */
+  --fa-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --fa-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.06);
+  --fa-shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
+  --fa-shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.1);
+  --fa-shadow-xl: 0 12px 28px rgba(0, 0, 0, 0.12);
+}
+
+/* ==========================================================================
+   @acme/fluent-acrylic — Corp Mode Theme
+   ==========================================================================
+   Activated via [data-theme="corp"] on <html> or any container.
+   A professional corporate variant of the light theme.
+
+   Design rationale:
+     • Grey dominates all passive/structural elements (borders, surfaces, scrollbar, acrylic)
+     • Red (#AB0000) fires only on interaction: primary CTAs, active nav, links, focus ring
+     • This creates contrast — red pops intentionally rather than flooding the UI
+     • No glow effects — cold, professional feel
+     • High contrast for legibility in formal/enterprise contexts
+
+   Contrast ratios (on bg-base #f2f2f4):
+     • text-primary (#1a1a1e) = ~15:1 ✓
+     • accent (#AB0000) on white = ~5.9:1 ✓ (WCAG AA)
+     • danger (#e01010) on white = ~4.6:1 ✓
+   ========================================================================== */
+
+[data-theme="corp"] {
+  color-scheme: light;
+
+  /* --- Neutrals / Backgrounds (cool blue-grey tint — plays well against red pops) --- */
+  --fa-color-bg-base: #f1f2f5;
+  --fa-color-bg-surface-0: #eaebef;
+  --fa-color-bg-surface-1: #ffffff;
+  --fa-color-bg-surface-2: #f6f7fa;
+  --fa-color-bg-surface-3: #edeef2;
+  --fa-color-bg-elevated: #ffffff;
+  --fa-color-bg-overlay: rgba(241, 242, 245, 0.85);
+
+  /* --- Text --- */
+  --fa-color-text-primary: #1a1a1e;
+  --fa-color-text-secondary: #4a4a52;
+  --fa-color-text-tertiary: #8a8a94;
+  --fa-color-text-disabled: #b8b8c2;
+  --fa-color-text-inverse: #f2f2f4;
+  --fa-color-text-on-accent: #ffffff;
+
+  /* --- Accent (Corporate Red — reserved for interactive moments only) --- */
+  --fa-color-accent: #ab0000;
+  --fa-color-accent-hover: #c80000;
+  --fa-color-accent-active: #890000;
+  --fa-color-accent-subtle: rgba(100, 100, 115, 0.07);   /* grey, not red — passive surfaces stay neutral */
+  --fa-color-accent-subtle-hover: rgba(171, 0, 0, 0.09); /* red surfaces on intentional hover */
+  --fa-color-accent-muted: rgba(171, 0, 0, 0.5);
+
+  /* --- Secondary (steel grey — the main structural partner to red) --- */
+  --fa-color-secondary: #4a5568;
+  --fa-color-secondary-hover: #5a6680;
+  --fa-color-secondary-subtle: rgba(74, 85, 104, 0.08);
+
+  /* --- Semantic — Success --- */
+  --fa-color-success: #166534;
+  --fa-color-success-subtle: rgba(22, 101, 52, 0.08);
+  --fa-color-success-text: #166534;
+
+  /* --- Semantic — Warning --- */
+  --fa-color-warning: #92400e;
+  --fa-color-warning-subtle: rgba(146, 64, 14, 0.08);
+  --fa-color-warning-text: #92400e;
+
+  /* --- Semantic — Danger (vivid, eye-catching red) --- */
+  --fa-color-danger: #e01010;
+  --fa-color-danger-hover: #f52020;
+  --fa-color-danger-active: #b80d0d;
+  --fa-color-danger-subtle: rgba(224, 16, 16, 0.08);
+  --fa-color-danger-text: #c40e0e;
+
+  /* --- Semantic — Info --- */
+  --fa-color-info: #1e40af;
+  --fa-color-info-subtle: rgba(30, 64, 175, 0.08);
+  --fa-color-info-text: #1e40af;
+
+  /* --- Borders (grey by default — red only for strong active/focus) --- */
+  --fa-color-border: rgba(0, 0, 0, 0.09);
+  --fa-color-border-hover: rgba(0, 0, 0, 0.18);
+  --fa-color-border-accent: rgba(90, 95, 115, 0.22);        /* grey — passive accent borders */
+  --fa-color-border-accent-strong: rgba(171, 0, 0, 0.5);   /* red — active/focus states */
+  --fa-color-border-danger: rgba(224, 16, 16, 0.3);
+
+  /* --- Acrylic (grey-neutral tint — no red bleed) --- */
+  --fa-acrylic-bg: rgba(255, 255, 255, 0.68);
+  --fa-acrylic-bg-strong: rgba(255, 255, 255, 0.84);
+  --fa-acrylic-bg-subtle: rgba(255, 255, 255, 0.44);
+  --fa-acrylic-border: rgba(80, 85, 100, 0.1);  /* grey */
+  --fa-acrylic-tint: rgba(90, 95, 110, 0.02);   /* grey */
+
+  /* --- Focus ring (red inner for visibility, grey outer for subtlety) --- */
+  --fa-focus-ring-color: rgba(171, 0, 0, 0.7);
+  --fa-focus-ring-color-outer: rgba(90, 95, 115, 0.15);
+
+  /* --- Scrollbar (grey at rest — red on hover for that intentional red pop) --- */
+  --fa-scrollbar-thumb: rgba(90, 95, 115, 0.3);
+  --fa-scrollbar-thumb-hover: rgba(171, 0, 0, 0.5);
+  --fa-scrollbar-track: rgba(0, 0, 0, 0.04);
+
+  /* --- Glow (none — corp mode is cold and sharp, no luminosity) --- */
+  --fa-glow-text: none;
+  --fa-glow-text-strong: none;
+  --fa-glow-box: none;
+  --fa-glow-box-strong: none;
+
+  /* --- Shadows --- */
+  --fa-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --fa-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.07);
+  --fa-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.09);
+  --fa-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.11);
+  --fa-shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.13);
+  --fa-shadow-glow-cyan: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --fa-shadow-glow-cyan-strong: 0 4px 16px rgba(0, 0, 0, 0.14);
+
+  /* --- Background blobs (neutral grey — no color tint) --- */
+  --fa-bg-blob-1: rgba(130, 130, 145, 0.38);
+  --fa-bg-blob-2: rgba(100, 100, 115, 0.28);
+  --fa-bg-blob-3: rgba(115, 115, 130, 0.22);
+}
+
+/* ==========================================================================
+   Corp Mode — Component semantic overrides
+   --------------------------------------------------------------------------
+   In corp mode the accent color is red (#AB0000). To avoid confusion with
+   danger/error states, "accent" alerts and toasts are remapped to the info
+   blue so that red is reserved exclusively for destructive actions.
+   ========================================================================== */
+
+[data-theme="corp"] .alert--accent {
+  border-left-color: var(--fa-color-info);
+  background: var(--fa-color-info-subtle);
+}
+[data-theme="corp"] .alert--accent .alert__icon { color: var(--fa-color-info); }
+[data-theme="corp"] .alert--accent .alert__title { color: var(--fa-color-info-text); }
+
+[data-theme="corp"] .toast--accent {
+  border-left-color: var(--fa-color-info);
+}
+[data-theme="corp"] .toast--accent .toast__icon { color: var(--fa-color-info); }
+[data-theme="corp"] .toast--accent .toast__title { color: var(--fa-color-info-text); }
+
+/* ==========================================================================
+   @acme/fluent-acrylic — Corp Dark Theme
+   ==========================================================================
+   Activated via [data-theme="corp-dark"] on <html> or any container.
+   Dark variant of Corp Mode — same red/grey philosophy, dark surfaces.
+
+   Design rationale:
+     • Dark charcoal surfaces (warm-neutral — NOT the blue-tinted Dark Mode)
+     • Grey dominates all passive/structural elements (borders, acrylic, scrollbar)
+     • Red (muted burgundy) fires on interaction only
+     • No glow effects — corp stays cold and sharp regardless of surface brightness
+     • Distinct from the cyan Dark Mode: no teal, no luminosity, no blobs
+
+   Contrast ratios (on bg-surface-1 #1e1e21):
+     • text-primary (#e8e8ec) = ~14:1 ✓
+     • accent (muted red) on surface-1 = high visual priority without neon feel
+     • danger (muted red) preserves destructive hierarchy
+   ========================================================================== */
+
+[data-theme="corp-dark"] {
+  color-scheme: dark;
+
+  /* --- Neutrals / Backgrounds (warm charcoal — no blue tint) --- */
+  --fa-color-bg-base: #111113;
+  --fa-color-bg-surface-0: #161618;
+  --fa-color-bg-surface-1: #1e1e21;
+  --fa-color-bg-surface-2: #252528;
+  --fa-color-bg-surface-3: #2d2d31;
+  --fa-color-bg-elevated: #2d2d31;
+  --fa-color-bg-overlay: rgba(17, 17, 19, 0.8);
+
+  /* --- Text --- */
+  --fa-color-text-primary: #e8e8ec;
+  --fa-color-text-secondary: #9898a4;
+  --fa-color-text-tertiary: #60606c;
+  --fa-color-text-disabled: #404048;
+  --fa-color-text-inverse: #111113;
+  --fa-color-text-on-accent: #ffffff;
+
+  /* --- Accent (Corp Red — muted to avoid neon intensity) --- */
+  --fa-color-accent: #8e1a34;
+  --fa-color-accent-hover: #9a2240;
+  --fa-color-accent-active: #6a0f25;
+  --fa-color-accent-subtle: rgba(80, 80, 95, 0.15);      /* grey passive surfaces */
+  --fa-color-accent-subtle-hover: rgba(142, 26, 52, 0.26); /* red on intentional hover */
+  --fa-color-accent-muted: rgba(142, 26, 52, 0.66);
+
+  /* --- Secondary (steel grey) --- */
+  --fa-color-secondary: #7a7a88;
+  --fa-color-secondary-hover: #9090a0;
+  --fa-color-secondary-subtle: rgba(100, 100, 115, 0.12);
+
+  /* --- Semantic — Success --- */
+  --fa-color-success: #22c55e;
+  --fa-color-success-subtle: rgba(34, 197, 94, 0.1);
+  --fa-color-success-text: #22c55e;
+
+  /* --- Semantic — Warning --- */
+  --fa-color-warning: #f59e0b;
+  --fa-color-warning-subtle: rgba(245, 158, 11, 0.1);
+  --fa-color-warning-text: #f59e0b;
+
+  /* --- Semantic — Danger (muted, still clearly destructive) --- */
+  --fa-color-danger: #921d3a;
+  --fa-color-danger-hover: #9f2747;
+  --fa-color-danger-active: #6d1229;
+  --fa-color-danger-subtle: rgba(146, 29, 58, 0.18);
+  --fa-color-danger-text: #b44f67;
+
+  /* --- Semantic — Info --- */
+  --fa-color-info: #3b82f6;
+  --fa-color-info-subtle: rgba(59, 130, 246, 0.1);
+  --fa-color-info-text: #3b82f6;
+
+  /* --- Borders (grey — never red for passive borders) --- */
+  --fa-color-border: rgba(255, 255, 255, 0.07);
+  --fa-color-border-hover: rgba(255, 255, 255, 0.13);
+  --fa-color-border-accent: rgba(120, 120, 135, 0.2);       /* grey passive */
+  --fa-color-border-accent-strong: rgba(142, 26, 52, 0.72);   /* red active/focus */
+  --fa-color-border-danger: rgba(146, 29, 58, 0.55);
+
+  /* --- Acrylic (dark grey tint — no red) --- */
+  --fa-acrylic-bg: rgba(22, 22, 24, 0.72);
+  --fa-acrylic-bg-strong: rgba(17, 17, 19, 0.85);
+  --fa-acrylic-bg-subtle: rgba(30, 30, 33, 0.5);
+  --fa-acrylic-border: rgba(100, 100, 115, 0.1);  /* grey */
+  --fa-acrylic-tint: rgba(90, 90, 105, 0.025);    /* grey */
+
+  /* --- Focus ring (muted red inner for visibility, grey outer) --- */
+  --fa-focus-ring-color: rgba(142, 26, 52, 0.92);
+  --fa-focus-ring-color-outer: rgba(100, 100, 115, 0.2);
+
+  /* --- Scrollbar (grey at rest, muted red pop on hover) --- */
+  --fa-scrollbar-thumb: rgba(100, 100, 115, 0.3);
+  --fa-scrollbar-thumb-hover: rgba(142, 26, 52, 0.72);
+  --fa-scrollbar-track: rgba(255, 255, 255, 0.03);
+
+  /* --- Glow (none — corp is always sharp, no luminosity) --- */
+  --fa-glow-text: none;
+  --fa-glow-text-strong: none;
+  --fa-glow-box: none;
+  --fa-glow-box-strong: none;
+
+  /* --- Shadows (deep, no color) --- */
+  --fa-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --fa-shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45);
+  --fa-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --fa-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.55);
+  --fa-shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.65);
+  --fa-shadow-glow-cyan: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --fa-shadow-glow-cyan-strong: 0 4px 16px rgba(0, 0, 0, 0.6);
+
+  /* --- Background blobs (whiter grey — visible against dark charcoal) --- */
+  --fa-bg-blob-1: rgba(210, 210, 225, 0.14);
+  --fa-bg-blob-2: rgba(190, 190, 210, 0.10);
+  --fa-bg-blob-3: rgba(200, 200, 218, 0.08);
+}
+
+/* ==========================================================================
+   Corp Dark — Component semantic overrides
+   --------------------------------------------------------------------------
+   Same rules as corp light: accent toasts/alerts → blue info.
+   ========================================================================== */
+
+[data-theme="corp-dark"] .alert--accent {
+  border-left-color: var(--fa-color-info);
+  background: var(--fa-color-info-subtle);
+}
+[data-theme="corp-dark"] .alert--accent .alert__icon { color: var(--fa-color-info); }
+[data-theme="corp-dark"] .alert--accent .alert__title { color: var(--fa-color-info-text); }
+
+[data-theme="corp-dark"] .toast--accent {
+  border-left-color: var(--fa-color-info);
+}
+[data-theme="corp-dark"] .toast--accent .toast__icon { color: var(--fa-color-info); }
+[data-theme="corp-dark"] .toast--accent .toast__title { color: var(--fa-color-info-text); }
+
+/* ==========================================================================
+   @acme/fluent-acrylic — Base Reset & Global Styles
+   ==========================================================================
+   Minimal reset + global typographic defaults + reduced-motion + scrollbar
+   styling. Applied once at the root level.
+   ========================================================================== */
+
+/* --- Box-sizing reset --- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* --- Reset margins --- */
+* {
+  margin: 0;
+}
+
+/* --- Document --- */
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+  tab-size: 4;
+}
+
+body {
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-base);
+  font-weight: var(--fa-font-weight-normal);
+  line-height: var(--fa-line-height-normal);
+  color: var(--fa-color-text-primary);
+  background-color: var(--fa-color-bg-base);
+  background-attachment: fixed;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  transition: background-color var(--fa-duration-slow) var(--fa-easing-default),
+    color var(--fa-duration-slow) var(--fa-easing-default);
+}
+
+/* --- Animated background blobs --- */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
+  will-change: transform;
+}
+
+body::before {
+  width: min(700px, 65vw);
+  height: min(700px, 65vw);
+  top: -20%;
+  left: -15%;
+  background: var(--fa-bg-blob-1);
+  filter: blur(90px);
+  animation: fa-blob-float-1 22s ease-in-out infinite;
+}
+
+body::after {
+  width: min(600px, 55vw);
+  height: min(600px, 55vw);
+  bottom: -15%;
+  right: -10%;
+  background: var(--fa-bg-blob-2);
+  filter: blur(80px);
+  animation: fa-blob-float-2 28s ease-in-out infinite;
+}
+
+@keyframes fa-blob-float-1 {
+  0%   { transform: translate(0,      0);      }
+  20%  { transform: translate(40vw,   15vh);   }
+  40%  { transform: translate(55vw,   55vh);   }
+  60%  { transform: translate(20vw,   70vh);   }
+  80%  { transform: translate(5vw,    35vh);   }
+  100% { transform: translate(0,      0);      }
+}
+
+@keyframes fa-blob-float-2 {
+  0%   { transform: translate(0,      0);      }
+  20%  { transform: translate(-35vw, -20vh);   }
+  40%  { transform: translate(-55vw, -55vh);   }
+  60%  { transform: translate(-15vw, -65vh);   }
+  80%  { transform: translate(-5vw,  -30vh);   }
+  100% { transform: translate(0,      0);      }
+}
+
+/* --- Typography defaults --- */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--fa-font-family-display);
+  font-weight: var(--fa-font-weight-semibold);
+  line-height: var(--fa-line-height-tight);
+  letter-spacing: var(--fa-letter-spacing-tight);
+  color: var(--fa-color-text-primary);
+}
+
+h1 { font-size: var(--fa-font-size-3xl); }
+h2 { font-size: var(--fa-font-size-2xl); }
+h3 { font-size: var(--fa-font-size-xl); }
+h4 { font-size: var(--fa-font-size-lg); }
+h5 { font-size: var(--fa-font-size-md); }
+h6 { font-size: var(--fa-font-size-base); }
+
+p {
+  line-height: var(--fa-line-height-normal);
+  color: var(--fa-color-text-secondary);
+}
+
+a {
+  color: var(--fa-color-accent);
+  text-decoration: none;
+  transition: var(--fa-transition-colors);
+}
+
+a:hover {
+  color: var(--fa-color-accent-hover);
+  text-decoration: underline;
+}
+
+code, kbd, samp, pre {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-sm);
+}
+
+code {
+  padding: 0.15em 0.4em;
+  border-radius: var(--fa-radius-sm);
+  background: var(--fa-color-accent-subtle);
+  color: var(--fa-color-accent);
+}
+
+pre {
+  padding: var(--fa-space-4);
+  border-radius: var(--fa-radius-md);
+  background: var(--fa-color-bg-surface-1);
+  overflow-x: auto;
+}
+
+pre code {
+  padding: 0;
+  background: transparent;
+}
+
+/* --- Media --- */
+img, picture, video, canvas, svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* --- Form defaults --- */
+input, button, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+/* --- Reduced motion --- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- Focus ring (global) --- */
+:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: var(--fa-focus-ring-offset);
+  border-radius: inherit;
+}
+
+/* Remove default focus for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* --- Scrollbar styling --- */
+
+/*
+ * Custom scrollbar: thin rectangular bar, no arrows, themed colors.
+ *
+ * Strategy:
+ * - Webkit/Blink (Chrome, Edge, Safari): use ::-webkit-scrollbar pseudo-elements.
+ *   When these are present the browser ignores native scrollbar entirely,
+ *   giving full control over shape, size, and arrows.
+ * - Firefox: use scrollbar-width + scrollbar-color (thin mode removes arrows).
+ *
+ * IMPORTANT: do NOT set scrollbar-width on elements in Webkit/Edge.
+ * If both scrollbar-width and ::-webkit-scrollbar are present,
+ * Edge prioritizes scrollbar-width (native renderer) over the pseudo-elements,
+ * which brings back arrows and rounded ends.
+ */
+
+/* --- Webkit / Blink custom scrollbar --- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+::-webkit-scrollbar-button:start:decrement,
+::-webkit-scrollbar-button:end:increment,
+::-webkit-scrollbar-button:start:increment,
+::-webkit-scrollbar-button:end:decrement {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--fa-scrollbar-track);
+}
+
+::-webkit-scrollbar-track-piece {
+  background: var(--fa-scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--fa-scrollbar-thumb);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fa-scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* --- Firefox only: thin scrollbar (no arrows in thin mode) --- */
+@-moz-document url-prefix() {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--fa-scrollbar-thumb) var(--fa-scrollbar-track);
+  }
+}
+
+/* --- Selection --- */
+::selection {
+  background: var(--fa-color-accent-subtle-hover);
+  color: var(--fa-color-text-primary);
+}
+
+/* --- Table reset --- */
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+/* --- List reset helper --- */
+.list-reset {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* --- Screen reader only --- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ==========================================================================
+   @acme/fluent-acrylic — Acrylic Layer Utilities
+   ==========================================================================
+   Glassmorphism layers using backdrop-filter.
+   Three intensities: subtle, default, strong.
+   Includes @supports fallback for browsers without backdrop-filter.
+
+   Usage:
+     <div class="acrylic">…</div>
+     <div class="acrylic acrylic--strong">…</div>
+     <div class="acrylic acrylic--subtle">…</div>
+   ========================================================================== */
+
+/* --- Base acrylic --- */
+.acrylic {
+  position: relative;
+  background: var(--fa-acrylic-bg);
+  border: var(--fa-border-width) solid var(--fa-acrylic-border);
+  border-radius: var(--fa-radius-lg);
+  box-shadow: var(--fa-shadow-lg);
+  overflow: hidden;
+}
+
+/* Blur + saturation via backdrop-filter */
+@supports (backdrop-filter: blur(1px)) {
+  .acrylic {
+    backdrop-filter: blur(var(--fa-acrylic-blur)) saturate(var(--fa-acrylic-saturation));
+    -webkit-backdrop-filter: blur(var(--fa-acrylic-blur)) saturate(var(--fa-acrylic-saturation));
+  }
+}
+
+@supports (-webkit-backdrop-filter: blur(1px)) {
+  .acrylic {
+    -webkit-backdrop-filter: blur(var(--fa-acrylic-blur)) saturate(var(--fa-acrylic-saturation));
+  }
+}
+
+/* Fallback: darker solid background when backdrop-filter not supported */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .acrylic {
+    background: var(--fa-color-bg-surface-1);
+  }
+  .acrylic.acrylic--strong {
+    background: var(--fa-color-bg-surface-0);
+  }
+  .acrylic.acrylic--subtle {
+    background: var(--fa-color-bg-surface-2);
+  }
+}
+
+/* --- Acrylic noise overlay (optional) ---
+   Adds a subtle noise texture using a pseudo-element.
+   Enable by adding class .acrylic--noise */
+.acrylic--noise::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--fa-acrylic-noise-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 128px 128px;
+  border-radius: inherit;
+}
+
+.acrylic--noise > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Strong variant --- */
+.acrylic--strong {
+  background: var(--fa-acrylic-bg-strong);
+  border-color: var(--fa-color-border-accent);
+  box-shadow: var(--fa-shadow-xl);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .acrylic--strong {
+    backdrop-filter: blur(var(--fa-acrylic-blur-strong)) saturate(var(--fa-acrylic-saturation));
+    -webkit-backdrop-filter: blur(var(--fa-acrylic-blur-strong)) saturate(var(--fa-acrylic-saturation));
+  }
+}
+
+/* --- Subtle variant --- */
+.acrylic--subtle {
+  background: var(--fa-acrylic-bg-subtle);
+  border-color: var(--fa-color-border);
+  box-shadow: var(--fa-shadow-sm);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .acrylic--subtle {
+    backdrop-filter: blur(var(--fa-acrylic-blur-subtle)) saturate(var(--fa-acrylic-saturation));
+    -webkit-backdrop-filter: blur(var(--fa-acrylic-blur-subtle)) saturate(var(--fa-acrylic-saturation));
+  }
+}
+
+/* --- Acrylic with cyan tint overlay --- */
+.acrylic--tint::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--fa-acrylic-tint);
+  border-radius: inherit;
+  z-index: 0;
+}
+
+.acrylic--tint > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Acrylic interactive (hover glow) --- */
+.acrylic--interactive {
+  transition: var(--fa-transition-colors), box-shadow var(--fa-duration-normal) var(--fa-easing-default);
+  cursor: pointer;
+}
+
+.acrylic--interactive:hover {
+  border-color: var(--fa-color-border-accent);
+  box-shadow: var(--fa-shadow-lg), var(--fa-glow-box);
+}
+
+.acrylic--interactive:active {
+  box-shadow: var(--fa-shadow-md);
+}
+
+/* ==========================================================================
+   @acme/fluent-acrylic — Utility Classes
+   ==========================================================================
+   Lightweight utility classes for common patterns.
+   Not a full utility framework — just what the design system needs.
+   ========================================================================== */
+
+/* --- Text utilities --- */
+.text-accent { color: var(--fa-color-accent); }
+.text-secondary { color: var(--fa-color-text-secondary); }
+.text-tertiary { color: var(--fa-color-text-tertiary); }
+.text-danger { color: var(--fa-color-danger-text); }
+.text-success { color: var(--fa-color-success-text); }
+.text-warning { color: var(--fa-color-warning-text); }
+
+.text-caps {
+  text-transform: uppercase;
+  letter-spacing: var(--fa-letter-spacing-caps);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-semibold);
+}
+
+.text-mono {
+  font-family: var(--fa-font-family-mono);
+}
+
+/* --- Glow text --- */
+.glow-text {
+  color: var(--fa-color-accent);
+  text-shadow: var(--fa-glow-text);
+}
+
+.glow-text--strong {
+  color: var(--fa-color-accent);
+  text-shadow: var(--fa-glow-text-strong);
+}
+
+/* --- Truncate --- */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Flex utilities --- */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.items-end { align-items: flex-end; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.justify-end { justify-content: flex-end; }
+.gap-1 { gap: var(--fa-space-1); }
+.gap-2 { gap: var(--fa-space-2); }
+.gap-3 { gap: var(--fa-space-3); }
+.gap-4 { gap: var(--fa-space-4); }
+.gap-6 { gap: var(--fa-space-6); }
+.gap-8 { gap: var(--fa-space-8); }
+.flex-1 { flex: 1; }
+
+/* --- Grid utilities --- */
+.grid { display: grid; }
+
+/* --- Spacing helpers --- */
+.p-0  { padding: var(--fa-space-0); }
+.p-2  { padding: var(--fa-space-2); }
+.p-3  { padding: var(--fa-space-3); }
+.p-4  { padding: var(--fa-space-4); }
+.p-6  { padding: var(--fa-space-6); }
+.p-8  { padding: var(--fa-space-8); }
+.px-4 { padding-left: var(--fa-space-4); padding-right: var(--fa-space-4); }
+.py-2 { padding-top: var(--fa-space-2); padding-bottom: var(--fa-space-2); }
+.py-3 { padding-top: var(--fa-space-3); padding-bottom: var(--fa-space-3); }
+.m-0  { margin: var(--fa-space-0); }
+.mb-2 { margin-bottom: var(--fa-space-2); }
+.mb-4 { margin-bottom: var(--fa-space-4); }
+.mb-6 { margin-bottom: var(--fa-space-6); }
+.mt-4 { margin-top: var(--fa-space-4); }
+
+/* --- Width helpers --- */
+.w-full { width: 100%; }
+
+/* --- Border radius --- */
+.rounded-sm { border-radius: var(--fa-radius-sm); }
+.rounded-md { border-radius: var(--fa-radius-md); }
+.rounded-lg { border-radius: var(--fa-radius-lg); }
+.rounded-full { border-radius: var(--fa-radius-full); }
+
+/* --- Status dot (online/offline indicator) --- */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--fa-radius-full);
+  background: var(--fa-color-accent);
+  box-shadow: 0 0 6px var(--fa-color-accent);
+}
+
+.status-dot--offline {
+  background: var(--fa-color-text-tertiary);
+  box-shadow: none;
+}
+
+.status-dot--warning {
+  background: var(--fa-color-warning);
+  box-shadow: 0 0 6px var(--fa-color-warning);
+}
+
+.status-dot--danger {
+  background: var(--fa-color-danger);
+  box-shadow: 0 0 6px var(--fa-color-danger);
+}
+
+/* ==========================================================================
+   @acme/fluent-acrylic — Components Index
+   ========================================================================== */
+
+/* ==========================================================================
+   Component: Button (.btn)
+   ==========================================================================
+   Variants: --primary (default accent), --ghost, --danger, --secondary
+   Sizes: --sm, (default), --lg
+   States: hover, active, focus-visible, disabled, loading
+
+   Design notes:
+     • Primary uses solid cyan bg with dark text for max contrast
+     • Ghost is transparent with accent border on hover
+     • All buttons use token-based colors — never hardcoded
+     • Active state has subtle inset shadow for tactile feedback
+     • Disabled uses reduced opacity + no pointer events
+   ========================================================================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--fa-space-2);
+  font-family: var(--fa-font-family-sans);
+  font-weight: var(--fa-font-weight-semibold);
+  font-size: var(--fa-font-size-sm);
+  line-height: 1;
+  letter-spacing: var(--fa-letter-spacing-wide);
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  border: var(--fa-border-width) solid transparent;
+  border-radius: var(--fa-radius-md);
+  padding: var(--fa-space-3) var(--fa-space-6);
+  min-height: 40px;
+  transition: var(--fa-transition-colors),
+    transform var(--fa-duration-fast) var(--fa-easing-out),
+    box-shadow var(--fa-duration-fast) var(--fa-easing-default);
+  position: relative;
+  overflow: hidden;
+
+  /* Default: filled subtle style */
+  background: var(--fa-color-bg-surface-2);
+  color: var(--fa-color-text-primary);
+  border-color: var(--fa-color-border);
+}
+
+.btn:hover {
+  background: var(--fa-color-bg-surface-3);
+  border-color: var(--fa-color-border-hover);
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: var(--fa-focus-ring-offset);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* --- Primary --- */
+.btn--primary {
+  background: var(--fa-color-accent);
+  color: var(--fa-color-text-on-accent);
+  border-color: var(--fa-color-accent);
+  box-shadow: var(--fa-glow-box);
+}
+
+.btn--primary:hover {
+  background: var(--fa-color-accent-hover);
+  border-color: var(--fa-color-accent-hover);
+  box-shadow: var(--fa-glow-box-strong);
+}
+
+.btn--primary:active {
+  background: var(--fa-color-accent-active);
+  border-color: var(--fa-color-accent-active);
+  box-shadow: var(--fa-shadow-sm);
+  transform: scale(0.97);
+}
+
+/* --- Ghost --- */
+.btn--ghost {
+  background: transparent;
+  color: var(--fa-color-accent);
+  border-color: transparent;
+}
+
+.btn--ghost:hover {
+  background: var(--fa-color-accent-subtle);
+  border-color: var(--fa-color-border-accent);
+}
+
+.btn--ghost:active {
+  background: var(--fa-color-accent-subtle-hover);
+}
+
+/* --- Danger --- */
+.btn--danger {
+  background: var(--fa-color-danger);
+  color: #ffffff;
+  border-color: var(--fa-color-danger);
+}
+
+.btn--danger:hover {
+  background: var(--fa-color-danger-hover);
+  border-color: var(--fa-color-danger-hover);
+  box-shadow: 0 0 12px rgba(255, 77, 106, 0.3);
+}
+
+.btn--danger:active {
+  background: var(--fa-color-danger-active);
+  border-color: var(--fa-color-danger-active);
+}
+
+/* --- Secondary --- */
+.btn--secondary {
+  background: var(--fa-color-secondary-subtle);
+  color: var(--fa-color-secondary);
+  border-color: transparent;
+}
+
+.btn--secondary:hover {
+  background: rgba(224, 64, 251, 0.2);
+  border-color: rgba(224, 64, 251, 0.3);
+}
+
+/* --- Outline --- */
+.btn--outline {
+  background: transparent;
+  color: var(--fa-color-accent);
+  border-color: var(--fa-color-border-accent);
+}
+
+.btn--outline:hover {
+  background: var(--fa-color-accent-subtle);
+  border-color: var(--fa-color-border-accent-strong);
+  box-shadow: var(--fa-glow-box);
+}
+
+/* --- Sizes --- */
+.btn--sm {
+  font-size: var(--fa-font-size-xs);
+  padding: var(--fa-space-2) var(--fa-space-4);
+  min-height: 32px;
+  border-radius: var(--fa-radius-sm);
+}
+
+.btn--lg {
+  font-size: var(--fa-font-size-base);
+  padding: var(--fa-space-4) var(--fa-space-8);
+  min-height: 48px;
+  border-radius: var(--fa-radius-lg);
+}
+
+/* --- Icon-only button --- */
+.btn--icon {
+  padding: var(--fa-space-2);
+  min-height: 36px;
+  min-width: 36px;
+}
+
+.btn--icon.btn--sm {
+  min-height: 28px;
+  min-width: 28px;
+}
+
+.btn--icon.btn--lg {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* --- Full-width --- */
+.btn--full {
+  width: 100%;
+}
+
+/* --- Button group --- */
+.btn-group {
+  display: inline-flex;
+}
+
+.btn-group > .btn {
+  border-radius: 0;
+}
+
+.btn-group > .btn:first-child {
+  border-radius: var(--fa-radius-md) 0 0 var(--fa-radius-md);
+}
+
+.btn-group > .btn:last-child {
+  border-radius: 0 var(--fa-radius-md) var(--fa-radius-md) 0;
+}
+
+.btn-group > .btn + .btn {
+  margin-left: calc(-1 * var(--fa-border-width));
+}
+
+/* ==========================================================================
+   Component: Input (.input)
+   ==========================================================================
+   Text input with dark surface, accent focus ring, and icon slot support.
+   Wrapper .input-group provides icon positioning.
+
+   States: default, hover, focus, disabled, error, success
+   ========================================================================== */
+
+/* --- Base input --- */
+.input {
+  display: block;
+  width: 100%;
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-base);
+  font-weight: var(--fa-font-weight-normal);
+  line-height: var(--fa-line-height-normal);
+  color: var(--fa-color-text-primary);
+  background: var(--fa-color-bg-surface-1);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  border-radius: var(--fa-radius-md);
+  padding: var(--fa-space-3) var(--fa-space-4);
+  min-height: 42px;
+  transition: var(--fa-transition-colors),
+    box-shadow var(--fa-duration-fast) var(--fa-easing-default);
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--fa-color-text-tertiary);
+  opacity: 1;
+}
+
+/* --- Hover --- */
+.input:hover:not(:disabled):not(:focus) {
+  border-color: var(--fa-color-border-hover);
+  background: var(--fa-color-bg-surface-2);
+}
+
+/* --- Focus --- */
+.input:focus {
+  border-color: var(--fa-color-accent);
+  box-shadow: 0 0 0 3px var(--fa-focus-ring-color-outer), var(--fa-glow-box);
+  background: var(--fa-color-bg-surface-1);
+}
+
+/* Prefer focus-visible for keyboard-only */
+.input:focus:not(:focus-visible) {
+  box-shadow: none;
+  border-color: var(--fa-color-border-accent);
+}
+
+.input:focus-visible {
+  border-color: var(--fa-color-accent);
+  box-shadow: 0 0 0 3px var(--fa-focus-ring-color-outer), var(--fa-glow-box);
+}
+
+/* --- Disabled --- */
+.input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--fa-color-bg-surface-0);
+}
+
+/* --- Error state --- */
+.input--error {
+  border-color: var(--fa-color-danger);
+}
+
+.input--error:focus,
+.input--error:focus-visible {
+  border-color: var(--fa-color-danger);
+  box-shadow: 0 0 0 3px rgba(255, 77, 106, 0.2);
+}
+
+/* --- Success state --- */
+.input--success {
+  border-color: var(--fa-color-success);
+}
+
+.input--success:focus,
+.input--success:focus-visible {
+  border-color: var(--fa-color-success);
+  box-shadow: 0 0 0 3px rgba(0, 230, 118, 0.15);
+}
+
+/* --- Sizes --- */
+.input--sm {
+  font-size: var(--fa-font-size-sm);
+  padding: var(--fa-space-2) var(--fa-space-3);
+  min-height: 34px;
+  border-radius: var(--fa-radius-sm);
+}
+
+.input--lg {
+  font-size: var(--fa-font-size-md);
+  padding: var(--fa-space-4) var(--fa-space-5);
+  min-height: 50px;
+}
+
+/* --- Input group (icon wrapper) --- */
+.input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-group .input {
+  width: 100%;
+}
+
+/* Icon slots */
+.input-group__icon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 100%;
+  color: var(--fa-color-text-tertiary);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.input-group__icon--start {
+  left: 0;
+}
+
+.input-group__icon--end {
+  right: 0;
+}
+
+.input-group--has-icon-start .input {
+  padding-left: 40px;
+}
+
+.input-group--has-icon-end .input {
+  padding-right: 40px;
+}
+
+/* --- Label --- */
+.input-label {
+  display: block;
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-medium);
+  color: var(--fa-color-text-secondary);
+  margin-bottom: var(--fa-space-2);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+/* --- Help / error text --- */
+.input-help {
+  display: block;
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+  margin-top: var(--fa-space-1);
+}
+
+.input-help--error {
+  color: var(--fa-color-danger-text);
+}
+
+.input-help--success {
+  color: var(--fa-color-success-text);
+}
+
+/* ==========================================================================
+   Component: Card / Panel (.card)
+   ==========================================================================
+   A surface container with header/body/footer structure.
+   Built on acrylic background by default for the glassmorphism look.
+
+   Variants: default, --bordered, --elevated, --interactive
+   
+   Design notes:
+     • Cards use surface-1 bg with acrylic layering
+     • Header has an accent bottom border for visual separation
+     • Generous padding (space-5 / space-6) for the Fluent look
+   ========================================================================== */
+
+.card {
+  position: relative;
+  background: var(--fa-color-bg-surface-1);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  border-radius: 0;
+  box-shadow: var(--fa-shadow-md);
+  overflow: hidden;
+  transition: var(--fa-transition-colors),
+    box-shadow var(--fa-duration-normal) var(--fa-easing-default),
+    transform var(--fa-duration-normal) var(--fa-easing-out);
+}
+
+/* --- Card sections --- */
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fa-space-4);
+  padding: var(--fa-space-5) var(--fa-space-6);
+  border-bottom: var(--fa-border-width) solid var(--fa-color-border);
+}
+
+.card__header-title {
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-semibold);
+  letter-spacing: var(--fa-letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--fa-color-text-secondary);
+}
+
+.card__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-2);
+}
+
+.card__body {
+  padding: var(--fa-space-6);
+}
+
+.card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--fa-space-3);
+  padding: var(--fa-space-4) var(--fa-space-6);
+  border-top: var(--fa-border-width) solid var(--fa-color-border);
+}
+
+/* --- Bordered variant (accent border) --- */
+.card--bordered {
+  border-color: var(--fa-color-border-accent);
+}
+
+/* --- Elevated (stronger shadow + surface) --- */
+.card--elevated {
+  background: var(--fa-color-bg-surface-2);
+  box-shadow: var(--fa-shadow-lg);
+}
+
+/* --- Interactive (hover effects) --- */
+.card--interactive {
+  cursor: pointer;
+}
+
+.card--interactive:hover {
+  border-color: var(--fa-color-border-accent);
+  box-shadow: var(--fa-shadow-lg), var(--fa-glow-box);
+  transform: translateY(-2px);
+}
+
+.card--interactive:active {
+  transform: translateY(0);
+  box-shadow: var(--fa-shadow-sm);
+}
+
+/* --- Acrylic card (combines with .acrylic) --- */
+.card--acrylic {
+  background: var(--fa-acrylic-bg);
+  border-color: var(--fa-acrylic-border);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .card--acrylic {
+    backdrop-filter: blur(var(--fa-acrylic-blur)) saturate(var(--fa-acrylic-saturation));
+    -webkit-backdrop-filter: blur(var(--fa-acrylic-blur)) saturate(var(--fa-acrylic-saturation));
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card--acrylic {
+    background: var(--fa-color-bg-surface-1);
+  }
+}
+
+/* --- Card with accent top highlight --- */
+.card--accent-top {
+  border-top: 2px solid var(--fa-color-accent);
+}
+
+/* --- Card with icon prefix in header --- */
+.card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--fa-radius-md);
+  background: var(--fa-color-accent-subtle);
+  color: var(--fa-color-accent);
+  flex-shrink: 0;
+}
+
+/* -- Panel variant (full-height sidebar-like) -- */
+.panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--fa-color-bg-surface-0);
+  border-right: var(--fa-border-width) solid var(--fa-color-border);
+  height: 100%;
+  overflow-y: auto;
+}
+
+.panel__header {
+  padding: var(--fa-space-6);
+  border-bottom: var(--fa-border-width) solid var(--fa-color-border);
+}
+
+.panel__body {
+  flex: 1;
+  padding: var(--fa-space-4);
+  overflow-y: auto;
+}
+
+.panel__footer {
+  padding: var(--fa-space-4) var(--fa-space-6);
+  border-top: var(--fa-border-width) solid var(--fa-color-border);
+}
+
+/* ==========================================================================
+   Component: Tabs (.tabs)
+   ==========================================================================
+   Horizontal tab navigation with underline indicator.
+   Matches the "OVERVIEW | DEEP ANALYTICS | PROTOCOL LOGS" pattern.
+
+   Naming: .tabs (container), .tab (individual item), .tab--active
+
+   Design notes:
+     • Inactive tabs use tertiary text color
+     • Active tab has accent color + bottom border indicator
+     • Hover shows subtle accent background
+     • Supports both <nav> and <div role="tablist"> semantics
+   ========================================================================== */
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-bottom: var(--fa-border-width) solid var(--fa-color-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* --- Individual tab --- */
+.tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--fa-space-2);
+  padding: var(--fa-space-3) var(--fa-space-5);
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-semibold);
+  letter-spacing: var(--fa-letter-spacing-caps);
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--fa-color-text-tertiary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--fa-transition-colors),
+    border-color var(--fa-duration-fast) var(--fa-easing-default);
+  position: relative;
+}
+
+.tab:hover {
+  color: var(--fa-color-text-secondary);
+  background: var(--fa-color-accent-subtle);
+}
+
+/* --- Active tab --- */
+.tab--active,
+.tab[aria-selected="true"] {
+  color: var(--fa-color-accent);
+  border-bottom-color: var(--fa-color-accent);
+  text-shadow: var(--fa-glow-text);
+}
+
+.tab--active:hover,
+.tab[aria-selected="true"]:hover {
+  color: var(--fa-color-accent);
+  background: var(--fa-color-accent-subtle);
+}
+
+/* --- Focus --- */
+.tab:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: -2px;
+  border-radius: var(--fa-radius-sm) var(--fa-radius-sm) 0 0;
+}
+
+/* --- Disabled --- */
+.tab:disabled,
+.tab[aria-disabled="true"] {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* --- Tab with count badge --- */
+.tab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--fa-space-1);
+  font-size: 0.625rem;
+  font-weight: var(--fa-font-weight-bold);
+  border-radius: var(--fa-radius-full);
+  background: var(--fa-color-accent-subtle);
+  color: var(--fa-color-accent);
+}
+
+.tab--active .tab__count {
+  background: var(--fa-color-accent);
+  color: var(--fa-color-text-on-accent);
+}
+
+/* --- Tabs container (pill variant) --- */
+.tabs--pills {
+  border-bottom: none;
+  gap: var(--fa-space-2);
+  padding: var(--fa-space-1);
+  background: var(--fa-color-bg-surface-1);
+  border-radius: var(--fa-radius-md);
+}
+
+.tabs--pills .tab {
+  border-bottom: none;
+  border-radius: var(--fa-radius-sm);
+  padding: var(--fa-space-2) var(--fa-space-4);
+}
+
+.tabs--pills .tab--active,
+.tabs--pills .tab[aria-selected="true"] {
+  background: var(--fa-color-accent);
+  color: var(--fa-color-text-on-accent);
+  text-shadow: none;
+}
+
+/* ==========================================================================
+   Component: Badge (.badge)
+   ==========================================================================
+   Inline label/status indicator.
+   Matches items like "SECURED FEED", "OPTIMIZED", "ENCRYPTED".
+
+   Variants: default (accent), --success, --warning, --danger, --info,
+             --secondary, --outline
+   Sizes: --sm, (default), --lg
+   ========================================================================== */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fa-space-1);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-bold);
+  letter-spacing: var(--fa-letter-spacing-caps);
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+  padding: var(--fa-space-1) var(--fa-space-3);
+  min-height: 22px;
+  border-radius: var(--fa-radius-sm);
+  border: var(--fa-border-width) solid transparent;
+  transition: var(--fa-transition-colors);
+
+  /* Default: accent */
+  background: var(--fa-color-accent-subtle);
+  color: var(--fa-color-accent);
+  border-color: var(--fa-color-border-accent);
+}
+
+/* --- Semantic variants --- */
+.badge--success {
+  background: var(--fa-color-success-subtle);
+  color: var(--fa-color-success-text);
+  border-color: rgba(0, 230, 118, 0.2);
+}
+
+.badge--warning {
+  background: var(--fa-color-warning-subtle);
+  color: var(--fa-color-warning-text);
+  border-color: rgba(255, 171, 64, 0.2);
+}
+
+.badge--danger {
+  background: var(--fa-color-danger-subtle);
+  color: var(--fa-color-danger-text);
+  border-color: rgba(255, 77, 106, 0.2);
+}
+
+.badge--info {
+  background: var(--fa-color-info-subtle);
+  color: var(--fa-color-info-text);
+  border-color: rgba(64, 196, 255, 0.2);
+}
+
+.badge--secondary {
+  background: var(--fa-color-secondary-subtle);
+  color: var(--fa-color-secondary);
+  border-color: rgba(224, 64, 251, 0.2);
+}
+
+/* --- Solid variant --- */
+.badge--solid {
+  background: var(--fa-color-accent);
+  color: var(--fa-color-text-on-accent);
+  border-color: var(--fa-color-accent);
+}
+
+.badge--solid.badge--danger {
+  background: var(--fa-color-danger);
+  color: #ffffff;
+  border-color: var(--fa-color-danger);
+}
+
+.badge--solid.badge--success {
+  background: var(--fa-color-success);
+  color: var(--fa-color-text-inverse);
+  border-color: var(--fa-color-success);
+}
+
+/* --- Outline variant --- */
+.badge--outline {
+  background: transparent;
+  border-color: var(--fa-color-border-accent-strong);
+  color: var(--fa-color-accent);
+}
+
+/* --- Sizes --- */
+.badge--sm {
+  font-size: 0.6rem;
+  padding: 2px var(--fa-space-2);
+  min-height: 18px;
+}
+
+.badge--lg {
+  font-size: var(--fa-font-size-sm);
+  padding: var(--fa-space-2) var(--fa-space-4);
+  min-height: 28px;
+}
+
+/* --- Badge with dot indicator --- */
+.badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--fa-radius-full);
+  background: currentColor;
+  box-shadow: 0 0 4px currentColor;
+}
+
+/* --- Pill (full rounded) --- */
+.badge--pill {
+  border-radius: var(--fa-radius-full);
+  padding-left: var(--fa-space-3);
+  padding-right: var(--fa-space-3);
+}
+
+/* --- Node badge (circular, dark fill with cyan border) --- */
+.badge--node {
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: var(--fa-radius-full);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-base);
+  font-weight: var(--fa-font-weight-semibold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fa-color-bg-surface-1);
+  color: var(--fa-color-text-secondary);
+  border: 2px solid var(--fa-color-accent);
+  transition: var(--fa-transition-colors), box-shadow var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+.badge--node:hover {
+  background: var(--fa-color-bg-surface-2);
+  box-shadow: var(--fa-glow-box);
+}
+
+/* ==========================================================================
+   Component: Navigation / Sidebar Item (.nav-item)
+   ==========================================================================
+   Vertical menu items for sidebar navigation.
+   Matches the sidebar pattern: icon + label, with active cyan highlight.
+
+   Structure:
+     .sidebar          — Container
+     .nav-list         — <ul> wrapper
+     .nav-item         — Individual item (<a> or <button>)
+     .nav-item--active — Currently selected
+
+   Design notes:
+     • Active item has accent left border + subtle accent background
+     • Hover shows surface-2 background
+     • Icons and text inherit color from the nav-item state
+     • Section headers use .nav-section-title
+   ========================================================================== */
+
+/* --- Sidebar container --- */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 240px;
+  min-width: 200px;
+  background: var(--fa-acrylic-bg);
+  border-right: var(--fa-border-width) solid var(--fa-acrylic-border);
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--fa-space-4) 0;
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .sidebar {
+    backdrop-filter: blur(var(--fa-acrylic-blur)) saturate(var(--fa-acrylic-saturation));
+    -webkit-backdrop-filter: blur(var(--fa-acrylic-blur)) saturate(var(--fa-acrylic-saturation));
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .sidebar {
+    background: var(--fa-color-bg-surface-1);
+  }
+}
+
+/* --- Sidebar with stronger acrylic --- */
+.sidebar--acrylic {
+  background: var(--fa-acrylic-bg-strong);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .sidebar--acrylic {
+    backdrop-filter: blur(var(--fa-acrylic-blur-strong)) saturate(var(--fa-acrylic-saturation));
+    -webkit-backdrop-filter: blur(var(--fa-acrylic-blur-strong)) saturate(var(--fa-acrylic-saturation));
+  }
+}
+
+/* --- Nav list reset --- */
+.nav-list {
+  list-style: none;
+  padding: 0 var(--fa-space-4);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fa-space-2);
+}
+
+/* --- Nav item --- */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-3);
+  padding: var(--fa-space-3) var(--fa-space-4);
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-medium);
+  color: var(--fa-color-text-secondary);
+  text-decoration: none;
+  background: transparent;
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  cursor: pointer;
+  transition: var(--fa-transition-colors),
+    border-color var(--fa-duration-fast) var(--fa-easing-default),
+    padding-inline-start var(--fa-duration-normal) var(--fa-easing-out);
+  width: 100%;
+  text-align: left;
+  position: relative;
+}
+
+.nav-item:hover {
+  padding-inline-start: calc(var(--fa-space-4) + var(--fa-space-2));
+  background: var(--fa-color-bg-surface-2);
+  color: var(--fa-color-text-primary);
+  border-color: var(--fa-color-border-hover);
+}
+
+/* --- Active state --- */
+.nav-item--active,
+.nav-item[aria-current="page"] {
+  background: var(--fa-color-accent-subtle);
+  color: var(--fa-color-accent);
+  border-color: var(--fa-color-border-accent);
+  border-left: 3px solid var(--fa-color-accent);
+  font-weight: var(--fa-font-weight-semibold);
+}
+
+.nav-item--active:hover,
+.nav-item[aria-current="page"]:hover {
+  background: var(--fa-color-accent-subtle-hover);
+  color: var(--fa-color-accent);
+}
+
+/* --- Focus --- */
+.nav-item:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: -2px;
+  border-radius: var(--fa-radius-sm);
+}
+
+/* --- Disabled --- */
+.nav-item:disabled,
+.nav-item[aria-disabled="true"] {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* --- Nav item icon --- */
+.nav-item__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transform: translateX(0);
+  transition: transform var(--fa-duration-normal) var(--fa-easing-out),
+    opacity var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+.nav-item:hover .nav-item__icon,
+.nav-item:focus-visible .nav-item__icon {
+  transform: translateX(2px);
+}
+
+.nav-item--active .nav-item__icon,
+.nav-item[aria-current="page"] .nav-item__icon {
+  opacity: 1;
+}
+
+/* --- Nav section title --- */
+.nav-section-title {
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-semibold);
+  letter-spacing: var(--fa-letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--fa-color-text-tertiary);
+  padding: var(--fa-space-4) var(--fa-space-5) var(--fa-space-2);
+}
+
+/* --- Sidebar header (logo area) --- */
+.sidebar__header {
+  padding: var(--fa-space-5) var(--fa-space-5) var(--fa-space-6);
+  border-bottom: var(--fa-border-width) solid var(--fa-color-border);
+  margin-bottom: var(--fa-space-4);
+}
+
+.sidebar__title {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-base);
+  font-weight: var(--fa-font-weight-bold);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  color: var(--fa-color-text-primary);
+}
+
+.sidebar__subtitle {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-accent);
+  letter-spacing: var(--fa-letter-spacing-caps);
+  text-transform: uppercase;
+  margin-top: var(--fa-space-1);
+}
+
+/* --- Sidebar footer --- */
+.sidebar__footer {
+  margin-top: auto;
+  padding: var(--fa-space-4) var(--fa-space-4);
+  border-top: var(--fa-border-width) solid var(--fa-color-border);
+}
+
+/* ==========================================================================
+   Component: Table (.table)
+   ==========================================================================
+   Data table with header, body rows, and optional variants.
+   Uses design tokens for all colors, spacing and borders.
+
+   Variants: default, --striped, --hoverable, --compact, --bordered
+   
+   Design notes:
+     • Mono font for header cells (uppercase, tracked) matches card headers
+     • Body rows use surface-0 base with subtle alternating in --striped
+     • Accent color for hover highlights in --hoverable
+     • Compact variant reduces padding for dense data views
+     • All styling adapts automatically via theme tokens (dark/light)
+   ========================================================================== */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-size: var(--fa-font-size-sm);
+  color: var(--fa-color-text-primary);
+}
+
+/* --- Head --- */
+.table thead {
+  border-bottom: var(--fa-border-width-thick) solid var(--fa-color-border);
+}
+
+.table th {
+  padding: var(--fa-space-3) var(--fa-space-4);
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-semibold);
+  letter-spacing: var(--fa-letter-spacing-caps);
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--fa-color-text-secondary);
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* --- Body rows --- */
+.table td {
+  padding: var(--fa-space-3) var(--fa-space-4);
+  border-bottom: var(--fa-border-width) solid var(--fa-color-border);
+  color: var(--fa-color-text-primary);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* --- Striped variant --- */
+.table--striped tbody tr:nth-child(even) {
+  background: var(--fa-color-bg-surface-1);
+}
+
+/* --- Hoverable variant --- */
+.table--hoverable tbody tr {
+  transition: background-color var(--fa-duration-fast) var(--fa-easing-default),
+    box-shadow var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+.table--hoverable tbody tr:hover {
+  background: var(--fa-color-accent-subtle);
+}
+
+/* --- Bordered variant --- */
+.table--bordered {
+  border: var(--fa-border-width) solid var(--fa-color-border);
+}
+
+.table--bordered th,
+.table--bordered td {
+  border: var(--fa-border-width) solid var(--fa-color-border);
+}
+
+/* --- Compact variant --- */
+.table--compact th,
+.table--compact td {
+  padding: var(--fa-space-2) var(--fa-space-3);
+  font-size: var(--fa-font-size-xs);
+}
+
+/* --- Cell utilities --- */
+.table .cell-mono {
+  font-family: var(--fa-font-family-mono);
+  letter-spacing: var(--fa-letter-spacing-wide);
+}
+
+.table .cell-accent {
+  color: var(--fa-color-accent);
+  font-weight: var(--fa-font-weight-semibold);
+}
+
+.table .cell-muted {
+  color: var(--fa-color-text-tertiary);
+}
+
+.table .cell-right {
+  text-align: right;
+}
+
+.table .cell-center {
+  text-align: center;
+}
+
+/* --- Status dot inside table cells --- */
+.table .status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fa-space-2);
+}
+
+.table .status-indicator::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: var(--fa-radius-full);
+  flex-shrink: 0;
+}
+
+.table .status-indicator--online::before {
+  background: var(--fa-color-success);
+  box-shadow: 0 0 6px var(--fa-color-success);
+}
+
+.table .status-indicator--warning::before {
+  background: var(--fa-color-warning);
+  box-shadow: 0 0 6px var(--fa-color-warning);
+}
+
+.table .status-indicator--offline::before {
+  background: var(--fa-color-danger);
+  box-shadow: 0 0 6px var(--fa-color-danger);
+}
+
+.table .status-indicator--idle::before {
+  background: var(--fa-color-text-tertiary);
+}
+
+/* --- Sortable header indicator --- */
+.table .th-sortable {
+  cursor: pointer;
+  transition: color var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+.table .th-sortable:hover {
+  color: var(--fa-color-accent);
+}
+
+/* --- Wrapper for horizontal scroll on small screens --- */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* ==========================================================================
+   Component: Toast / Alert (.toast, .alert)
+   ==========================================================================
+   Notification messages with semantic variants.
+
+   .alert  — Inline banner (persistent, within page flow)
+   .toast  — Floating notification (position: fixed, overlay)
+
+   Variants: default (info), --success, --warning, --danger, --accent
+   Features: dismissible (close button area), icon slot
+
+   Design notes:
+     • Left accent border (3px) for visual category at a glance
+     • Icon + text layout with flex
+     • Toast stacks at top-right by default
+     • Alert sits inline with subtle acrylic background
+   ========================================================================== */
+
+/* ===== ALERT (inline) ===== */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--fa-space-3);
+  padding: var(--fa-space-4) var(--fa-space-5);
+  border-radius: var(--fa-radius-md);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  border-left: 3px solid var(--fa-color-info);
+  background: var(--fa-color-info-subtle);
+  color: var(--fa-color-text-primary);
+  font-size: var(--fa-font-size-sm);
+  line-height: var(--fa-line-height-normal);
+  position: relative;
+}
+
+.alert__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--fa-color-info);
+  margin-top: 1px;
+}
+
+.alert__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.alert__title {
+  font-family: var(--fa-font-family-mono);
+  font-weight: var(--fa-font-weight-semibold);
+  font-size: var(--fa-font-size-sm);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  text-transform: uppercase;
+  margin-bottom: var(--fa-space-1);
+}
+
+.alert__message {
+  color: var(--fa-color-text-secondary);
+  line-height: var(--fa-line-height-relaxed);
+}
+
+.alert__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--fa-radius-sm);
+  color: var(--fa-color-text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: var(--fa-transition-colors);
+}
+
+.alert__close:hover {
+  background: var(--fa-color-bg-surface-2);
+  color: var(--fa-color-text-primary);
+}
+
+/* --- Alert semantic variants --- */
+.alert--success {
+  border-left-color: var(--fa-color-success);
+  background: var(--fa-color-success-subtle);
+}
+
+.alert--success .alert__icon { color: var(--fa-color-success); }
+.alert--success .alert__title { color: var(--fa-color-success-text); }
+
+.alert--warning {
+  border-left-color: var(--fa-color-warning);
+  background: var(--fa-color-warning-subtle);
+}
+
+.alert--warning .alert__icon { color: var(--fa-color-warning); }
+.alert--warning .alert__title { color: var(--fa-color-warning-text); }
+
+.alert--danger {
+  border-left-color: var(--fa-color-danger);
+  background: var(--fa-color-danger-subtle);
+}
+
+.alert--danger .alert__icon { color: var(--fa-color-danger); }
+.alert--danger .alert__title { color: var(--fa-color-danger-text); }
+
+.alert--accent {
+  border-left-color: var(--fa-color-accent);
+  background: var(--fa-color-accent-subtle);
+}
+
+.alert--accent .alert__icon { color: var(--fa-color-accent); }
+.alert--accent .alert__title { color: var(--fa-color-accent); }
+
+
+/* ===== TOAST (floating) ===== */
+.toast-container {
+  position: fixed;
+  top: var(--fa-space-6);
+  right: var(--fa-space-6);
+  z-index: var(--fa-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--fa-space-3);
+  pointer-events: none;
+  max-width: 420px;
+  width: 100%;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--fa-space-3);
+  padding: var(--fa-space-4) var(--fa-space-5);
+  border-radius: var(--fa-radius-md);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  border-left: 3px solid var(--fa-color-info);
+  background: var(--fa-color-bg-surface-2);
+  box-shadow: var(--fa-shadow-xl);
+  color: var(--fa-color-text-primary);
+  font-size: var(--fa-font-size-sm);
+  line-height: var(--fa-line-height-normal);
+  pointer-events: auto;
+  animation: fa-toast-enter var(--fa-duration-slow) var(--fa-easing-out);
+  position: relative;
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .toast {
+    background: var(--fa-acrylic-bg-strong);
+    backdrop-filter: blur(var(--fa-acrylic-blur)) saturate(var(--fa-acrylic-saturation));
+    -webkit-backdrop-filter: blur(var(--fa-acrylic-blur)) saturate(var(--fa-acrylic-saturation));
+  }
+}
+
+.toast__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--fa-color-info);
+  margin-top: 1px;
+}
+
+.toast__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast__title {
+  font-family: var(--fa-font-family-mono);
+  font-weight: var(--fa-font-weight-semibold);
+  font-size: var(--fa-font-size-sm);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  text-transform: uppercase;
+  margin-bottom: var(--fa-space-1);
+}
+
+.toast__message {
+  color: var(--fa-color-text-secondary);
+}
+
+.toast__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--fa-radius-sm);
+  color: var(--fa-color-text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: var(--fa-transition-colors);
+}
+
+.toast__close:hover {
+  background: var(--fa-color-bg-surface-3);
+  color: var(--fa-color-text-primary);
+}
+
+/* --- Toast semantic variants --- */
+.toast--success {
+  border-left-color: var(--fa-color-success);
+}
+.toast--success .toast__icon { color: var(--fa-color-success); }
+.toast--success .toast__title { color: var(--fa-color-success-text); }
+
+.toast--warning {
+  border-left-color: var(--fa-color-warning);
+}
+.toast--warning .toast__icon { color: var(--fa-color-warning); }
+.toast--warning .toast__title { color: var(--fa-color-warning-text); }
+
+.toast--danger {
+  border-left-color: var(--fa-color-danger);
+}
+.toast--danger .toast__icon { color: var(--fa-color-danger); }
+.toast--danger .toast__title { color: var(--fa-color-danger-text); }
+
+.toast--accent {
+  border-left-color: var(--fa-color-accent);
+}
+.toast--accent .toast__icon { color: var(--fa-color-accent); }
+.toast--accent .toast__title { color: var(--fa-color-accent); }
+
+/* --- Toast animation --- */
+@keyframes fa-toast-enter {
+  from {
+    opacity: 0;
+    transform: translateX(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.toast--exit {
+  animation: fa-toast-exit var(--fa-duration-normal) var(--fa-easing-in) forwards;
+}
+
+@keyframes fa-toast-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(20px) scale(0.95);
+  }
+}
+
+/* --- Progress bar for auto-dismiss --- */
+.toast__progress {
+  position: absolute;
+  bottom: 0;
+  left: 3px;
+  right: 0;
+  height: 2px;
+  background: var(--fa-color-accent);
+  border-radius: 0 0 var(--fa-radius-md) 0;
+  transform-origin: left;
+  animation: fa-toast-progress 5s linear forwards;
+}
+
+@keyframes fa-toast-progress {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+/* ==========================================================================
+   Component: Divider (.divider)
+   ==========================================================================
+   Horizontal and vertical separators.
+   Variants: (default horizontal), --vertical, --strong, --accent,
+             --spaced, --tight, --with-text
+   ========================================================================== */
+
+/* --- Base (horizontal) --- */
+.divider {
+  border: none;
+  border-top: var(--fa-border-width) solid var(--fa-color-border);
+  margin: var(--fa-space-4) 0;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+/* --- Vertical --- */
+.divider--vertical {
+  border-top: none;
+  border-left: var(--fa-border-width) solid var(--fa-color-border);
+  width: auto;
+  height: auto;
+  align-self: stretch;
+  margin: 0 var(--fa-space-4);
+}
+
+/* --- Strength variants --- */
+.divider--strong {
+  border-color: var(--fa-color-border-hover);
+}
+
+.divider--accent {
+  border-color: var(--fa-color-border-accent);
+}
+
+/* --- Spacing variants --- */
+.divider--spaced {
+  margin: var(--fa-space-6) 0;
+}
+
+.divider--spaced.divider--vertical {
+  margin: 0 var(--fa-space-6);
+}
+
+.divider--tight {
+  margin: var(--fa-space-2) 0;
+}
+
+.divider--tight.divider--vertical {
+  margin: 0 var(--fa-space-2);
+}
+
+.divider--flush {
+  margin: 0;
+}
+
+/* --- With text label --- */
+.divider--with-text {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-4);
+  border: none;
+  margin: var(--fa-space-4) 0;
+}
+
+.divider--with-text::before,
+.divider--with-text::after {
+  content: "";
+  flex: 1;
+  height: 0;
+  border-top: var(--fa-border-width) solid var(--fa-color-border);
+}
+
+.divider__text {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-medium);
+  color: var(--fa-color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--fa-letter-spacing-caps);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Component: Section Header (.section-header)
+   ==========================================================================
+   Uppercase mono label with optional trailing action — used in sidebars
+   and panels ("FAVORITES", "ALL PROJECTS", "NODE CLUSTER" etc.).
+
+   Sub-elements: __title, __action
+   Variants: --flush, --lg
+   ========================================================================== */
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fa-space-3);
+  padding: var(--fa-space-3) var(--fa-space-4);
+}
+
+/* --- Title text --- */
+.section-header__title {
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-semibold);
+  color: var(--fa-color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--fa-letter-spacing-caps);
+  line-height: var(--fa-line-height-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+/* --- Optional action (icon or link) --- */
+.section-header__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  color: var(--fa-color-text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: var(--fa-radius-sm);
+  cursor: pointer;
+  transition: var(--fa-transition-colors);
+  padding: 0;
+}
+
+.section-header__action:hover {
+  color: var(--fa-color-accent);
+  background: var(--fa-color-accent-subtle);
+}
+
+.section-header__action:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: var(--fa-focus-ring-offset);
+}
+
+.section-header__action svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* --- Flush (no horizontal padding, for inlined headers) --- */
+.section-header--flush {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* --- Larger variant --- */
+.section-header--lg .section-header__title {
+  font-size: var(--fa-font-size-sm);
+  letter-spacing: var(--fa-letter-spacing-wide);
+}
+
+/* --- With count badge --- */
+.section-header__count {
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-normal);
+  color: var(--fa-color-text-tertiary);
+  opacity: 0.7;
+}
+
+/* ==========================================================================
+   Component: Icon Button (.icon-btn)
+   ==========================================================================
+   Standalone circular/square icon-only button for toolbars, headers, and
+   inline actions. Differs from .btn--icon (which is a modifier on .btn)
+   by being a lighter, standalone element.
+
+   Variants: --sm, (default), --lg, --ghost, --accent, --danger
+   States: hover, active, focus-visible, disabled
+   ========================================================================== */
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: var(--fa-color-text-secondary);
+  background: transparent;
+  border: var(--fa-border-width) solid transparent;
+  border-radius: var(--fa-radius-md);
+  cursor: pointer;
+  transition: var(--fa-transition-colors),
+    transform var(--fa-duration-fast) var(--fa-easing-out);
+  user-select: none;
+  position: relative;
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* --- Hover --- */
+.icon-btn:hover {
+  color: var(--fa-color-text-primary);
+  background: var(--fa-color-bg-surface-2);
+  border-color: var(--fa-color-border);
+}
+
+/* --- Active --- */
+.icon-btn:active {
+  transform: scale(0.92);
+  background: var(--fa-color-bg-surface-3);
+}
+
+/* --- Focus --- */
+.icon-btn:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: var(--fa-focus-ring-offset);
+}
+
+/* --- Disabled --- */
+.icon-btn:disabled,
+.icon-btn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* --- Sizes --- */
+.icon-btn--sm {
+  width: 28px;
+  height: 28px;
+}
+
+.icon-btn--sm svg {
+  width: 14px;
+  height: 14px;
+}
+
+.icon-btn--lg {
+  width: 44px;
+  height: 44px;
+}
+
+.icon-btn--lg svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* --- Ghost (fully transparent, no border on hover) --- */
+.icon-btn--ghost:hover {
+  background: var(--fa-color-accent-subtle);
+  border-color: transparent;
+  color: var(--fa-color-accent);
+}
+
+/* --- Accent (filled) --- */
+.icon-btn--accent {
+  color: var(--fa-color-text-on-accent);
+  background: var(--fa-color-accent);
+  border-color: var(--fa-color-accent);
+  box-shadow: var(--fa-glow-box);
+}
+
+.icon-btn--accent:hover {
+  background: var(--fa-color-accent-hover);
+  border-color: var(--fa-color-accent-hover);
+  box-shadow: var(--fa-glow-box-strong);
+  color: var(--fa-color-text-on-accent);
+}
+
+/* --- Danger --- */
+.icon-btn--danger:hover {
+  color: var(--fa-color-danger);
+  background: rgba(255, 77, 106, 0.1);
+  border-color: rgba(255, 77, 106, 0.25);
+}
+
+/* --- Circular variant --- */
+.icon-btn--circle {
+  border-radius: var(--fa-radius-full);
+}
+
+/* --- Active/toggled state (for toolbar toggles) --- */
+.icon-btn[aria-pressed="true"],
+.icon-btn--active {
+  color: var(--fa-color-accent);
+  background: var(--fa-color-accent-subtle);
+  border-color: var(--fa-color-border-accent);
+}
+
+/* ==========================================================================
+   Component: Search Input (.search-input)
+   ==========================================================================
+   Specialized search field with built-in search icon, optional clear
+   button, and keyboard shortcut hint.
+
+   Sub-elements: __icon, __field, __clear, __kbd
+   Variants: --sm, --lg, --filled
+   ========================================================================== */
+
+/* --- Wrapper --- */
+.search-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* --- Search icon (left) --- */
+.search-input__icon {
+  position: absolute;
+  left: var(--fa-space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fa-color-text-tertiary);
+  pointer-events: none;
+  z-index: 1;
+  transition: color var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+.search-input__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* --- Input field --- */
+.search-input__field {
+  display: block;
+  width: 100%;
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-normal);
+  line-height: var(--fa-line-height-normal);
+  color: var(--fa-color-text-primary);
+  background: var(--fa-color-bg-surface-1);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  border-radius: var(--fa-radius-md);
+  padding: var(--fa-space-2) var(--fa-space-4);
+  padding-left: calc(var(--fa-space-3) + 16px + var(--fa-space-3));
+  min-height: 36px;
+  transition: var(--fa-transition-colors),
+    box-shadow var(--fa-duration-fast) var(--fa-easing-default);
+  outline: none;
+}
+
+.search-input__field::placeholder {
+  color: var(--fa-color-text-tertiary);
+  opacity: 1;
+}
+
+/* --- Hover --- */
+.search-input__field:hover:not(:disabled):not(:focus) {
+  border-color: var(--fa-color-border-hover);
+  background: var(--fa-color-bg-surface-2);
+}
+
+/* --- Focus --- */
+.search-input__field:focus {
+  border-color: var(--fa-color-accent);
+  box-shadow: 0 0 0 3px var(--fa-focus-ring-color-outer), var(--fa-glow-box);
+  background: var(--fa-color-bg-surface-1);
+}
+
+.search-input__field:focus:not(:focus-visible) {
+  box-shadow: none;
+  border-color: var(--fa-color-border-accent);
+}
+
+.search-input__field:focus-visible {
+  border-color: var(--fa-color-accent);
+  box-shadow: 0 0 0 3px var(--fa-focus-ring-color-outer), var(--fa-glow-box);
+}
+
+/* Highlight the search icon when focused */
+.search-input:focus-within .search-input__icon {
+  color: var(--fa-color-accent);
+}
+
+/* --- Disabled --- */
+.search-input__field:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--fa-color-bg-surface-0);
+}
+
+/* --- Clear button (right side) --- */
+.search-input__clear {
+  position: absolute;
+  right: var(--fa-space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--fa-color-text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: var(--fa-radius-sm);
+  cursor: pointer;
+  transition: var(--fa-transition-colors);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.search-input__clear svg {
+  width: 14px;
+  height: 14px;
+}
+
+.search-input__clear:hover {
+  color: var(--fa-color-text-primary);
+  background: var(--fa-color-bg-surface-3);
+}
+
+/* Show clear when input has value — toggled via JS adding class to wrapper */
+.search-input--has-value .search-input__clear {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.search-input--has-value .search-input__field {
+  padding-right: calc(var(--fa-space-2) + 24px + var(--fa-space-2));
+}
+
+/* --- Keyboard shortcut hint --- */
+.search-input__kbd {
+  position: absolute;
+  right: var(--fa-space-3);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+  background: var(--fa-color-bg-surface-2);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  border-radius: var(--fa-radius-sm);
+  padding: 2px 6px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Hide kbd hint when focused */
+.search-input:focus-within .search-input__kbd {
+  display: none;
+}
+
+/* --- Size: Small --- */
+.search-input--sm .search-input__field {
+  font-size: var(--fa-font-size-xs);
+  padding: var(--fa-space-1) var(--fa-space-3);
+  padding-left: calc(var(--fa-space-3) + 14px + var(--fa-space-2));
+  min-height: 30px;
+}
+
+.search-input--sm .search-input__icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* --- Size: Large --- */
+.search-input--lg .search-input__field {
+  font-size: var(--fa-font-size-base);
+  padding: var(--fa-space-3) var(--fa-space-5);
+  padding-left: calc(var(--fa-space-4) + 18px + var(--fa-space-3));
+  min-height: 46px;
+}
+
+.search-input--lg .search-input__icon {
+  left: var(--fa-space-4);
+}
+
+.search-input--lg .search-input__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* --- Filled variant (pre-filled background) --- */
+.search-input--filled .search-input__field {
+  background: var(--fa-color-bg-surface-2);
+  border-color: transparent;
+}
+
+.search-input--filled .search-input__field:hover:not(:disabled):not(:focus) {
+  background: var(--fa-color-bg-surface-3);
+  border-color: transparent;
+}
+
+.search-input--filled .search-input__field:focus,
+.search-input--filled .search-input__field:focus-visible {
+  background: var(--fa-color-bg-surface-1);
+  border-color: var(--fa-color-accent);
+}
+
+/* ==========================================================================
+   Component: Textarea (.textarea)
+   ==========================================================================
+   Multi-line text input. Shares visual language with .input but has its
+   own component class for sizing, resize behavior, and character count.
+
+   Sub-elements: __count
+   Variants: --sm, --lg, --no-resize, --auto-grow
+   States: hover, focus, disabled, error, success
+   ========================================================================== */
+
+/* --- Base --- */
+.textarea {
+  display: block;
+  width: 100%;
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-base);
+  font-weight: var(--fa-font-weight-normal);
+  line-height: var(--fa-line-height-relaxed);
+  color: var(--fa-color-text-primary);
+  background: var(--fa-color-bg-surface-1);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  border-radius: var(--fa-radius-md);
+  padding: var(--fa-space-3) var(--fa-space-4);
+  min-height: 100px;
+  resize: vertical;
+  transition: var(--fa-transition-colors),
+    box-shadow var(--fa-duration-fast) var(--fa-easing-default);
+  outline: none;
+}
+
+.textarea::placeholder {
+  color: var(--fa-color-text-tertiary);
+  opacity: 1;
+}
+
+/* --- Hover --- */
+.textarea:hover:not(:disabled):not(:focus) {
+  border-color: var(--fa-color-border-hover);
+  background: var(--fa-color-bg-surface-2);
+}
+
+/* --- Focus --- */
+.textarea:focus {
+  border-color: var(--fa-color-accent);
+  box-shadow: 0 0 0 3px var(--fa-focus-ring-color-outer), var(--fa-glow-box);
+  background: var(--fa-color-bg-surface-1);
+}
+
+.textarea:focus:not(:focus-visible) {
+  box-shadow: none;
+  border-color: var(--fa-color-border-accent);
+}
+
+.textarea:focus-visible {
+  border-color: var(--fa-color-accent);
+  box-shadow: 0 0 0 3px var(--fa-focus-ring-color-outer), var(--fa-glow-box);
+}
+
+/* --- Disabled --- */
+.textarea:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--fa-color-bg-surface-0);
+  resize: none;
+}
+
+/* --- Error --- */
+.textarea--error {
+  border-color: var(--fa-color-danger);
+}
+
+.textarea--error:focus,
+.textarea--error:focus-visible {
+  border-color: var(--fa-color-danger);
+  box-shadow: 0 0 0 3px rgba(255, 77, 106, 0.2);
+}
+
+/* --- Success --- */
+.textarea--success {
+  border-color: var(--fa-color-success);
+}
+
+.textarea--success:focus,
+.textarea--success:focus-visible {
+  border-color: var(--fa-color-success);
+  box-shadow: 0 0 0 3px rgba(0, 230, 118, 0.15);
+}
+
+/* --- Sizes --- */
+.textarea--sm {
+  font-size: var(--fa-font-size-sm);
+  padding: var(--fa-space-2) var(--fa-space-3);
+  min-height: 72px;
+}
+
+.textarea--lg {
+  font-size: var(--fa-font-size-md);
+  padding: var(--fa-space-4) var(--fa-space-5);
+  min-height: 160px;
+}
+
+/* --- No resize --- */
+.textarea--no-resize {
+  resize: none;
+}
+
+/* --- Monospace (for code/log input) --- */
+.textarea--mono {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-sm);
+  line-height: var(--fa-line-height-normal);
+}
+
+/* --- Wrapper with character count --- */
+.textarea-wrapper {
+  position: relative;
+}
+
+.textarea-wrapper .textarea {
+  padding-bottom: calc(var(--fa-space-3) + 1.2em);
+}
+
+.textarea__count {
+  position: absolute;
+  right: var(--fa-space-3);
+  bottom: var(--fa-space-2);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+  pointer-events: none;
+}
+
+.textarea__count--limit {
+  color: var(--fa-color-danger-text);
+}
+
+/* ==========================================================================
+   Component: Progress Bar (.progress)
+   ==========================================================================
+   Horizontal progress indicator with fill bar and optional label/value.
+
+   Sub-elements: __bar, __label, __value
+   Variants: --sm, --lg, --accent (default), --success, --warning,
+             --danger, --indeterminate, --striped
+   ========================================================================== */
+
+/* --- Track --- */
+.progress {
+  width: 100%;
+  height: 8px;
+  background: var(--fa-color-bg-surface-2);
+  border-radius: var(--fa-radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+/* --- Fill bar --- */
+.progress__bar {
+  height: 100%;
+  background: var(--fa-color-accent);
+  border-radius: var(--fa-radius-full);
+  transition: width var(--fa-duration-normal) var(--fa-easing-default);
+  min-width: 0;
+}
+
+/* --- Color variants --- */
+.progress--success .progress__bar {
+  background: var(--fa-color-success);
+}
+
+.progress--warning .progress__bar {
+  background: var(--fa-color-warning);
+}
+
+.progress--danger .progress__bar {
+  background: var(--fa-color-danger);
+}
+
+/* --- Glow (accent only) --- */
+.progress--glow .progress__bar {
+  box-shadow: 0 0 8px var(--fa-color-accent),
+    var(--fa-glow-box);
+}
+
+/* --- Sizes --- */
+.progress--sm {
+  height: 4px;
+}
+
+.progress--lg {
+  height: 12px;
+}
+
+/* --- Striped --- */
+.progress--striped .progress__bar {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.08) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.08) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 20px 20px;
+}
+
+/* --- Indeterminate --- */
+.progress--indeterminate .progress__bar {
+  width: 30% !important;
+  animation: fa-progress-indeterminate 1.5s var(--fa-easing-default) infinite;
+}
+
+@keyframes fa-progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+/* --- Animated stripes --- */
+.progress--animated .progress__bar {
+  animation: fa-progress-stripes 1s linear infinite;
+}
+
+@keyframes fa-progress-stripes {
+  0% {
+    background-position: 20px 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+/* --- Label wrapper --- */
+.progress-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fa-space-2);
+  width: 100%;
+}
+
+.progress-group__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--fa-space-3);
+}
+
+.progress-group__label {
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-medium);
+  color: var(--fa-color-text-secondary);
+}
+
+.progress-group__value {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+}
+
+/* --- Reduced motion --- */
+@media (prefers-reduced-motion: reduce) {
+  .progress--indeterminate .progress__bar,
+  .progress--animated .progress__bar {
+    animation: none;
+  }
+
+  .progress__bar {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Component: Select (.select)
+   ==========================================================================
+   Custom-styled native <select> with dropdown chevron.
+   Wrapper .select-group provides icon slot. For fully custom dropdowns,
+   use .dropdown (menu-based pattern).
+
+   Variants: --sm, (default), --lg, --error, --success
+   States: hover, focus, disabled
+
+   Sub-component: Dropdown Menu (.dropdown)
+   Fully custom dropdown panel triggered via JS. Contains .dropdown__trigger,
+   .dropdown__menu, .dropdown__item, .dropdown__divider.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   PART 1 — NATIVE SELECT
+   --------------------------------------------------------------------------- */
+
+.select {
+  display: block;
+  width: 100%;
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-base);
+  font-weight: var(--fa-font-weight-normal);
+  line-height: var(--fa-line-height-normal);
+  color: var(--fa-color-text-primary);
+  background: var(--fa-color-bg-surface-1);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  border-radius: var(--fa-radius-md);
+  padding: var(--fa-space-3) var(--fa-space-10) var(--fa-space-3) var(--fa-space-4);
+  min-height: 42px;
+  cursor: pointer;
+  transition: var(--fa-transition-colors),
+    box-shadow var(--fa-duration-fast) var(--fa-easing-default);
+  outline: none;
+
+  /* Remove native arrow */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+
+  /* Custom chevron */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%238899aa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--fa-space-4) center;
+  background-size: 12px;
+}
+
+/* --- Hover --- */
+.select:hover:not(:disabled):not(:focus) {
+  border-color: var(--fa-color-border-hover);
+  background-color: var(--fa-color-bg-surface-2);
+}
+
+/* --- Focus --- */
+.select:focus {
+  border-color: var(--fa-color-accent);
+  box-shadow: 0 0 0 3px var(--fa-focus-ring-color-outer), var(--fa-glow-box);
+  background-color: var(--fa-color-bg-surface-1);
+}
+
+.select:focus:not(:focus-visible) {
+  box-shadow: none;
+  border-color: var(--fa-color-border-accent);
+}
+
+.select:focus-visible {
+  border-color: var(--fa-color-accent);
+  box-shadow: 0 0 0 3px var(--fa-focus-ring-color-outer), var(--fa-glow-box);
+}
+
+/* --- Disabled --- */
+.select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background-color: var(--fa-color-bg-surface-0);
+}
+
+/* --- Error --- */
+.select--error {
+  border-color: var(--fa-color-danger);
+}
+
+.select--error:focus,
+.select--error:focus-visible {
+  border-color: var(--fa-color-danger);
+  box-shadow: 0 0 0 3px rgba(255, 77, 106, 0.2);
+}
+
+/* --- Success --- */
+.select--success {
+  border-color: var(--fa-color-success);
+}
+
+.select--success:focus,
+.select--success:focus-visible {
+  border-color: var(--fa-color-success);
+  box-shadow: 0 0 0 3px rgba(0, 230, 118, 0.15);
+}
+
+/* --- Sizes --- */
+.select--sm {
+  font-size: var(--fa-font-size-sm);
+  padding: var(--fa-space-2) var(--fa-space-8) var(--fa-space-2) var(--fa-space-3);
+  min-height: 34px;
+  border-radius: var(--fa-radius-sm);
+}
+
+.select--lg {
+  font-size: var(--fa-font-size-md);
+  padding: var(--fa-space-4) var(--fa-space-12) var(--fa-space-4) var(--fa-space-5);
+  min-height: 50px;
+}
+
+/* --- Placeholder text (first disabled option) --- */
+.select option[disabled] {
+  color: var(--fa-color-text-tertiary);
+}
+
+
+/* ---------------------------------------------------------------------------
+   PART 2 — CUSTOM DROPDOWN MENU
+   --------------------------------------------------------------------------- */
+
+.dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+/* --- Trigger (button or element that opens the menu) --- */
+.dropdown__trigger {
+  cursor: pointer;
+}
+
+/* --- Menu panel --- */
+.dropdown__menu {
+  position: absolute;
+  top: calc(100% + var(--fa-space-1));
+  left: 0;
+  z-index: var(--fa-z-dropdown);
+  min-width: 180px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--fa-color-bg-surface-1);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  border-radius: var(--fa-radius-md);
+  box-shadow: var(--fa-shadow-lg);
+  padding: var(--fa-space-1) 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity var(--fa-duration-fast) var(--fa-easing-default),
+    transform var(--fa-duration-fast) var(--fa-easing-out),
+    visibility var(--fa-duration-fast);
+}
+
+/* Open state — toggled via JS */
+.dropdown--open .dropdown__menu,
+.dropdown__menu--open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Right-aligned variant */
+.dropdown__menu--end {
+  left: auto;
+  right: 0;
+}
+
+/* Upward variant */
+.dropdown__menu--up {
+  top: auto;
+  bottom: calc(100% + var(--fa-space-1));
+  transform: translateY(4px);
+}
+
+.dropdown--open .dropdown__menu--up,
+.dropdown__menu--up.dropdown__menu--open {
+  transform: translateY(0);
+}
+
+/* --- Menu item --- */
+.dropdown__item {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-3);
+  width: 100%;
+  padding: var(--fa-space-2) var(--fa-space-4);
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-normal);
+  color: var(--fa-color-text-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition: var(--fa-transition-colors);
+}
+
+.dropdown__item:hover {
+  background: var(--fa-color-bg-surface-2);
+  color: var(--fa-color-accent);
+}
+
+.dropdown__item:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: calc(-1 * var(--fa-focus-ring-width));
+}
+
+/* Active / selected */
+.dropdown__item--active,
+.dropdown__item[aria-selected="true"] {
+  color: var(--fa-color-accent);
+  background: var(--fa-color-accent-subtle);
+}
+
+/* Disabled */
+.dropdown__item:disabled,
+.dropdown__item[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Danger item (e.g. "Delete") */
+.dropdown__item--danger {
+  color: var(--fa-color-danger-text);
+}
+
+.dropdown__item--danger:hover {
+  background: var(--fa-color-danger-subtle);
+  color: var(--fa-color-danger-text);
+}
+
+/* --- Item icon slot --- */
+.dropdown__item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--fa-color-text-tertiary);
+}
+
+.dropdown__item:hover .dropdown__item-icon {
+  color: currentColor;
+}
+
+/* --- Item shortcut hint --- */
+.dropdown__item-kbd {
+  margin-left: auto;
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+}
+
+/* --- Menu divider --- */
+.dropdown__divider {
+  border: none;
+  border-top: var(--fa-border-width) solid var(--fa-color-border);
+  margin: var(--fa-space-1) 0;
+}
+
+/* --- Menu header label --- */
+.dropdown__header {
+  padding: var(--fa-space-2) var(--fa-space-4) var(--fa-space-1);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-semibold);
+  color: var(--fa-color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--fa-letter-spacing-caps);
+}
+
+/* ==========================================================================
+   Component: Checkbox (.checkbox)
+   ==========================================================================
+   Custom-styled checkbox using a hidden native input + visual indicator.
+   Supports indeterminate state via [aria-checked="mixed"].
+
+   Structure:  <label class="checkbox">
+                 <input type="checkbox" class="checkbox__input" />
+                 <span class="checkbox__box"></span>
+                 <span class="checkbox__label">…</span>
+               </label>
+
+   Variants: --sm, (default), --lg, --error, --switch-like
+   States: hover, checked, indeterminate, focus-visible, disabled
+   ========================================================================== */
+
+/* --- Wrapper --- */
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fa-space-3);
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+/* --- Hidden native input (always accessible) --- */
+.checkbox__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Visual box --- */
+.checkbox__box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  background: var(--fa-color-bg-surface-1);
+  border: var(--fa-border-width-thick) solid var(--fa-color-border);
+  border-radius: var(--fa-radius-sm);
+  transition: var(--fa-transition-colors),
+    transform var(--fa-duration-fast) var(--fa-easing-spring);
+}
+
+/* Checkmark icon (hidden by default) */
+.checkbox__box::after {
+  content: "";
+  display: block;
+  width: 10px;
+  height: 6px;
+  border-left: 2px solid var(--fa-color-text-on-accent);
+  border-bottom: 2px solid var(--fa-color-text-on-accent);
+  transform: rotate(-45deg) scale(0);
+  transform-origin: center;
+  transition: transform var(--fa-duration-fast) var(--fa-easing-spring);
+  margin-top: -2px;
+}
+
+/* --- Label text --- */
+.checkbox__label {
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-normal);
+  color: var(--fa-color-text-primary);
+  line-height: var(--fa-line-height-normal);
+}
+
+/* --- Hover --- */
+.checkbox:hover .checkbox__box {
+  border-color: var(--fa-color-border-hover);
+  background: var(--fa-color-bg-surface-2);
+}
+
+/* --- Focus (keyboard) --- */
+.checkbox__input:focus-visible ~ .checkbox__box {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: var(--fa-focus-ring-offset);
+}
+
+/* --- Checked --- */
+.checkbox__input:checked ~ .checkbox__box {
+  background: var(--fa-color-accent);
+  border-color: var(--fa-color-accent);
+  box-shadow: var(--fa-glow-box);
+}
+
+.checkbox__input:checked ~ .checkbox__box::after {
+  transform: rotate(-45deg) scale(1);
+}
+
+.checkbox:hover .checkbox__input:checked ~ .checkbox__box {
+  background: var(--fa-color-accent-hover);
+  border-color: var(--fa-color-accent-hover);
+}
+
+/* --- Indeterminate --- */
+.checkbox__input:indeterminate ~ .checkbox__box,
+.checkbox__input[aria-checked="mixed"] ~ .checkbox__box {
+  background: var(--fa-color-accent);
+  border-color: var(--fa-color-accent);
+  box-shadow: var(--fa-glow-box);
+}
+
+.checkbox__input:indeterminate ~ .checkbox__box::after,
+.checkbox__input[aria-checked="mixed"] ~ .checkbox__box::after {
+  width: 10px;
+  height: 0;
+  border-left: none;
+  border-bottom: 2px solid var(--fa-color-text-on-accent);
+  transform: rotate(0) scale(1);
+  margin-top: 0;
+}
+
+/* --- Disabled --- */
+.checkbox__input:disabled ~ .checkbox__box {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--fa-color-bg-surface-0);
+}
+
+.checkbox__input:disabled ~ .checkbox__label {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.checkbox__input:disabled ~ .checkbox__box {
+  box-shadow: none;
+}
+
+/* Disabled + checked */
+.checkbox__input:disabled:checked ~ .checkbox__box {
+  background: var(--fa-color-accent);
+  border-color: var(--fa-color-accent);
+}
+
+/* --- Error variant --- */
+.checkbox--error .checkbox__box {
+  border-color: var(--fa-color-danger);
+}
+
+.checkbox--error .checkbox__input:checked ~ .checkbox__box {
+  background: var(--fa-color-danger);
+  border-color: var(--fa-color-danger);
+  box-shadow: 0 0 8px rgba(255, 77, 106, 0.25);
+}
+
+/* --- Sizes --- */
+.checkbox--sm .checkbox__box {
+  width: 16px;
+  height: 16px;
+}
+
+.checkbox--sm .checkbox__box::after {
+  width: 8px;
+  height: 4px;
+  border-width: 1.5px;
+}
+
+.checkbox--sm .checkbox__label {
+  font-size: var(--fa-font-size-xs);
+}
+
+.checkbox--lg .checkbox__box {
+  width: 24px;
+  height: 24px;
+}
+
+.checkbox--lg .checkbox__box::after {
+  width: 12px;
+  height: 7px;
+  border-width: 2.5px;
+  margin-top: -3px;
+}
+
+.checkbox--lg .checkbox__label {
+  font-size: var(--fa-font-size-base);
+}
+
+/* --- Checkbox Group --- */
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fa-space-3);
+}
+
+.checkbox-group--horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--fa-space-4);
+}
+
+/* --- Reduced motion --- */
+@media (prefers-reduced-motion: reduce) {
+  .checkbox__box,
+  .checkbox__box::after {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Component: Toggle / Switch (.toggle)
+   ==========================================================================
+   On/off switch with sliding knob and accent glow.
+
+   Structure:  <label class="toggle">
+                 <input type="checkbox" class="toggle__input" />
+                 <span class="toggle__track"></span>
+                 <span class="toggle__label">…</span>
+               </label>
+
+   Variants: --sm, (default), --lg, --danger, --success
+   States: hover, checked, focus-visible, disabled
+   ========================================================================== */
+
+/* --- Wrapper --- */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fa-space-3);
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+/* --- Hidden native input --- */
+.toggle__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Track (pill) --- */
+.toggle__track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 22px;
+  background: var(--fa-color-bg-surface-2);
+  border: var(--fa-border-width-thick) solid var(--fa-color-border);
+  border-radius: var(--fa-radius-full);
+  transition: var(--fa-transition-colors),
+    box-shadow var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+/* --- Knob (thumb) --- */
+.toggle__track::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--fa-radius-full);
+  background: var(--fa-color-text-tertiary);
+  transition: transform var(--fa-duration-normal) var(--fa-easing-spring),
+    background var(--fa-duration-fast) var(--fa-easing-default),
+    box-shadow var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+/* --- Label text --- */
+.toggle__label {
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-normal);
+  color: var(--fa-color-text-primary);
+  line-height: var(--fa-line-height-normal);
+}
+
+/* --- Hover --- */
+.toggle:hover .toggle__track {
+  border-color: var(--fa-color-border-hover);
+  background: var(--fa-color-bg-surface-3);
+}
+
+.toggle:hover .toggle__track::after {
+  background: var(--fa-color-text-secondary);
+}
+
+/* --- Focus (keyboard) --- */
+.toggle__input:focus-visible ~ .toggle__track {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: var(--fa-focus-ring-offset);
+}
+
+/* --- Checked (ON) --- */
+.toggle__input:checked ~ .toggle__track {
+  background: var(--fa-color-accent);
+  border-color: var(--fa-color-accent);
+  box-shadow: var(--fa-glow-box);
+}
+
+.toggle__input:checked ~ .toggle__track::after {
+  transform: translateX(18px);
+  background: var(--fa-color-text-on-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.toggle:hover .toggle__input:checked ~ .toggle__track {
+  background: var(--fa-color-accent-hover);
+  border-color: var(--fa-color-accent-hover);
+}
+
+/* --- Disabled --- */
+.toggle__input:disabled ~ .toggle__track {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.toggle__input:disabled ~ .toggle__label {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* --- Danger variant (for destructive toggles) --- */
+.toggle--danger .toggle__input:checked ~ .toggle__track {
+  background: var(--fa-color-danger);
+  border-color: var(--fa-color-danger);
+  box-shadow: 0 0 8px rgba(255, 77, 106, 0.25);
+}
+
+.toggle--danger .toggle__input:checked ~ .toggle__track::after {
+  background: #ffffff;
+}
+
+/* --- Success variant --- */
+.toggle--success .toggle__input:checked ~ .toggle__track {
+  background: var(--fa-color-success);
+  border-color: var(--fa-color-success);
+  box-shadow: 0 0 8px rgba(0, 230, 118, 0.2);
+}
+
+.toggle--success .toggle__input:checked ~ .toggle__track::after {
+  background: var(--fa-color-text-inverse);
+}
+
+/* --- Size: Small --- */
+.toggle--sm .toggle__track {
+  width: 32px;
+  height: 18px;
+}
+
+.toggle--sm .toggle__track::after {
+  width: 11px;
+  height: 11px;
+  left: 2px;
+}
+
+.toggle--sm .toggle__input:checked ~ .toggle__track::after {
+  transform: translateX(14px);
+}
+
+.toggle--sm .toggle__label {
+  font-size: var(--fa-font-size-xs);
+}
+
+/* --- Size: Large --- */
+.toggle--lg .toggle__track {
+  width: 52px;
+  height: 28px;
+}
+
+.toggle--lg .toggle__track::after {
+  width: 20px;
+  height: 20px;
+  left: 3px;
+}
+
+.toggle--lg .toggle__input:checked ~ .toggle__track::after {
+  transform: translateX(24px);
+}
+
+.toggle--lg .toggle__label {
+  font-size: var(--fa-font-size-base);
+}
+
+/* --- With status text --- */
+.toggle__status {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--fa-letter-spacing-caps);
+  color: var(--fa-color-text-tertiary);
+  min-width: 2.5em;
+}
+
+.toggle__input:checked ~ .toggle__status {
+  color: var(--fa-color-accent);
+}
+
+/* --- Toggle Group --- */
+.toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fa-space-3);
+}
+
+/* --- Reduced motion --- */
+@media (prefers-reduced-motion: reduce) {
+  .toggle__track,
+  .toggle__track::after {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Component: Tag / Chip (.tag)
+   ==========================================================================
+   Interactive label with optional remove button. Used for filters,
+   selected items, categories, and metadata.
+
+   Structure:  <span class="tag">
+                 <span class="tag__text">…</span>
+                 <button class="tag__remove">×</button>
+               </span>
+
+   Variants: --accent (default), --success, --warning, --danger, --info,
+             --secondary, --outline, --solid
+   Sizes: --sm, (default), --lg
+   Modifiers: --interactive (clickable), --pill (rounded)
+   ========================================================================== */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fa-space-1);
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+  padding: var(--fa-space-1) var(--fa-space-3);
+  min-height: 26px;
+  border-radius: var(--fa-radius-sm);
+  border: var(--fa-border-width) solid transparent;
+  transition: var(--fa-transition-colors);
+  user-select: none;
+
+  /* Default: accent subtle */
+  background: var(--fa-color-accent-subtle);
+  color: var(--fa-color-accent);
+  border-color: var(--fa-color-border-accent);
+}
+
+/* --- Tag text --- */
+.tag__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Remove button --- */
+.tag__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin-left: var(--fa-space-1);
+  color: currentColor;
+  background: transparent;
+  border: none;
+  border-radius: var(--fa-radius-sm);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: var(--fa-transition-colors),
+    opacity var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+.tag__remove:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tag__remove:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: 0;
+}
+
+.tag__remove svg {
+  width: 10px;
+  height: 10px;
+}
+
+/* --- Interactive (clickable tag) --- */
+.tag--interactive {
+  cursor: pointer;
+}
+
+.tag--interactive:hover {
+  background: var(--fa-color-accent-subtle-hover);
+  border-color: var(--fa-color-border-accent-strong);
+}
+
+.tag--interactive:active {
+  transform: scale(0.96);
+}
+
+.tag--interactive:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: var(--fa-focus-ring-offset);
+}
+
+/* --- Selected state --- */
+.tag--selected,
+.tag[aria-selected="true"] {
+  background: var(--fa-color-accent);
+  color: var(--fa-color-text-on-accent);
+  border-color: var(--fa-color-accent);
+  box-shadow: var(--fa-glow-box);
+}
+
+.tag--selected .tag__remove:hover,
+.tag[aria-selected="true"] .tag__remove:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* --- Semantic variants --- */
+.tag--success {
+  background: var(--fa-color-success-subtle);
+  color: var(--fa-color-success-text);
+  border-color: rgba(0, 230, 118, 0.2);
+}
+
+.tag--warning {
+  background: var(--fa-color-warning-subtle);
+  color: var(--fa-color-warning-text);
+  border-color: rgba(255, 171, 64, 0.2);
+}
+
+.tag--danger {
+  background: var(--fa-color-danger-subtle);
+  color: var(--fa-color-danger-text);
+  border-color: rgba(255, 77, 106, 0.2);
+}
+
+.tag--info {
+  background: var(--fa-color-info-subtle);
+  color: var(--fa-color-info-text);
+  border-color: rgba(64, 196, 255, 0.2);
+}
+
+.tag--secondary {
+  background: var(--fa-color-secondary-subtle);
+  color: var(--fa-color-secondary);
+  border-color: rgba(224, 64, 251, 0.2);
+}
+
+/* --- Outline variant --- */
+.tag--outline {
+  background: transparent;
+  border-color: var(--fa-color-border-accent-strong);
+  color: var(--fa-color-accent);
+}
+
+.tag--outline.tag--danger {
+  border-color: rgba(255, 77, 106, 0.35);
+  color: var(--fa-color-danger-text);
+}
+
+.tag--outline.tag--success {
+  border-color: rgba(0, 230, 118, 0.35);
+  color: var(--fa-color-success-text);
+}
+
+/* --- Solid variant --- */
+.tag--solid {
+  background: var(--fa-color-accent);
+  color: var(--fa-color-text-on-accent);
+  border-color: var(--fa-color-accent);
+}
+
+.tag--solid.tag--danger {
+  background: var(--fa-color-danger);
+  color: #ffffff;
+  border-color: var(--fa-color-danger);
+}
+
+.tag--solid.tag--success {
+  background: var(--fa-color-success);
+  color: var(--fa-color-text-inverse);
+  border-color: var(--fa-color-success);
+}
+
+.tag--solid.tag--warning {
+  background: var(--fa-color-warning);
+  color: var(--fa-color-text-inverse);
+  border-color: var(--fa-color-warning);
+}
+
+/* --- Pill (rounded) --- */
+.tag--pill {
+  border-radius: var(--fa-radius-full);
+  padding-left: var(--fa-space-3);
+  padding-right: var(--fa-space-3);
+}
+
+/* --- Sizes --- */
+.tag--sm {
+  font-size: 0.625rem;
+  padding: 2px var(--fa-space-2);
+  min-height: 20px;
+  gap: 2px;
+}
+
+.tag--sm .tag__remove {
+  width: 14px;
+  height: 14px;
+}
+
+.tag--sm .tag__remove svg {
+  width: 8px;
+  height: 8px;
+}
+
+.tag--lg {
+  font-size: var(--fa-font-size-sm);
+  padding: var(--fa-space-2) var(--fa-space-4);
+  min-height: 32px;
+}
+
+.tag--lg .tag__remove {
+  width: 18px;
+  height: 18px;
+}
+
+/* --- With icon (leading) --- */
+.tag__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: currentColor;
+}
+
+.tag__icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* --- Tag Group (wrapping container) --- */
+.tag-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fa-space-2);
+  align-items: center;
+}
+
+/* --- Disabled --- */
+.tag--disabled,
+.tag[aria-disabled="true"] {
+  opacity: 0.4;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Component: Modal / Dialog (.modal)
+   ==========================================================================
+   Overlay dialog with acrylic backdrop, slide-up entrance, and
+   card-like header/body/footer structure.
+
+   Structure:  <div class="modal-overlay">
+                 <div class="modal" role="dialog" aria-modal="true">
+                   <div class="modal__header">…</div>
+                   <div class="modal__body">…</div>
+                   <div class="modal__footer">…</div>
+                 </div>
+               </div>
+
+   Variants: (default), --sm, --lg, --full, --danger, --flush
+   States: open (via .modal-overlay--open)
+   ========================================================================== */
+
+/* --- Overlay / Backdrop --- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--fa-z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--fa-space-6);
+  background: rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--fa-duration-normal) var(--fa-easing-default),
+    visibility var(--fa-duration-normal);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .modal-overlay {
+    backdrop-filter: blur(6px) saturate(120%);
+    -webkit-backdrop-filter: blur(6px) saturate(120%);
+  }
+}
+
+/* Open state */
+.modal-overlay--open {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* --- Dialog container --- */
+.modal {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: calc(100vh - var(--fa-space-12));
+  display: flex;
+  flex-direction: column;
+  background: var(--fa-color-bg-surface-1);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  border-radius: var(--fa-radius-md);
+  box-shadow: var(--fa-shadow-xl);
+  overflow: hidden;
+  transform: translateY(12px) scale(0.97);
+  transition: transform var(--fa-duration-slow) var(--fa-easing-spring),
+    opacity var(--fa-duration-normal) var(--fa-easing-default);
+}
+
+.modal-overlay--open .modal {
+  transform: translateY(0) scale(1);
+}
+
+/* --- Header --- */
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fa-space-4);
+  padding: var(--fa-space-5) var(--fa-space-6);
+  border-bottom: var(--fa-border-width) solid var(--fa-color-border);
+  flex-shrink: 0;
+}
+
+.modal__title {
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-md);
+  font-weight: var(--fa-font-weight-semibold);
+  color: var(--fa-color-text-primary);
+  line-height: var(--fa-line-height-tight);
+}
+
+.modal__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--fa-color-text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: var(--fa-radius-sm);
+  cursor: pointer;
+  transition: var(--fa-transition-colors);
+}
+
+.modal__close:hover {
+  color: var(--fa-color-text-primary);
+  background: var(--fa-color-bg-surface-2);
+}
+
+.modal__close:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: var(--fa-focus-ring-offset);
+}
+
+.modal__close svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* --- Body --- */
+.modal__body {
+  padding: var(--fa-space-6);
+  overflow-y: auto;
+  flex: 1;
+  font-size: var(--fa-font-size-sm);
+  line-height: var(--fa-line-height-relaxed);
+  color: var(--fa-color-text-secondary);
+}
+
+/* --- Footer (actions) --- */
+.modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--fa-space-3);
+  padding: var(--fa-space-4) var(--fa-space-6);
+  border-top: var(--fa-border-width) solid var(--fa-color-border);
+  flex-shrink: 0;
+}
+
+.modal__footer--between {
+  justify-content: space-between;
+}
+
+/* --- Sizes --- */
+.modal--sm {
+  max-width: 380px;
+}
+
+.modal--lg {
+  max-width: 720px;
+}
+
+.modal--full {
+  max-width: calc(100vw - var(--fa-space-12));
+  max-height: calc(100vh - var(--fa-space-12));
+}
+
+/* --- Danger accent header --- */
+.modal--danger .modal__header {
+  border-bottom-color: var(--fa-color-danger);
+}
+
+.modal--danger .modal__title {
+  color: var(--fa-color-danger-text);
+}
+
+/* --- Flush body (no padding — for embedded tables/lists) --- */
+.modal--flush .modal__body {
+  padding: 0;
+}
+
+/* --- Description text in header --- */
+.modal__description {
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+  margin-top: var(--fa-space-1);
+  line-height: var(--fa-line-height-normal);
+}
+
+/* --- Reduced motion --- */
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay {
+    transition: none;
+  }
+
+  .modal {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   Component: Top Bar / App Bar (.topbar)
+   ==========================================================================
+   Horizontal top navigation bar with logo, search, nav links, and
+   trailing actions. Optionally sticky with acrylic blur.
+
+   Structure:  <header class="topbar">
+                 <div class="topbar__start">…</div>
+                 <div class="topbar__center">…</div>
+                 <div class="topbar__end">…</div>
+               </header>
+
+   Sub-elements: __brand, __nav, __nav-link, __start, __center, __end
+   Variants: --sticky, --bordered, --transparent, --compact
+   ========================================================================== */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-4);
+  width: 100%;
+  min-height: 56px;
+  padding: 0 var(--fa-space-6);
+  background: var(--fa-color-bg-surface-1);
+  border-bottom: var(--fa-border-width) solid var(--fa-color-border);
+  z-index: var(--fa-z-sticky);
+  transition: var(--fa-transition-colors),
+    box-shadow var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+/* --- Sections (start / center / end) --- */
+.topbar__start {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-3);
+  flex-shrink: 0;
+}
+
+.topbar__center {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-4);
+  flex: 1;
+  justify-content: center;
+}
+
+.topbar__end {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-3);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* --- Brand / logo --- */
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-2);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-bold);
+  color: var(--fa-color-accent);
+  text-decoration: none;
+  letter-spacing: var(--fa-letter-spacing-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.topbar__brand:hover {
+  text-shadow: var(--fa-glow-text);
+}
+
+.topbar__brand svg,
+.topbar__brand img {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+/* --- Inline nav links --- */
+.topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.topbar__nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fa-space-2);
+  padding: var(--fa-space-2) var(--fa-space-3);
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-medium);
+  color: var(--fa-color-text-secondary);
+  text-decoration: none;
+  border-radius: var(--fa-radius-sm);
+  transition: var(--fa-transition-colors);
+  white-space: nowrap;
+}
+
+.topbar__nav-link:hover {
+  color: var(--fa-color-text-primary);
+  background: var(--fa-color-bg-surface-2);
+}
+
+.topbar__nav-link--active,
+.topbar__nav-link[aria-current="page"] {
+  color: var(--fa-color-accent);
+  background: var(--fa-color-accent-subtle);
+}
+
+.topbar__nav-link:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: var(--fa-focus-ring-offset);
+}
+
+.topbar__nav-link svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* --- Separator between groups --- */
+.topbar__separator {
+  width: 1px;
+  height: 24px;
+  background: var(--fa-color-border);
+  flex-shrink: 0;
+  margin: 0 var(--fa-space-2);
+}
+
+/* --- Sticky variant --- */
+.topbar--sticky {
+  position: sticky;
+  top: 0;
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .topbar--sticky {
+    background: var(--fa-acrylic-bg, var(--fa-color-bg-surface-1));
+    backdrop-filter: blur(var(--fa-acrylic-blur)) saturate(var(--fa-acrylic-saturation));
+    -webkit-backdrop-filter: blur(var(--fa-acrylic-blur)) saturate(var(--fa-acrylic-saturation));
+  }
+}
+
+/* --- Bordered variant (stronger bottom) --- */
+.topbar--bordered {
+  border-bottom-width: var(--fa-border-width-thick);
+}
+
+/* --- Transparent variant (no bg, for hero sections) --- */
+.topbar--transparent {
+  background: transparent;
+  border-bottom-color: transparent;
+}
+
+/* --- Compact variant (smaller height) --- */
+.topbar--compact {
+  min-height: 44px;
+  padding: 0 var(--fa-space-4);
+}
+
+.topbar--compact .topbar__nav-link {
+  font-size: var(--fa-font-size-xs);
+  padding: var(--fa-space-1) var(--fa-space-2);
+}
+
+/* ==========================================================================
+   Component: Breadcrumb (.breadcrumb)
+   ==========================================================================
+   Horizontal trail showing navigation hierarchy.
+
+   Structure:  <nav class="breadcrumb" aria-label="Breadcrumb">
+                 <ol class="breadcrumb__list">
+                   <li class="breadcrumb__item">
+                     <a class="breadcrumb__link" href="#">…</a>
+                   </li>
+                   <li class="breadcrumb__item breadcrumb__item--active"
+                       aria-current="page">…</li>
+                 </ol>
+               </nav>
+
+   Variants: --sm, --lg, --slash (alternate separator)
+   ========================================================================== */
+
+/* --- Container --- */
+.breadcrumb {
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-sm);
+  line-height: var(--fa-line-height-normal);
+}
+
+/* --- List --- */
+.breadcrumb__list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fa-space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* --- Item --- */
+.breadcrumb__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fa-space-1);
+  color: var(--fa-color-text-tertiary);
+}
+
+/* Separator (chevron by default) */
+.breadcrumb__item + .breadcrumb__item::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: var(--fa-space-1);
+  flex-shrink: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%236b7a8d' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 2.5L7.5 6L4.5 9.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px;
+  opacity: 0.7;
+}
+
+/* --- Link --- */
+.breadcrumb__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fa-space-1);
+  color: var(--fa-color-text-secondary);
+  text-decoration: none;
+  transition: var(--fa-transition-colors);
+  padding: var(--fa-space-1) var(--fa-space-1);
+  border-radius: var(--fa-radius-sm);
+}
+
+.breadcrumb__link:hover {
+  color: var(--fa-color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.breadcrumb__link:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: var(--fa-focus-ring-offset);
+}
+
+/* --- Link with icon --- */
+.breadcrumb__link svg {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-right: 0;
+}
+
+/* --- Active / current item --- */
+.breadcrumb__item--active,
+.breadcrumb__item[aria-current="page"] {
+  color: var(--fa-color-text-primary);
+  font-weight: var(--fa-font-weight-medium);
+}
+
+/* --- Slash separator variant --- */
+.breadcrumb--slash .breadcrumb__item + .breadcrumb__item::before {
+  background: none;
+  content: "/";
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+  opacity: 0.5;
+  width: auto;
+  height: auto;
+}
+
+/* --- Size: Small --- */
+.breadcrumb--sm {
+  font-size: var(--fa-font-size-xs);
+}
+
+.breadcrumb--sm .breadcrumb__item + .breadcrumb__item::before {
+  width: 10px;
+  height: 10px;
+  background-size: 10px;
+}
+
+/* --- Size: Large --- */
+.breadcrumb--lg {
+  font-size: var(--fa-font-size-base);
+}
+
+.breadcrumb--lg .breadcrumb__item + .breadcrumb__item::before {
+  width: 14px;
+  height: 14px;
+  background-size: 14px;
+}
+
+/* --- Collapsed item (ellipsis for deep nesting) --- */
+.breadcrumb__item--collapsed::after {
+  content: "…";
+  color: var(--fa-color-text-tertiary);
+  padding: 0 var(--fa-space-1);
+}
+
+/* ==========================================================================
+   Component: Toolbar (.toolbar)
+   ==========================================================================
+   Horizontal action bar for grouping related controls (icon buttons,
+   selects, toggles, dividers). Common in editors, table headers, etc.
+
+   Structure:  <div class="toolbar">
+                 <div class="toolbar__group">…</div>
+                 <div class="toolbar__separator"></div>
+                 <div class="toolbar__group">…</div>
+                 <div class="toolbar__spacer"></div>
+                 <div class="toolbar__group">…</div>
+               </div>
+
+   Variants: --bordered, --compact, --vertical, --sticky
+   ========================================================================== */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-2);
+  padding: var(--fa-space-2) var(--fa-space-3);
+  background: var(--fa-color-bg-surface-1);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  border-radius: var(--fa-radius-md);
+  min-height: 44px;
+}
+
+/* --- Group (logical cluster of controls) --- */
+.toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-1);
+  flex-shrink: 0;
+}
+
+/* --- Vertical separator between groups --- */
+.toolbar__separator {
+  width: 1px;
+  height: 24px;
+  background: var(--fa-color-border);
+  flex-shrink: 0;
+  margin: 0 var(--fa-space-1);
+}
+
+/* --- Spacer (pushes trailing group to end) --- */
+.toolbar__spacer {
+  flex: 1;
+}
+
+/* --- Label text in toolbar --- */
+.toolbar__label {
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-medium);
+  color: var(--fa-color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--fa-letter-spacing-caps);
+  white-space: nowrap;
+  padding: 0 var(--fa-space-2);
+}
+
+/* --- Bordered variant (stronger visual) --- */
+.toolbar--bordered {
+  border-width: var(--fa-border-width-thick);
+  box-shadow: var(--fa-shadow-sm);
+}
+
+/* --- Compact (less padding/height) --- */
+.toolbar--compact {
+  padding: var(--fa-space-1) var(--fa-space-2);
+  gap: var(--fa-space-1);
+  min-height: 36px;
+}
+
+.toolbar--compact .toolbar__separator {
+  height: 18px;
+}
+
+/* --- Flush (no bg, border, or shadow — inline strip) --- */
+.toolbar--flush {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* --- Vertical toolbar --- */
+.toolbar--vertical {
+  flex-direction: column;
+  align-items: stretch;
+  min-height: auto;
+  width: max-content;
+  padding: var(--fa-space-2);
+}
+
+.toolbar--vertical .toolbar__group {
+  flex-direction: column;
+}
+
+.toolbar--vertical .toolbar__separator {
+  width: 100%;
+  height: 1px;
+  margin: var(--fa-space-1) 0;
+}
+
+/* --- Sticky toolbar --- */
+.toolbar--sticky {
+  position: sticky;
+  top: 0;
+  z-index: var(--fa-z-sticky);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .toolbar--sticky {
+    background: var(--fa-acrylic-bg, var(--fa-color-bg-surface-1));
+    backdrop-filter: blur(var(--fa-acrylic-blur-subtle)) saturate(var(--fa-acrylic-saturation));
+    -webkit-backdrop-filter: blur(var(--fa-acrylic-blur-subtle)) saturate(var(--fa-acrylic-saturation));
+  }
+}
+
+/* --- Toolbar with bottom border only (for table/card headers) --- */
+.toolbar--bottom-border {
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  border-radius: 0;
+}
+
+/* ==========================================================================
+   Component: Pagination (.pagination)
+   ==========================================================================
+   Page navigation with numbered links, prev/next, and optional
+   "go to page" input.
+
+   Structure:  <nav class="pagination" aria-label="Pagination">
+                 <button class="pagination__prev">…</button>
+                 <a class="pagination__page" href="#">1</a>
+                 <a class="pagination__page pagination__page--active">2</a>
+                 <span class="pagination__ellipsis">…</span>
+                 <a class="pagination__page" href="#">10</a>
+                 <button class="pagination__next">…</button>
+               </nav>
+
+   Sub-elements: __prev, __next, __page, __ellipsis, __info, __size-select
+   Variants: --sm, --lg, --compact (prev/next only)
+   ========================================================================== */
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-1);
+  font-family: var(--fa-font-family-sans);
+  font-size: var(--fa-font-size-sm);
+}
+
+/* --- Shared style for all clickable items --- */
+.pagination__page,
+.pagination__prev,
+.pagination__next {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 var(--fa-space-2);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-medium);
+  color: var(--fa-color-text-secondary);
+  background: transparent;
+  border: var(--fa-border-width) solid transparent;
+  border-radius: var(--fa-radius-sm);
+  text-decoration: none;
+  cursor: pointer;
+  transition: var(--fa-transition-colors);
+  user-select: none;
+}
+
+/* Hover */
+.pagination__page:hover,
+.pagination__prev:hover,
+.pagination__next:hover {
+  color: var(--fa-color-text-primary);
+  background: var(--fa-color-bg-surface-2);
+  border-color: var(--fa-color-border);
+}
+
+/* Focus */
+.pagination__page:focus-visible,
+.pagination__prev:focus-visible,
+.pagination__next:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-focus-ring-color);
+  outline-offset: var(--fa-focus-ring-offset);
+}
+
+/* Active page */
+.pagination__page--active,
+.pagination__page[aria-current="page"] {
+  color: var(--fa-color-text-on-accent);
+  background: var(--fa-color-accent);
+  border-color: var(--fa-color-accent);
+  box-shadow: var(--fa-glow-box);
+  font-weight: var(--fa-font-weight-bold);
+}
+
+.pagination__page--active:hover,
+.pagination__page[aria-current="page"]:hover {
+  background: var(--fa-color-accent-hover);
+  border-color: var(--fa-color-accent-hover);
+}
+
+/* Disabled prev/next */
+.pagination__prev:disabled,
+.pagination__next:disabled,
+.pagination__prev[aria-disabled="true"],
+.pagination__next[aria-disabled="true"] {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Icons inside prev/next */
+.pagination__prev svg,
+.pagination__next svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* --- Ellipsis --- */
+.pagination__ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-sm);
+  color: var(--fa-color-text-tertiary);
+  user-select: none;
+  letter-spacing: 0.15em;
+}
+
+/* --- Info text ("Page 2 of 10") --- */
+.pagination__info {
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+  white-space: nowrap;
+  padding: 0 var(--fa-space-2);
+}
+
+/* --- Page size selector --- */
+.pagination__size-select {
+  margin-left: var(--fa-space-3);
+}
+
+/* --- Size: Small --- */
+.pagination--sm .pagination__page,
+.pagination--sm .pagination__prev,
+.pagination--sm .pagination__next {
+  min-width: 28px;
+  height: 28px;
+  font-size: var(--fa-font-size-xs);
+}
+
+.pagination--sm .pagination__prev svg,
+.pagination--sm .pagination__next svg {
+  width: 12px;
+  height: 12px;
+}
+
+.pagination--sm .pagination__ellipsis {
+  min-width: 28px;
+  height: 28px;
+  font-size: var(--fa-font-size-xs);
+}
+
+/* --- Size: Large --- */
+.pagination--lg .pagination__page,
+.pagination--lg .pagination__prev,
+.pagination--lg .pagination__next {
+  min-width: 44px;
+  height: 44px;
+  font-size: var(--fa-font-size-base);
+}
+
+.pagination--lg .pagination__prev svg,
+.pagination--lg .pagination__next svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* --- Compact (prev/next only, no numbers) --- */
+.pagination--compact {
+  gap: var(--fa-space-2);
+}
+
+/* --- Justified (space-between for table footers) --- */
+.pagination--justified {
+  justify-content: space-between;
+  width: 100%;
+}
+
+/* --- Center wrapper --- */
+.pagination--center {
+  justify-content: center;
+}
+
+/* ==========================================================================
+   Component: Avatar (.avatar)
+   ==========================================================================
+   Circular (or squared) user/entity representation.
+   Supports images, initials, and icon placeholders.
+
+   Sizes: --xs (24px), --sm (32px), (default 40px), --lg (48px), --xl (64px)
+   Variants: --squared, --status (online/offline/busy/away), --ring,
+             --group (overlapping stack)
+
+   Usage:
+     <div class="avatar">
+       <img class="avatar__image" src="..." alt="User" />
+     </div>
+
+     <div class="avatar avatar--lg">
+       <span class="avatar__initials">RW</span>
+     </div>
+
+     <div class="avatar avatar--status" data-status="online">
+       <img class="avatar__image" src="..." alt="User" />
+     </div>
+
+     <div class="avatar-group">
+       <div class="avatar">...</div>
+       <div class="avatar">...</div>
+       <span class="avatar-group__overflow">+3</span>
+     </div>
+   ========================================================================== */
+
+.avatar {
+  --_avatar-size: 40px;
+  --_avatar-font: var(--fa-font-size-sm);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--_avatar-size);
+  height: var(--_avatar-size);
+  border-radius: var(--fa-radius-full);
+  background: var(--fa-color-bg-surface-2);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  overflow: hidden;
+  transition: var(--fa-transition-colors);
+}
+
+/* --- Image --- */
+.avatar__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+/* --- Initials --- */
+.avatar__initials {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--_avatar-font);
+  font-weight: var(--fa-font-weight-semibold);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  text-transform: uppercase;
+  color: var(--fa-color-accent);
+  user-select: none;
+  line-height: 1;
+}
+
+/* --- Icon placeholder --- */
+.avatar__icon {
+  width: 50%;
+  height: 50%;
+  color: var(--fa-color-text-tertiary);
+}
+
+.avatar__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* ==========================================================================
+   Sizes
+   ========================================================================== */
+
+.avatar--xs {
+  --_avatar-size: 24px;
+  --_avatar-font: 0.55rem;
+}
+
+.avatar--sm {
+  --_avatar-size: 32px;
+  --_avatar-font: var(--fa-font-size-xs);
+}
+
+.avatar--lg {
+  --_avatar-size: 48px;
+  --_avatar-font: var(--fa-font-size-base);
+}
+
+.avatar--xl {
+  --_avatar-size: 64px;
+  --_avatar-font: var(--fa-font-size-lg);
+}
+
+/* ==========================================================================
+   Variants
+   ========================================================================== */
+
+/* --- Squared --- */
+.avatar--squared {
+  border-radius: var(--fa-radius-sm);
+}
+
+/* --- Accent ring (highlights selected or important avatars) --- */
+.avatar--ring {
+  border-width: var(--fa-border-width-thick);
+  border-color: var(--fa-color-accent);
+  box-shadow: 0 0 0 2px var(--fa-color-bg-base),
+    var(--fa-glow-box);
+}
+
+/* --- Status indicator (dot on bottom-right) --- */
+.avatar--status {
+  overflow: visible;
+}
+
+.avatar--status::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 25%;
+  height: 25%;
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: var(--fa-radius-full);
+  border: 2px solid var(--fa-color-bg-surface-1);
+  background: var(--fa-color-text-tertiary);
+  z-index: 1;
+}
+
+.avatar--status[data-status="online"]::after {
+  background: var(--fa-color-success);
+  box-shadow: 0 0 6px rgba(0, 230, 118, 0.5);
+}
+
+.avatar--status[data-status="busy"]::after {
+  background: var(--fa-color-danger);
+  box-shadow: 0 0 6px rgba(255, 77, 106, 0.4);
+}
+
+.avatar--status[data-status="away"]::after {
+  background: var(--fa-color-warning);
+  box-shadow: 0 0 6px rgba(255, 171, 64, 0.4);
+}
+
+.avatar--status[data-status="offline"]::after {
+  background: var(--fa-color-text-disabled);
+}
+
+/* ==========================================================================
+   Avatar Group (.avatar-group)
+   Overlapping stack of avatars.
+   ========================================================================== */
+
+.avatar-group {
+  display: inline-flex;
+  align-items: center;
+  flex-direction: row-reverse;
+}
+
+.avatar-group .avatar {
+  margin-left: -10px;
+  border: 2px solid var(--fa-color-bg-surface-1);
+  transition: var(--fa-transition-transform), var(--fa-transition-colors);
+}
+
+.avatar-group .avatar:last-child {
+  margin-left: 0;
+}
+
+.avatar-group .avatar:hover {
+  z-index: 1;
+  transform: translateY(-2px);
+}
+
+/* --- Overflow indicator --- */
+.avatar-group__overflow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 var(--fa-space-2);
+  margin-left: var(--fa-space-2);
+  border-radius: var(--fa-radius-full);
+  background: var(--fa-color-bg-surface-2);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-semibold);
+  color: var(--fa-color-text-secondary);
+  letter-spacing: var(--fa-letter-spacing-wide);
+}
+
+/* ==========================================================================
+   Component: Feed Post (.feed-post)
+   ==========================================================================
+   A social/activity feed item with author, content, timestamp, and actions.
+   Used in dashboards, activity logs, timelines.
+
+   Structure:
+     .feed-post
+       .feed-post__header
+         .avatar  (author)
+         .feed-post__meta
+           .feed-post__author
+           .feed-post__timestamp
+         .feed-post__actions  (header-level actions)
+       .feed-post__body
+       .feed-post__media  (images/embeds)
+       .feed-post__footer
+         .feed-post__reactions
+         .feed-post__stats
+
+   Variants: --compact, --highlighted, --threaded
+   ========================================================================== */
+
+.feed-post {
+  position: relative;
+  padding: var(--fa-space-5) var(--fa-space-6);
+  background: var(--fa-color-bg-surface-1);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  transition: var(--fa-transition-colors);
+}
+
+.feed-post + .feed-post {
+  border-top: 0;
+}
+
+/* --- Header --- */
+.feed-post__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--fa-space-3);
+  margin-bottom: var(--fa-space-3);
+}
+
+.feed-post__meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.feed-post__author {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-semibold);
+  color: var(--fa-color-text-primary);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  line-height: var(--fa-line-height-tight);
+}
+
+.feed-post__author a {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+.feed-post__author a:hover {
+  color: var(--fa-color-accent);
+}
+
+.feed-post__role {
+  display: inline;
+  margin-left: var(--fa-space-2);
+  font-family: var(--fa-font-family-mono);
+  font-size: 0.6rem;
+  font-weight: var(--fa-font-weight-bold);
+  letter-spacing: var(--fa-letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--fa-color-accent);
+  background: var(--fa-color-accent-subtle);
+  border: var(--fa-border-width) solid var(--fa-color-border-accent);
+  padding: 1px var(--fa-space-1);
+  vertical-align: middle;
+}
+
+.feed-post__timestamp {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+  letter-spacing: var(--fa-letter-spacing-wide);
+}
+
+.feed-post__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-1);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* --- Body --- */
+.feed-post__body {
+  font-size: var(--fa-font-size-base);
+  color: var(--fa-color-text-secondary);
+  line-height: var(--fa-line-height-normal);
+}
+
+.feed-post__body p {
+  margin: 0 0 var(--fa-space-2);
+}
+
+.feed-post__body p:last-child {
+  margin-bottom: 0;
+}
+
+/* --- Media attachment --- */
+.feed-post__media {
+  margin-top: var(--fa-space-4);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  overflow: hidden;
+}
+
+.feed-post__media img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* --- Footer --- */
+.feed-post__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-4);
+  margin-top: var(--fa-space-4);
+  padding-top: var(--fa-space-3);
+  border-top: var(--fa-border-width) solid var(--fa-color-border);
+}
+
+/* --- Reaction buttons --- */
+.feed-post__reactions {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-1);
+}
+
+.feed-post__reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fa-space-1);
+  padding: var(--fa-space-1) var(--fa-space-2);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  background: transparent;
+  color: var(--fa-color-text-tertiary);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  cursor: pointer;
+  transition: var(--fa-transition-colors);
+  border-radius: 0;
+}
+
+.feed-post__reaction svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.feed-post__reaction:hover {
+  background: var(--fa-color-bg-surface-2);
+  border-color: var(--fa-color-border-hover);
+  color: var(--fa-color-text-secondary);
+}
+
+.feed-post__reaction--active {
+  color: var(--fa-color-accent);
+  border-color: var(--fa-color-border-accent);
+  background: var(--fa-color-accent-subtle);
+}
+
+.feed-post__reaction--active:hover {
+  background: var(--fa-color-accent-subtle-hover);
+}
+
+/* --- Stats (replies, views, etc.) --- */
+.feed-post__stats {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-4);
+  margin-left: auto;
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+  letter-spacing: var(--fa-letter-spacing-wide);
+}
+
+.feed-post__stat {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-1);
+}
+
+.feed-post__stat svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0.6;
+}
+
+/* ==========================================================================
+   Variants
+   ========================================================================== */
+
+/* --- Compact: reduced spacing for dense feeds --- */
+.feed-post--compact {
+  padding: var(--fa-space-3) var(--fa-space-4);
+}
+
+.feed-post--compact .feed-post__header {
+  margin-bottom: var(--fa-space-2);
+}
+
+.feed-post--compact .feed-post__body {
+  font-size: var(--fa-font-size-sm);
+}
+
+/* --- Highlighted: accent left-border emphasis --- */
+.feed-post--highlighted {
+  border-left: var(--fa-border-width-thick) solid var(--fa-color-accent);
+  background: var(--fa-color-accent-subtle);
+}
+
+/* --- Threaded: indent for replies --- */
+.feed-post--threaded {
+  margin-left: var(--fa-space-8);
+  border-left: var(--fa-border-width-thick) solid var(--fa-color-border);
+}
+
+.feed-post--threaded::before {
+  content: "";
+  position: absolute;
+  top: var(--fa-space-6);
+  left: calc(-1 * var(--fa-space-4));
+  width: var(--fa-space-4);
+  height: var(--fa-border-width);
+  background: var(--fa-color-border);
+}
+
+/* ==========================================================================
+   Component: Chat Bubble (.chat-bubble)
+   ==========================================================================
+   Conversational message bubble for chat UIs.
+   Supports sent/received, system messages, and typing indicators.
+
+   Structure:
+     .chat-message (wrapper row)
+       .avatar  (optional)
+       .chat-bubble
+         .chat-bubble__content
+         .chat-bubble__meta
+           .chat-bubble__sender
+           .chat-bubble__time
+       .chat-bubble--sent  (modifier for outgoing)
+
+   Variants: --sent, --system, --typing, --error, --consecutive
+
+   Usage:
+     <div class="chat-message">
+       <div class="avatar avatar--sm">…</div>
+       <div class="chat-bubble">
+         <div class="chat-bubble__content">Hello, World!</div>
+         <div class="chat-bubble__meta">
+           <span class="chat-bubble__sender">NX-0041</span>
+           <span class="chat-bubble__time">14:32</span>
+         </div>
+       </div>
+     </div>
+   ========================================================================== */
+
+/* --- Message row --- */
+.chat-message {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--fa-space-2);
+  margin-bottom: var(--fa-space-3);
+}
+
+.chat-message--sent {
+  flex-direction: row-reverse;
+}
+
+/* --- Bubble --- */
+.chat-bubble {
+  position: relative;
+  max-width: 70%;
+  padding: var(--fa-space-3) var(--fa-space-4);
+  background: var(--fa-color-bg-surface-2);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  color: var(--fa-color-text-primary);
+  font-size: var(--fa-font-size-base);
+  line-height: var(--fa-line-height-normal);
+  transition: var(--fa-transition-colors);
+}
+
+.chat-bubble p {
+  margin: 0 0 var(--fa-space-2);
+}
+
+.chat-bubble p:last-child {
+  margin-bottom: 0;
+}
+
+/* --- Sent (outgoing) bubble --- */
+.chat-bubble--sent {
+  background: var(--fa-color-accent-subtle);
+  border-color: var(--fa-color-border-accent);
+}
+
+/* --- Meta line --- */
+.chat-bubble__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-2);
+  margin-top: var(--fa-space-2);
+}
+
+.chat-bubble__sender {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-semibold);
+  color: var(--fa-color-accent);
+  letter-spacing: var(--fa-letter-spacing-wide);
+}
+
+.chat-bubble__time {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  margin-left: auto;
+}
+
+/* --- Status indicator (delivered/read) --- */
+.chat-bubble__status {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--fa-space-1);
+  color: var(--fa-color-text-tertiary);
+}
+
+.chat-bubble__status svg {
+  width: 12px;
+  height: 12px;
+}
+
+.chat-bubble__status--read {
+  color: var(--fa-color-accent);
+}
+
+/* --- Code block inside bubble --- */
+.chat-bubble__code {
+  display: block;
+  margin-top: var(--fa-space-2);
+  padding: var(--fa-space-2) var(--fa-space-3);
+  background: var(--fa-color-bg-surface-0);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-accent);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ==========================================================================
+   Variants
+   ========================================================================== */
+
+/* --- System message (centered, muted) --- */
+.chat-bubble--system {
+  max-width: 100%;
+  background: transparent;
+  border: none;
+  text-align: center;
+  color: var(--fa-color-text-tertiary);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  text-transform: uppercase;
+  padding: var(--fa-space-2);
+}
+
+.chat-message--system {
+  justify-content: center;
+}
+
+/* --- Error --- */
+.chat-bubble--error {
+  background: var(--fa-color-danger-subtle);
+  border-color: var(--fa-color-border-danger);
+  color: var(--fa-color-danger-text);
+}
+
+/* --- Consecutive message (no sender, tighter spacing) --- */
+.chat-bubble--consecutive {
+  margin-top: calc(-1 * var(--fa-space-1));
+}
+
+.chat-bubble--consecutive .chat-bubble__meta {
+  display: none;
+}
+
+/* --- Typing indicator --- */
+.chat-bubble--typing {
+  min-width: 64px;
+}
+
+.chat-bubble__typing-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--fa-space-1) 0;
+}
+
+.chat-bubble__typing-dots span {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--fa-radius-full);
+  background: var(--fa-color-text-tertiary);
+  animation: chatBubblePulse 1.4s ease-in-out infinite;
+}
+
+.chat-bubble__typing-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.chat-bubble__typing-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes chatBubblePulse {
+  0%, 60%, 100% {
+    opacity: 0.3;
+    transform: scale(0.85);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-bubble__typing-dots span {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+/* ==========================================================================
+   Component: List Item (.list-item)
+   ==========================================================================
+   Versatile list row for data-dense UIs — files, settings, search results,
+   nav menus. Supports leading/trailing slots, multi-line content.
+
+   Structure:
+     .list  (container, optional)
+       .list-item
+         .list-item__leading  (icon/avatar/checkbox slot)
+         .list-item__content
+           .list-item__title
+           .list-item__description
+         .list-item__trailing  (action/value slot)
+
+   Variants: --interactive, --active, --selected, --danger, --compact,
+             --bordered, --disabled
+   ========================================================================== */
+
+/* --- Container --- */
+.list {
+  display: flex;
+  flex-direction: column;
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  background: var(--fa-color-bg-surface-1);
+}
+
+/* --- Item --- */
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-3);
+  padding: var(--fa-space-3) var(--fa-space-4);
+  min-height: 48px;
+  background: transparent;
+  border: none;
+  border-bottom: var(--fa-border-width) solid var(--fa-color-border);
+  color: var(--fa-color-text-primary);
+  text-decoration: none;
+  transition: var(--fa-transition-colors);
+  text-align: left;
+  width: 100%;
+  cursor: default;
+}
+
+.list-item:last-child {
+  border-bottom: 0;
+}
+
+/* --- Leading slot (icon/avatar) --- */
+.list-item__leading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  color: var(--fa-color-text-tertiary);
+}
+
+.list-item__leading svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* --- Content --- */
+.list-item__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-item__title {
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-medium);
+  color: var(--fa-color-text-primary);
+  line-height: var(--fa-line-height-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list-item__description {
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+  line-height: var(--fa-line-height-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+/* --- Trailing slot (badge/action/value) --- */
+.list-item__trailing {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-2);
+  flex-shrink: 0;
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+}
+
+.list-item__trailing svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* --- Keyboard shortcut label --- */
+.list-item__kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--fa-font-family-mono);
+  font-size: 0.65rem;
+  font-weight: var(--fa-font-weight-medium);
+  color: var(--fa-color-text-tertiary);
+  background: var(--fa-color-bg-surface-2);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  padding: 1px var(--fa-space-1);
+  line-height: 1;
+  letter-spacing: var(--fa-letter-spacing-wide);
+}
+
+/* ==========================================================================
+   Variants
+   ========================================================================== */
+
+/* --- Interactive (hoverable, clickable) --- */
+.list-item--interactive {
+  cursor: pointer;
+}
+
+.list-item--interactive:hover {
+  background: var(--fa-color-bg-surface-2);
+}
+
+.list-item--interactive:active {
+  background: var(--fa-color-bg-surface-3);
+}
+
+/* --- Active / Selected --- */
+.list-item--active,
+.list-item[aria-current="true"],
+.list-item[aria-selected="true"] {
+  background: var(--fa-color-accent-subtle);
+  border-left: var(--fa-border-width-thick) solid var(--fa-color-accent);
+}
+
+.list-item--active .list-item__title,
+.list-item[aria-current="true"] .list-item__title,
+.list-item[aria-selected="true"] .list-item__title {
+  color: var(--fa-color-accent);
+}
+
+.list-item--active .list-item__leading,
+.list-item[aria-current="true"] .list-item__leading,
+.list-item[aria-selected="true"] .list-item__leading {
+  color: var(--fa-color-accent);
+}
+
+/* --- Selected (checkbox-style) --- */
+.list-item--selected {
+  background: var(--fa-color-accent-subtle);
+}
+
+.list-item--selected .list-item__leading {
+  color: var(--fa-color-accent);
+}
+
+/* --- Danger (destructive action row) --- */
+.list-item--danger .list-item__title {
+  color: var(--fa-color-danger-text);
+}
+
+.list-item--danger .list-item__leading {
+  color: var(--fa-color-danger);
+}
+
+.list-item--danger.list-item--interactive:hover {
+  background: var(--fa-color-danger-subtle);
+}
+
+/* --- Compact --- */
+.list-item--compact {
+  padding: var(--fa-space-2) var(--fa-space-3);
+  min-height: 36px;
+  gap: var(--fa-space-2);
+}
+
+/* --- Bordered (adds separator borders) --- */
+.list--bordered .list-item {
+  border-bottom: var(--fa-border-width) solid var(--fa-color-border);
+}
+
+/* --- Disabled --- */
+.list-item--disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* --- Section header inside a list --- */
+.list-item--header {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-bold);
+  color: var(--fa-color-text-tertiary);
+  letter-spacing: var(--fa-letter-spacing-caps);
+  text-transform: uppercase;
+  min-height: auto;
+  padding: var(--fa-space-3) var(--fa-space-4) var(--fa-space-1);
+  background: transparent;
+  border-bottom: none;
+  cursor: default;
+}
+
+/* --- Focus --- */
+.list-item--interactive:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-color-accent);
+  outline-offset: calc(-1 * var(--fa-focus-ring-width));
+  z-index: 1;
+}
+
+/* ==========================================================================
+   Component: Notification Badge (.notif-badge)
+   ==========================================================================
+   Small numeric or dot indicator overlaid on icons/avatars.
+   Different from .badge, which is an inline label.
+
+   Usage:
+     <div class="notif-badge-wrap">
+       <button class="icon-btn">…</button>
+       <span class="notif-badge">3</span>
+     </div>
+
+     <div class="notif-badge-wrap">
+       <div class="avatar">…</div>
+       <span class="notif-badge notif-badge--dot"></span>
+     </div>
+
+   Variants: --dot, --danger, --warning, --success, --lg
+   Positioning: Wrap the target element + badge in .notif-badge-wrap
+   ========================================================================== */
+
+/* --- Wrapper (provides positioning context) --- */
+.notif-badge-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* --- Badge --- */
+.notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--fa-radius-full);
+  background: var(--fa-color-accent);
+  color: var(--fa-color-text-on-accent);
+  font-family: var(--fa-font-family-mono);
+  font-size: 0.6rem;
+  font-weight: var(--fa-font-weight-bold);
+  line-height: 1;
+  letter-spacing: var(--fa-letter-spacing-wide);
+  white-space: nowrap;
+  border: 2px solid var(--fa-color-bg-surface-1);
+  z-index: 1;
+  box-shadow: var(--fa-glow-box);
+  transition: var(--fa-transition-colors),
+    transform var(--fa-duration-fast) var(--fa-easing-spring);
+}
+
+/* Subtle entrance pulse */
+.notif-badge:not(.notif-badge--dot) {
+  animation: notifBadgePop 0.3s var(--fa-easing-spring) both;
+}
+
+@keyframes notifBadgePop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notif-badge:not(.notif-badge--dot) {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   Variants
+   ========================================================================== */
+
+/* --- Dot (no text, presence indicator) --- */
+.notif-badge--dot {
+  min-width: 10px;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  top: -2px;
+  right: -2px;
+}
+
+/* --- Semantic colors --- */
+.notif-badge--danger {
+  background: var(--fa-color-danger);
+  box-shadow: 0 0 8px rgba(255, 77, 106, 0.4);
+}
+
+.notif-badge--warning {
+  background: var(--fa-color-warning);
+  color: var(--fa-color-text-inverse);
+  box-shadow: 0 0 8px rgba(255, 171, 64, 0.35);
+}
+
+.notif-badge--success {
+  background: var(--fa-color-success);
+  color: var(--fa-color-text-inverse);
+  box-shadow: 0 0 8px rgba(0, 230, 118, 0.35);
+}
+
+/* --- Secondary --- */
+.notif-badge--secondary {
+  background: var(--fa-color-bg-surface-3);
+  color: var(--fa-color-text-secondary);
+  border-color: var(--fa-color-border);
+  box-shadow: none;
+}
+
+/* --- Large --- */
+.notif-badge--lg {
+  min-width: 22px;
+  height: 22px;
+  font-size: var(--fa-font-size-xs);
+  padding: 0 6px;
+  top: -6px;
+  right: -6px;
+}
+
+.notif-badge--lg.notif-badge--dot {
+  min-width: 12px;
+  width: 12px;
+  height: 12px;
+  top: -3px;
+  right: -3px;
+}
+
+/* --- Ping animation (draws attention) --- */
+.notif-badge--ping::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: var(--fa-radius-full);
+  background: inherit;
+  opacity: 0.5;
+  animation: notifPing 1.5s ease-out infinite;
+}
+
+@keyframes notifPing {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notif-badge--ping::before {
+    animation: none;
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   Component: Tooltip (.tooltip)
+   ==========================================================================
+   Small informational popover on hover/focus.
+   CSS-only via ::before/::after pseudo-elements on a wrapper, OR
+   as a standalone element for JS-positioned tooltips.
+
+   Usage (CSS-only):
+     <button class="tooltip-trigger" data-tooltip="Copy to clipboard">
+       <svg>…</svg>
+     </button>
+
+   Usage (JS-positioned):
+     <div class="tooltip tooltip--visible" role="tooltip">
+       Copied!
+     </div>
+
+   Placement: --top (default), --bottom, --left, --right
+   Variants: --accent, --danger, --multiline, --lg
+   ========================================================================== */
+
+/* ==========================================================================
+   CSS-only tooltip (attribute based)
+   ========================================================================== */
+
+.tooltip-trigger {
+  position: relative;
+}
+
+/* Tooltip text via ::after */
+.tooltip-trigger::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  padding: var(--fa-space-1) var(--fa-space-2);
+  background: var(--fa-color-bg-elevated);
+  color: var(--fa-color-text-primary);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-medium);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  line-height: var(--fa-line-height-tight);
+  white-space: nowrap;
+  border: var(--fa-border-width) solid var(--fa-color-border-hover);
+  box-shadow: var(--fa-shadow-md);
+  z-index: var(--fa-z-tooltip);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--fa-duration-fast) var(--fa-easing-default),
+    transform var(--fa-duration-fast) var(--fa-easing-out);
+}
+
+/* Arrow via ::before */
+.tooltip-trigger::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: var(--fa-color-border-hover);
+  z-index: var(--fa-z-tooltip);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+/* Show on hover/focus */
+.tooltip-trigger:hover::after,
+.tooltip-trigger:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.tooltip-trigger:hover::before,
+.tooltip-trigger:focus-visible::before {
+  opacity: 1;
+}
+
+/* ==========================================================================
+   Placement variants (CSS-only)
+   ========================================================================== */
+
+/* --- Bottom --- */
+.tooltip-trigger--bottom::after {
+  bottom: auto;
+  top: calc(100% + 6px);
+  transform: translateX(-50%) translateY(-4px);
+}
+
+.tooltip-trigger--bottom::before {
+  bottom: auto;
+  top: calc(100% + 2px);
+  border-top-color: transparent;
+  border-bottom-color: var(--fa-color-border-hover);
+}
+
+.tooltip-trigger--bottom:hover::after,
+.tooltip-trigger--bottom:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+/* --- Left --- */
+.tooltip-trigger--left::after {
+  bottom: auto;
+  left: auto;
+  right: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%) translateX(4px);
+}
+
+.tooltip-trigger--left::before {
+  bottom: auto;
+  left: auto;
+  right: calc(100% + 2px);
+  top: 50%;
+  transform: translateY(-50%);
+  border-top-color: transparent;
+  border-left-color: var(--fa-color-border-hover);
+}
+
+.tooltip-trigger--left:hover::after,
+.tooltip-trigger--left:focus-visible::after {
+  transform: translateY(-50%) translateX(0);
+}
+
+/* --- Right --- */
+.tooltip-trigger--right::after {
+  bottom: auto;
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+}
+
+.tooltip-trigger--right::before {
+  bottom: auto;
+  left: calc(100% + 2px);
+  top: 50%;
+  transform: translateY(-50%);
+  border-top-color: transparent;
+  border-right-color: var(--fa-color-border-hover);
+}
+
+.tooltip-trigger--right:hover::after,
+.tooltip-trigger--right:focus-visible::after {
+  transform: translateY(-50%) translateX(0);
+}
+
+/* ==========================================================================
+   Standalone tooltip element (JS-positioned)
+   ========================================================================== */
+
+.tooltip {
+  position: absolute;
+  padding: var(--fa-space-1) var(--fa-space-3);
+  background: var(--fa-color-bg-elevated);
+  color: var(--fa-color-text-primary);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-medium);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  line-height: var(--fa-line-height-tight);
+  white-space: nowrap;
+  border: var(--fa-border-width) solid var(--fa-color-border-hover);
+  box-shadow: var(--fa-shadow-md);
+  z-index: var(--fa-z-tooltip);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity var(--fa-duration-fast) var(--fa-easing-default),
+    transform var(--fa-duration-fast) var(--fa-easing-out);
+}
+
+.tooltip--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ==========================================================================
+   Style variants
+   ========================================================================== */
+
+/* --- Accent --- */
+.tooltip-trigger--accent::after,
+.tooltip--accent {
+  background: var(--fa-color-accent);
+  color: var(--fa-color-text-on-accent);
+  border-color: var(--fa-color-accent);
+  box-shadow: var(--fa-shadow-glow-cyan);
+}
+
+.tooltip-trigger--accent::before {
+  border-top-color: var(--fa-color-accent);
+}
+
+.tooltip-trigger--accent.tooltip-trigger--bottom::before {
+  border-top-color: transparent;
+  border-bottom-color: var(--fa-color-accent);
+}
+
+/* --- Danger --- */
+.tooltip-trigger--danger::after,
+.tooltip--danger {
+  background: var(--fa-color-danger);
+  color: #fff;
+  border-color: var(--fa-color-danger);
+}
+
+.tooltip-trigger--danger::before {
+  border-top-color: var(--fa-color-danger);
+}
+
+/* --- Multiline --- */
+.tooltip-trigger--multiline::after,
+.tooltip--multiline {
+  white-space: normal;
+  max-width: 240px;
+  text-align: center;
+  line-height: var(--fa-line-height-normal);
+}
+
+/* --- Large --- */
+.tooltip-trigger--lg::after,
+.tooltip--lg {
+  padding: var(--fa-space-2) var(--fa-space-3);
+  font-size: var(--fa-font-size-sm);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .tooltip-trigger::after,
+  .tooltip {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Component: Calendar (.calendar)
+   ==========================================================================
+   Full month-view calendar with date grid, events, and navigation.
+   Designed for dashboards and scheduling UIs.
+
+   Structure:
+     .calendar
+       .calendar__header
+         .calendar__nav (prev/next buttons)
+         .calendar__title (month + year)
+         .calendar__actions (today, view toggles)
+       .calendar__weekdays (Su Mo Tu We Th Fr Sa)
+       .calendar__grid (7-column day grid)
+         .calendar__day
+           .calendar__day-number
+           .calendar__day-events
+             .calendar__event
+
+   States: --today, --selected, --range-start, --range-end, --in-range,
+           --outside (adjacent month), --disabled
+   Variants: --compact, --bordered, --mini
+   Event colors: --accent (default), --success, --warning, --danger, --info
+   ========================================================================== */
+
+.calendar {
+  background: var(--fa-color-bg-surface-1);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  box-shadow: var(--fa-shadow-md);
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+
+.calendar__header {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-3);
+  padding: var(--fa-space-4) var(--fa-space-5);
+  border-bottom: var(--fa-border-width) solid var(--fa-color-border);
+}
+
+.calendar__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-1);
+}
+
+.calendar__nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  background: transparent;
+  color: var(--fa-color-text-secondary);
+  cursor: pointer;
+  transition: var(--fa-transition-colors);
+}
+
+.calendar__nav-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.calendar__nav-btn:hover {
+  background: var(--fa-color-bg-surface-2);
+  color: var(--fa-color-text-primary);
+  border-color: var(--fa-color-border-hover);
+}
+
+.calendar__nav-btn:active {
+  background: var(--fa-color-bg-surface-3);
+}
+
+.calendar__nav-btn:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-color-accent);
+  outline-offset: calc(-1 * var(--fa-focus-ring-width));
+}
+
+.calendar__title {
+  flex: 1;
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-semibold);
+  letter-spacing: var(--fa-letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--fa-color-text-primary);
+}
+
+.calendar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--fa-space-2);
+  margin-left: auto;
+}
+
+.calendar__today-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--fa-space-1) var(--fa-space-3);
+  border: var(--fa-border-width) solid var(--fa-color-border);
+  background: transparent;
+  color: var(--fa-color-text-secondary);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-semibold);
+  letter-spacing: var(--fa-letter-spacing-caps);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: var(--fa-transition-colors);
+}
+
+.calendar__today-btn:hover {
+  background: var(--fa-color-bg-surface-2);
+  color: var(--fa-color-accent);
+  border-color: var(--fa-color-border-accent);
+}
+
+.calendar__today-btn:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-color-accent);
+  outline-offset: calc(-1 * var(--fa-focus-ring-width));
+}
+
+/* ==========================================================================
+   Weekday headers
+   ========================================================================== */
+
+.calendar__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: var(--fa-border-width) solid var(--fa-color-border);
+}
+
+.calendar__weekday {
+  padding: var(--fa-space-2) var(--fa-space-1);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  font-weight: var(--fa-font-weight-bold);
+  letter-spacing: var(--fa-letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--fa-color-text-tertiary);
+  text-align: center;
+  user-select: none;
+}
+
+/* Weekend highlight */
+.calendar__weekday:first-child,
+.calendar__weekday:last-child {
+  color: var(--fa-color-text-disabled);
+}
+
+/* ==========================================================================
+   Day grid
+   ========================================================================== */
+
+.calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.calendar__day {
+  position: relative;
+  min-height: 80px;
+  padding: var(--fa-space-1);
+  border-right: var(--fa-border-width) solid var(--fa-color-border);
+  border-bottom: var(--fa-border-width) solid var(--fa-color-border);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+/* Remove right border on last column */
+.calendar__day:nth-child(7n) {
+  border-right: 0;
+}
+
+/* Remove bottom border on last row */
+.calendar__grid > .calendar__day:nth-last-child(-n+7) {
+  border-bottom: 0;
+}
+
+.calendar__day:hover {
+  background: var(--fa-color-bg-surface-2);
+}
+
+/* --- Day number --- */
+.calendar__day-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: var(--fa-space-1);
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-medium);
+  color: var(--fa-color-text-secondary);
+  transition: var(--fa-transition-colors);
+}
+
+/* ==========================================================================
+   Day states
+   ========================================================================== */
+
+/* --- Today --- */
+.calendar__day--today .calendar__day-number {
+  background: var(--fa-color-accent);
+  color: var(--fa-color-text-on-accent);
+  font-weight: var(--fa-font-weight-bold);
+  box-shadow: var(--fa-glow-box);
+}
+
+/* --- Selected --- */
+.calendar__day--selected {
+  background: var(--fa-color-accent-subtle);
+}
+
+.calendar__day--selected .calendar__day-number {
+  background: var(--fa-color-accent);
+  color: var(--fa-color-text-on-accent);
+  font-weight: var(--fa-font-weight-bold);
+}
+
+/* --- Range selection --- */
+.calendar__day--range-start .calendar__day-number {
+  background: var(--fa-color-accent);
+  color: var(--fa-color-text-on-accent);
+  font-weight: var(--fa-font-weight-bold);
+}
+
+.calendar__day--range-end .calendar__day-number {
+  background: var(--fa-color-accent);
+  color: var(--fa-color-text-on-accent);
+  font-weight: var(--fa-font-weight-bold);
+}
+
+.calendar__day--in-range {
+  background: var(--fa-color-accent-subtle);
+}
+
+.calendar__day--in-range .calendar__day-number {
+  color: var(--fa-color-accent);
+  font-weight: var(--fa-font-weight-semibold);
+}
+
+/* --- Outside month (leading/trailing days) --- */
+.calendar__day--outside {
+  opacity: 0.35;
+}
+
+.calendar__day--outside:hover {
+  opacity: 0.55;
+}
+
+/* --- Disabled --- */
+.calendar__day--disabled {
+  opacity: 0.2;
+  pointer-events: none;
+  cursor: default;
+}
+
+/* --- Weekend columns --- */
+.calendar__day:nth-child(7n),
+.calendar__day:nth-child(7n-6) {
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.calendar__day:nth-child(7n):hover,
+.calendar__day:nth-child(7n-6):hover {
+  background: var(--fa-color-bg-surface-2);
+}
+
+/* ==========================================================================
+   Events
+   ========================================================================== */
+
+.calendar__day-events {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--fa-space-1);
+}
+
+.calendar__event {
+  display: block;
+  padding: 1px var(--fa-space-1);
+  font-family: var(--fa-font-family-mono);
+  font-size: 0.6rem;
+  font-weight: var(--fa-font-weight-medium);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: var(--fa-transition-colors);
+
+  /* Default: accent */
+  background: var(--fa-color-accent-subtle);
+  color: var(--fa-color-accent);
+  border-left: 2px solid var(--fa-color-accent);
+}
+
+.calendar__event:hover {
+  background: var(--fa-color-accent-subtle-hover);
+}
+
+/* --- Event color variants --- */
+.calendar__event--success {
+  background: var(--fa-color-success-subtle);
+  color: var(--fa-color-success-text);
+  border-left-color: var(--fa-color-success);
+}
+
+.calendar__event--success:hover {
+  background: rgba(0, 230, 118, 0.2);
+}
+
+.calendar__event--warning {
+  background: var(--fa-color-warning-subtle);
+  color: var(--fa-color-warning-text);
+  border-left-color: var(--fa-color-warning);
+}
+
+.calendar__event--warning:hover {
+  background: rgba(255, 171, 64, 0.2);
+}
+
+.calendar__event--danger {
+  background: var(--fa-color-danger-subtle);
+  color: var(--fa-color-danger-text);
+  border-left-color: var(--fa-color-danger);
+}
+
+.calendar__event--danger:hover {
+  background: rgba(255, 77, 106, 0.2);
+}
+
+.calendar__event--info {
+  background: var(--fa-color-info-subtle);
+  color: var(--fa-color-info-text);
+  border-left-color: var(--fa-color-info);
+}
+
+.calendar__event--info:hover {
+  background: rgba(64, 196, 255, 0.2);
+}
+
+/* --- More events indicator --- */
+.calendar__more {
+  padding: 1px var(--fa-space-1);
+  font-family: var(--fa-font-family-mono);
+  font-size: 0.55rem;
+  font-weight: var(--fa-font-weight-bold);
+  color: var(--fa-color-text-tertiary);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  cursor: pointer;
+  transition: color var(--fa-duration-fast) var(--fa-easing-default);
+}
+
+.calendar__more:hover {
+  color: var(--fa-color-accent);
+}
+
+/* ==========================================================================
+   Variants
+   ========================================================================== */
+
+/* --- Compact: smaller cells, no events visible --- */
+.calendar--compact .calendar__day {
+  min-height: 40px;
+}
+
+.calendar--compact .calendar__day-number {
+  width: 24px;
+  height: 24px;
+  font-size: var(--fa-font-size-xs);
+  margin: 2px;
+}
+
+.calendar--compact .calendar__day-events {
+  display: none;
+}
+
+/* --- Mini: ultra-compact for sidebar widgets --- */
+.calendar--mini {
+  max-width: 280px;
+}
+
+.calendar--mini .calendar__header {
+  padding: var(--fa-space-3) var(--fa-space-3);
+}
+
+.calendar--mini .calendar__title {
+  font-size: var(--fa-font-size-xs);
+}
+
+.calendar--mini .calendar__day {
+  min-height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.calendar--mini .calendar__day-number {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  font-size: var(--fa-font-size-xs);
+}
+
+.calendar--mini .calendar__day-events {
+  display: none;
+}
+
+.calendar--mini .calendar__weekday {
+  padding: var(--fa-space-1);
+  font-size: 0.6rem;
+}
+
+/* --- Bordered: thicker borders for emphasis --- */
+.calendar--bordered {
+  border-width: var(--fa-border-width-thick);
+}
+
+.calendar--bordered .calendar__header {
+  border-bottom-width: var(--fa-border-width-thick);
+}
+
+/* ==========================================================================
+   Event detail popover (optional, for JS-enhanced UIs)
+   ========================================================================== */
+
+.calendar__event-detail {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: var(--fa-z-dropdown);
+  min-width: 200px;
+  padding: var(--fa-space-3) var(--fa-space-4);
+  background: var(--fa-color-bg-elevated);
+  border: var(--fa-border-width) solid var(--fa-color-border-hover);
+  box-shadow: var(--fa-shadow-lg);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition: opacity var(--fa-duration-fast) var(--fa-easing-default),
+    transform var(--fa-duration-fast) var(--fa-easing-out),
+    visibility 0s var(--fa-duration-fast);
+}
+
+.calendar__event-detail--open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition-delay: 0s;
+}
+
+.calendar__event-detail-title {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-sm);
+  font-weight: var(--fa-font-weight-semibold);
+  color: var(--fa-color-text-primary);
+  margin-bottom: var(--fa-space-1);
+}
+
+.calendar__event-detail-time {
+  font-family: var(--fa-font-family-mono);
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-accent);
+  letter-spacing: var(--fa-letter-spacing-wide);
+  margin-bottom: var(--fa-space-2);
+}
+
+.calendar__event-detail-desc {
+  font-size: var(--fa-font-size-xs);
+  color: var(--fa-color-text-tertiary);
+  line-height: var(--fa-line-height-normal);
+}
+
+/* ==========================================================================
+   Focus & accessibility
+   ========================================================================== */
+
+.calendar__day:focus-visible {
+  outline: var(--fa-focus-ring-width) solid var(--fa-color-accent);
+  outline-offset: calc(-1 * var(--fa-focus-ring-width));
+  z-index: 1;
+}
+
+/* ==========================================================================
+   Reduced motion
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar__event-detail {
+    transition: none;
+  }
+}
+
+

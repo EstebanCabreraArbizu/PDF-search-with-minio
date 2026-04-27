@@ -1,0 +1,592 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Búsqueda de Planillas</title>
+    <link href="{% static 'documents/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'documents/css/app.css' %}" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container mt-5">
+        <!-- ========================================= -->
+        <!-- PANTALLA DE LOGIN (visible al inicio)    -->
+        <!-- ========================================= -->
+        <div id="loginScreen">
+            <div class="row justify-content-center">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h3 class="text-center mb-4">🔒 Iniciar Sesión</h3>
+                            <form id="loginForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Usuario</label>
+                                    <input type="text" class="form-control" name="username" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Contraseña</label>
+                                    <input type="password" class="form-control" name="password" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Ingresar</button>
+                                <div id="loginError" class="alert alert-danger mt-3 d-none"></div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================= -->
+        <!-- PANTALLA DE BÚSQUEDA (oculta al inicio)  -->
+        <!-- ========================================= -->
+        <div id="searchScreen" class="d-none">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>🔍 Sistema de Planillas</h2>
+                <div>
+                    <span id="username" class="me-3"></span>
+                    <button class="btn btn-sm btn-outline-danger" id="logoutButton">Cerrar Sesión</button>
+                </div>
+            </div>
+
+            <!-- ========================================= -->
+            <!-- NAVEGACIÓN POR PESTAÑAS                   -->
+            <!-- ========================================= -->
+            <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="search-tab" data-bs-toggle="tab" data-bs-target="#search-panel"
+                        type="button" role="tab">
+                        🔍 Búsqueda
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="files-tab" data-bs-toggle="tab" data-bs-target="#files-panel"
+                        type="button" role="tab">
+                        📁 Gestión de Archivos
+                    </button>
+                </li>
+            </ul>
+
+            <!-- ========================================= -->
+            <!-- CONTENIDO DE LAS PESTAÑAS                 -->
+            <!-- ========================================= -->
+            <div class="tab-content" id="mainTabsContent">
+
+                <!-- ============ PESTAÑA: BÚSQUEDA ============ -->
+                <div class="tab-pane fade show active" id="search-panel" role="tabpanel">
+
+                    <!-- Sub-tabs: Búsqueda Simple y Masiva -->
+                    <ul class="nav nav-pills mb-3" id="searchSubTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="simple-search-tab" data-bs-toggle="pill"
+                                data-bs-target="#simple-search-panel" type="button" role="tab">
+                                🔍 Búsqueda Simple
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="bulk-search-tab" data-bs-toggle="pill"
+                                data-bs-target="#bulk-search-panel" type="button" role="tab">
+                                📋 Búsqueda Masiva (DNI)
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="searchSubTabsContent">
+                        <!-- Búsqueda Simple -->
+                        <div class="tab-pane fade show active" id="simple-search-panel" role="tabpanel">
+                            <div class="card mb-4">
+                                <div class="card-body">
+                                    <form id="searchForm">
+                                        <div class="row g-3">
+                                            <!-- DNI del Empleado -->
+                                            <div class="col-md-2">
+                                                <label class="form-label">DNI</label>
+                                                <input type="text" class="form-control" name="codigo_empleado"
+                                                    placeholder="Ej: 12345" pattern="\d{4,10}"
+                                                    title="Debe contener entre 4 y 10 dígitos">
+                                            </div>
+
+                                            <!-- Año (NUEVO) -->
+                                            <div class="col-md-2">
+                                                <label class="form-label">Año 📅</label>
+                                                <select class="form-select" name="año" id="selectAño">
+                                                    <option value="">Todos</option>
+                                                    <!-- Opciones cargadas dinámicamente -->
+                                                </select>
+                                            </div>
+
+                                            <!-- Mes -->
+                                            <div class="col-md-2">
+                                                <label class="form-label">Mes</label>
+                                                <select class="form-select" name="mes" id="selectMes">
+                                                    <option value="">Todos</option>
+                                                    <!-- Opciones cargadas dinámicamente -->
+                                                </select>
+                                            </div>
+
+                                            <!-- Banco -->
+                                            <div class="col-md-2">
+                                                <label class="form-label">Banco 🏦</label>
+                                                <select class="form-select" name="banco" id="selectBanco">
+                                                    <option value="">Todos</option>
+                                                    <!-- Opciones cargadas dinámicamente -->
+                                                </select>
+                                            </div>
+
+                                            <!-- Razón Social -->
+                                            <div class="col-md-2">
+                                                <label class="form-label">Razón Social 🏢</label>
+                                                <select class="form-select" name="razon_social" id="selectRazonSocial">
+                                                    <option value="">Todas</option>
+                                                    <!-- Opciones cargadas dinámicamente -->
+                                                </select>
+                                            </div>
+
+                                            <!-- Tipo de Documento (Autocompletado) -->
+                                            <div class="col-md-2">
+                                                <label class="form-label">Tipo Documento 📄</label>
+                                                <input type="text" class="form-control" name="tipo_documento"
+                                                    id="inputTipoDocumento" list="tiposDocumentoList"
+                                                    placeholder="Ej: CUADRE" autocomplete="off">
+                                                <datalist id="tiposDocumentoList"></datalist>
+                                            </div>
+                                        </div>
+
+                                        <div class="mt-3 d-flex gap-2">
+                                            <button type="submit" class="btn btn-primary">
+                                                <span id="searchBtn">🔍 Buscar</span>
+                                                <span id="loadingBtn" class="d-none">
+                                                    <span class="spinner-border spinner-border-sm"></span> Buscando...
+                                                </span>
+                                            </button>
+                                            <button type="reset" class="btn btn-outline-secondary" id="clearFiltersButton">
+                                                🗑️ Limpiar Filtros
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Búsqueda Masiva -->
+                        <div class="tab-pane fade" id="bulk-search-panel" role="tabpanel">
+                            <div class="card mb-4">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">📋 Búsqueda Masiva por DNI del Empleado</h5>
+                                    <small>Ingresa múltiples DNI separados por comas, espacios o uno por
+                                        línea</small>
+                                </div>
+                                <div class="card-body">
+                                    <form id="bulkSearchForm">
+                                        <div class="row g-3">
+                                            <!-- Textarea para DNI -->
+                                            <div class="col-md-6">
+                                                <label class="form-label">DNI del Empleado</label>
+                                                <textarea class="form-control" id="bulkCodigos" name="codigos" rows="5"
+                                                    placeholder="12345678&#10;87654321&#10;11223344&#10;..."></textarea>
+                                                <small class="text-muted">Separa por comas, espacios o nueva
+                                                    línea</small>
+                                            </div>
+
+                                            <!-- Filtros adicionales -->
+                                            <div class="col-md-6">
+                                                <div class="row g-2">
+                                                    <div class="col-6">
+                                                        <label class="form-label">Año 📅</label>
+                                                        <select class="form-select" name="año" id="bulkAño">
+                                                            <option value="">Todos</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label">Mes</label>
+                                                        <select class="form-select" name="mes" id="bulkMes">
+                                                            <option value="">Todos</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label">Banco 🏦</label>
+                                                        <select class="form-select" name="banco" id="bulkBanco">
+                                                            <option value="">Todos</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <label class="form-label">Razón Social 🏢</label>
+                                                        <select class="form-select" name="razon_social"
+                                                            id="bulkRazonSocial">
+                                                            <option value="">Todas</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-12">
+                                                        <label class="form-label">Tipo Documento 📄</label>
+                                                        <input type="text" class="form-control" name="tipo_documento"
+                                                            id="bulkTipoDocumento" list="bulkTiposDocumentoList"
+                                                            placeholder="Ej: CUADRE" autocomplete="off">
+                                                        <datalist id="bulkTiposDocumentoList"></datalist>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="mt-3 d-flex gap-2">
+                                            <button type="submit" class="btn btn-info">
+                                                <span id="bulkSearchBtn">🔍 Buscar Masivamente</span>
+                                                <span id="bulkLoadingBtn" class="d-none">
+                                                    <span class="spinner-border spinner-border-sm"></span> Buscando...
+                                                </span>
+                                            </button>
+                                            <button type="reset" class="btn btn-outline-secondary">
+                                                🗑️ Limpiar
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resultados de Búsqueda (compartido para ambos tipos) -->
+                    <div id="resultsContainer" class="d-none">
+                        <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div>
+                                <strong id="totalResults"></strong>
+                                <span id="activeFilters" class="text-muted small ms-2"></span>
+                            </div>
+                            <div id="mergeButtonContainer" class="d-none">
+                                <button class="btn btn-success btn-sm" id="mergeButton">
+                                    <span id="mergeBtn">📑 Descargar TODO en 1 PDF</span>
+                                    <span id="mergingBtn" class="d-none">
+                                        <span class="spinner-border spinner-border-sm"></span> Fusionando...
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Resumen de búsqueda masiva -->
+                        <div id="bulkSearchSummary" class="d-none mb-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card border-success">
+                                        <div class="card-body py-2">
+                                            <small class="text-success">✓ DNI encontrados:</small>
+                                            <div id="codigosEncontrados" class="small"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-danger">
+                                        <div class="card-body py-2">
+                                            <small class="text-danger">✗ DNI sin resultados:</small>
+                                            <div id="codigosNoEncontrados" class="small"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="results" class="row"></div>
+                    </div>
+                </div>
+
+                <!-- ============ PESTAÑA: GESTIÓN DE ARCHIVOS ============ -->
+                <div class="tab-pane fade" id="files-panel" role="tabpanel">
+
+                    <!-- Zona de Upload (solo admin) -->
+                    <div id="uploadSection" class="d-none mb-4">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0">📤 Subir Archivos PDF</h5>
+                            </div>
+                            <div class="card-body">
+                                <!-- Selector de carpeta con botón de explorar -->
+                                <div class="mb-3">
+                                    <label class="form-label">📁 Carpeta de destino</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="uploadFolder"
+                                            placeholder="Ej: Planillas 2025/" value="Planillas 2025/">
+                                        <button class="btn btn-outline-secondary" type="button" id="openFolderBrowserButton"
+                                            title="Explorar carpetas">
+                                            📂 Explorar
+                                        </button>
+                                    </div>
+                                    <small class="text-muted">Haz clic en "Explorar" para navegar las carpetas
+                                        existentes o escribe una nueva</small>
+                                </div>
+
+                                <!-- Drag & Drop Zone -->
+                                <div id="dropZone" class="border border-2 border-dashed rounded p-5 text-center drop-zone">
+                                    <div class="mb-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"
+                                            fill="currentColor" class="bi bi-cloud-upload text-primary"
+                                            viewBox="0 0 16 16">
+                                            <path fill-rule="evenodd"
+                                                d="M4.406 1.342A5.53 5.53 0 0 1 8 0c2.69 0 4.923 2 5.166 4.579C14.758 4.804 16 6.137 16 7.773 16 9.569 14.502 11 12.687 11H10a.5.5 0 0 1 0-1h2.688C13.979 10 15 8.988 15 7.773c0-1.216-1.02-2.228-2.313-2.228h-.5v-.5C12.188 2.825 10.328 1 8 1a4.53 4.53 0 0 0-2.941 1.1c-.757.652-1.153 1.438-1.153 2.055v.448l-.445.049C2.064 4.805 1 5.952 1 7.318 1 8.785 2.23 10 3.781 10H6a.5.5 0 0 1 0 1H3.781C1.708 11 0 9.366 0 7.318c0-1.763 1.266-3.223 2.942-3.593.143-.863.698-1.723 1.464-2.383z" />
+                                            <path fill-rule="evenodd"
+                                                d="M7.646 4.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 5.707V14.5a.5.5 0 0 1-1 0V5.707L5.354 7.854a.5.5 0 1 1-.708-.708l3-3z" />
+                                        </svg>
+                                    </div>
+                                    <h5>Arrastra archivos PDF aquí</h5>
+                                    <p class="text-muted mb-2">o haz clic para seleccionar</p>
+                                    <input type="file" id="fileInput" multiple accept=".pdf" class="d-none">
+                                    <button type="button" class="btn btn-outline-primary" id="selectFilesButton">
+                                        Seleccionar archivos
+                                    </button>
+                                </div>
+
+                                <!-- Lista de archivos seleccionados -->
+                                <div id="selectedFiles" class="mt-3 d-none">
+                                    <h6>Archivos seleccionados:</h6>
+                                    <ul id="filesList" class="list-group mb-3"></ul>
+                                    <small class="text-muted d-block mb-2">Se ejecuta una preclasificación antes de subir. Los duplicados se omiten automáticamente.</small>
+                                    <button type="button" class="btn btn-success w-100" id="uploadFilesButton">
+                                        <span id="uploadBtn">📤 Previsualizar y Subir</span>
+                                        <span id="uploadingBtn" class="d-none">
+                                            <span class="spinner-border spinner-border-sm"></span> Previsualizando/Subiendo...
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sección de Sincronización de Índice (solo admin) -->
+                    <div id="syncSection" class="d-none mb-4">
+                        <div class="card border-warning">
+                            <div class="card-header bg-warning text-dark">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="mb-0">🔄 Sincronización de Índice</h5>
+                                        <small>Detecta archivos nuevos, movidos o eliminados en MinIO</small>
+                                    </div>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <select class="form-select form-select-sm sync-batch-size" id="syncBatchSize">
+                                            <option value="25">25 por lote</option>
+                                            <option value="50" selected>50 por lote</option>
+                                            <option value="100">100 por lote</option>
+                                            <option value="200">200 por lote</option>
+                                        </select>
+                                        <button class="btn btn-dark" id="syncButton">
+                                            <span id="syncBtnText">🔄 Sincronizar</span>
+                                            <span id="syncBtnLoading" class="d-none">
+                                                <span class="spinner-border spinner-border-sm"></span> Procesando...
+                                            </span>
+                                        </button>
+                                        <button class="btn btn-outline-danger d-none" id="syncStopButton">
+                                            ⏹️ Detener
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- Barra de progreso -->
+                                <div id="syncProgressContainer" class="mt-2 d-none">
+                                    <div class="progress progress-height-25">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                                            id="syncProgressBar" role="progressbar" class="progress-width-0">
+                                            <span id="syncProgressText">0%</span>
+                                        </div>
+                                    </div>
+                                    <small class="text-dark" id="syncProgressInfo">Pendientes: 0</small>
+                                </div>
+                            </div>
+                            <div class="card-body d-none" id="syncResults">
+                                <div class="row text-center">
+                                    <div class="col-md-3">
+                                        <div class="border rounded p-3 bg-success bg-opacity-10">
+                                            <h4 class="text-success mb-0" id="syncNewFiles">0</h4>
+                                            <small class="text-muted">📥 Nuevos</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="border rounded p-3 bg-info bg-opacity-10">
+                                            <h4 class="text-info mb-0" id="syncMovedFiles">0</h4>
+                                            <small class="text-muted">📦 Movidos</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="border rounded p-3 bg-danger bg-opacity-10">
+                                            <h4 class="text-danger mb-0" id="syncRemovedFiles">0</h4>
+                                            <small class="text-muted">🗑️ Eliminados</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="border rounded p-3 bg-secondary bg-opacity-10">
+                                            <h4 class="text-secondary mb-0" id="syncTime">0s</h4>
+                                            <small class="text-muted">⏱️ Tiempo total</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="syncMovedDetails" class="mt-3 d-none">
+                                    <h6>📦 Archivos movidos detectados:</h6>
+                                    <ul id="syncMovedList" class="list-group list-group-flush small"></ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sección de Migración de Hashes (solo admin, una sola vez) -->
+                    <div id="hashSection" class="d-none mb-4">
+                        <div class="card border-info">
+                            <div class="card-header bg-info text-white">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="mb-0">🔑 Migrar Hashes MD5</h5>
+                                        <small>Ejecutar UNA VEZ después de actualizar. Rápido (~2-5 min para 20K
+                                            archivos)</small>
+                                    </div>
+                                    <button class="btn btn-light" id="hashButton">
+                                        <span id="hashBtnText">🔑 Poblar Hashes</span>
+                                        <span id="hashBtnLoading" class="d-none">
+                                            <span class="spinner-border spinner-border-sm"></span> Procesando...
+                                        </span>
+                                    </button>
+                                </div>
+                                <!-- Barra de progreso -->
+                                <div id="hashProgressContainer" class="mt-2 d-none">
+                                    <div class="progress progress-height-20">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                            id="hashProgressBar" role="progressbar" class="progress-width-0">
+                                            <span id="hashProgressText">0%</span>
+                                        </div>
+                                    </div>
+                                    <small class="text-white" id="hashProgressInfo">Pendientes: 0</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filtros y búsqueda de archivos -->
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-2">
+                                    <label class="form-label">Buscar archivo</label>
+                                    <input type="text" class="form-control" id="searchFileName"
+                                        placeholder="Nombre del archivo...">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Año</label>
+                                    <select class="form-select" id="filterAño">
+                                        <option value="">Todos</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Mes</label>
+                                    <select class="form-select" id="filterMes">
+                                        <option value="">Todos</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Banco</label>
+                                    <select class="form-select" id="filterBanco">
+                                        <option value="">Todos</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Razón Social</label>
+                                    <select class="form-select" id="filterRazonSocial">
+                                        <option value="">Todas</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Tipo Documento</label>
+                                    <input type="text" class="form-control" id="filterTipoDocumento"
+                                        list="filterTiposDocumentoList" placeholder="Ej: CUADRE">
+                                    <datalist id="filterTiposDocumentoList"></datalist>
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-primary w-100" id="filesSearchButton">
+                                        🔍 Buscar
+                                    </button>
+                                    <button class="btn btn-outline-secondary w-100 mt-1" id="clearFileFiltersButton">
+                                        🗑️ Limpiar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lista de archivos -->
+                    <div id="filesListContainer">
+                        <div class="d-flex justify-content-center p-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+        <script src="{% static 'documents/js/vendor/bootstrap.bundle.min.js' %}"></script>
+    {% if DEBUG %}
+      <script src="{% static 'documents/js/app.js' %}"></script>
+    {% else %}
+      <script src="{% static 'documents/js/dist/app.js' %}"></script>
+    {% endif %}
+
+    <!-- Modal: Explorador de Carpetas -->
+    <div class="modal fade" id="folderBrowserModal" tabindex="-1" aria-labelledby="folderBrowserModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="folderBrowserModalLabel">📂 Explorador de Carpetas</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Breadcrumb de navegación -->
+                    <nav aria-label="breadcrumb" class="mb-3">
+                        <ol class="breadcrumb" id="folderBreadcrumb">
+                            <li class="breadcrumb-item active">🏠 Raíz</li>
+                        </ol>
+                    </nav>
+
+                    <!-- Barra de herramientas -->
+                    <div class="d-flex gap-2 mb-3">
+                        <button class="btn btn-outline-secondary btn-sm" id="goUpFolderButton" title="Subir un nivel">
+                            ⬆️ Subir
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" id="refreshFolderBrowserButton"
+                            title="Refrescar">
+                            🔄 Refrescar
+                        </button>
+                        <div class="flex-grow-1">
+                            <input type="text" class="form-control form-control-sm" id="currentFolderPath" readonly
+                                placeholder="Ubicación actual">
+                        </div>
+                    </div>
+
+                    <!-- Lista de carpetas -->
+                    <div id="folderBrowserList" class="list-group mb-3 folder-browser-list">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+
+                    <!-- Crear nueva subcarpeta -->
+                    <div class="card bg-light">
+                        <div class="card-body py-2">
+                            <label class="form-label small mb-1">➕ Crear nueva subcarpeta aquí:</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" id="newSubfolderName"
+                                    placeholder="Nombre de la nueva carpeta">
+                                <button class="btn btn-success" type="button" id="createSubfolderButton">
+                                    Crear y Usar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="selectCurrentFolderButton">
+                        ✓ Usar ubicación actual
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,118 @@
+{% extends 'documents/base_search.html' %}
+{% load static %}
+
+{% block page_title_text %}Buscador T-Registro - v2.1 TEST{% endblock %}
+{% block body_class %}search-page-body tregistro-page{% endblock %}
+
+{% block page_title %}<span class="accent" style="color:var(--primary);">&#9670;</span>BUSCADOR DE DOCUMENTOS - T-REGISTRO{% endblock %}
+{% block page_subtitle %}BUSCA Y DESCARGA DOCUMENTOS DE ALTA Y BAJA DEL T-REGISTRO DEL REPOSITORIO DOCUMENTAL CORPORATIVO{% endblock %}
+
+{% block main_content %}
+  <section class="stats-grid four" id="statsTRegistro"></section>
+
+  <section class="search-panel acrylic-surface">
+    <div class="search-mode-tabs" style="margin-bottom:12px;">
+      <button class="mode-tab active" data-mode="simple" id="tabSimple"> <i class="ti ti-search"></i> Busqueda Simple</button>
+      <button class="mode-tab" data-mode="masiva" id="tabMasivo"> <i class="ti ti-list-search"></i> Busqueda Masiva por DNI</button>
+    </div>
+
+    <div class="panel-title"><i class="ti ti-filter"></i> FILTROS DE BUSQUEDA</div>
+
+    <form id="tregistroForm" class="search-form">
+      <div id="simpleMode" class="form-grid">
+        <div class="form-group">
+          <label>DNI (opcional)</label>
+          <input id="dniInput" class="form-control" type="text" placeholder="Ej: 12345678">
+        </div>
+      </div>
+
+      <div id="masivaMode" class="form-group hidden">
+        <label>DNIs de trabajadores (separados por coma, espacio o salto de linea)</label>
+        <textarea id="dniMasivo" class="form-control" rows="3" placeholder="12345678&#10;87654321"></textarea>
+      </div>
+
+      <div class="form-grid cols-3">
+        <div class="form-group">
+          <label>Razon Social</label>
+          <select id="empresaSelect" class="form-select"></select>
+        </div>
+        <div class="form-group">
+          <label>Tipo de Documento</label>
+          <select id="tipoSelect" class="form-select">
+            <option value="">Alta y Baja</option>
+            <option value="Alta">Alta</option>
+            <option value="Baja">Baja</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Periodo (Mes Anio)</label>
+          <select id="periodoSelect" class="form-select">
+            <option value="">Todos</option>
+            <option value="Ene 2024">Ene 2024</option>
+            <option value="Feb 2024">Feb 2024</option>
+            <option value="Mar 2024">Mar 2024</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="search-actions">
+        <button class="btn btn-primary" type="submit"><i class="ti ti-search"></i> Buscar</button>
+        <button class="btn btn-soft" type="button" id="limpiarBtn"><i class="ti ti-rotate"></i> Limpiar</button>
+        <button class="btn btn-primary" type="button" id="downloadZipBtn"><i class="ti ti-download"></i> Descargar todo (PDF)</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="results-panel acrylic-surface">
+    <div class="results-header">
+      <div class="results-count" id="resultCount">0 documentos encontrados</div>
+    </div>
+
+    <div id="stateEmpty" class="empty-state">
+      <div class="empty-icon"><i class="ti ti-search"></i></div>
+      <h3 style="margin:0;">Sin consulta activa</h3>
+      <p style="margin:0;">Ejecuta una busqueda para listar documentos de T-Registro.</p>
+    </div>
+
+    <div id="stateLoading" class="loading-state hidden">
+      <div class="spinner"></div>
+      <span>Consultando indice local...</span>
+    </div>
+
+    <div id="stateTable" class="results-table-wrapper hidden">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Documento</th>
+            <th>Razon Social</th>
+            <th>Movimiento</th>
+            <th>DNI Trabajador</th>
+            <th>Periodo</th>
+            <th>Estado</th>
+            <th class="text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <div id="paginationControls" class="table-pagination hidden">
+      <button type="button" class="pagination-btn" id="prevPageBtn" aria-label="Pagina anterior" title="Pagina anterior">
+        <i class="ti ti-chevron-left"></i>
+      </button>
+      <span class="pagination-info" id="paginationInfo">Pagina 1 de 1</span>
+      <button type="button" class="pagination-btn" id="nextPageBtn" aria-label="Pagina siguiente" title="Pagina siguiente">
+        <i class="ti ti-chevron-right"></i>
+      </button>
+    </div>
+  </section>
+{% endblock %}
+
+{% block page_scripts %}
+  {% if DEBUG %}
+    <script src="{% static 'documents/js/search_tregistro_v2.js' %}"></script>
+  {% else %}
+    <script src="{% static 'documents/js/dist/search_tregistro_v2.js' %}"></script>
+  {% endif %}
+{% endblock %}
+

@@ -1,0 +1,36 @@
+{% load static %}
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo-box" style="background: transparent; padding: 0;">
+      <img src="{% static 'documents/img/Logo-Liderman2.svg' %}" alt="Liderman Logo" style="width: 100%; height: 100%; object-fit: contain;">
+    </div>
+    <div class="sidebar-title">
+      <h4>LIDERMAN</h4>
+      <span>v2.0</span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Modulos</div>
+    <a class="nav-item{% if active_module == 'seguros' %} active{% endif %}" href="{% url 'search_seguros_ui' %}"><i class="ti ti-shield"></i> Seguros</a>
+    <a class="nav-item{% if active_module == 'tregistro' %} active{% endif %}" href="{% url 'search_tregistro_ui' %}"><i class="ti ti-file-certificate"></i> T-Registro</a>
+    <a class="nav-item{% if active_module == 'constancias' %} active{% endif %}" href="{% url 'search_constancias_ui' %}"><i class="ti ti-folders"></i> Constancias</a>
+
+    <div class="nav-section-label">Administracion</div>
+    <a id="adminFilesLink" class="nav-item{% if active_admin == 'files' %} active{% endif %}" href="{% url 'files_management_ui' %}"><i class="ti ti-folder-cog"></i> Gestion de Archivos</a>
+    <a id="adminSyncLink" class="nav-item{% if active_admin == 'sync' %} active{% endif %}" href="{% url 'files_management_ui' %}?section=sync#sync-section"><i class="ti ti-refresh"></i> Sincronizacion</a>
+  </nav>
+
+  <div class="sidebar-user">
+    <div class="sidebar-user-main">
+      <div class="sidebar-avatar">AD</div>
+      <div>
+        <p class="sidebar-user-name" id="sidebarUserName">admin</p>
+        <p class="sidebar-user-role" id="sidebarUserRole">ADMINISTRADOR</p>
+      </div>
+    </div>
+    <button class="sidebar-logout" type="button" id="btnLogout" aria-label="CERRAR SESION" title="CERRAR SESION">
+      <i class="ti ti-logout"></i>
+    </button>
+  </div>
+</aside>

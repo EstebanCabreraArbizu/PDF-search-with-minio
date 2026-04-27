@@ -1,0 +1,273 @@
+{% extends 'documents/base_search.html' %}
+{% load static %}
+
+{% block page_title_text %}Gestion de Archivos - DocSearch{% endblock %}
+{% block body_class %}search-page-body files-page{% endblock %}
+
+{% block page_title %}<span class="accent">&#9670;</span>GESTION DE ARCHIVOS Y SINCRONIZACION{% endblock %}
+{% block page_subtitle %}ADMINISTRACION DOCUMENTAL: CARGA, CONTROL Y SINCRONIZACION DE INDICE{% endblock %}
+
+{% block main_content %}
+
+  <!-- ── STATS ─────────────────────────────────────────────── -->
+  <section class="stats-grid four" id="statsFiles">
+    <article class="stat-card acrylic-surface" id="statTotal">
+      <div class="label">Documentos Indexados</div>
+      <div class="value" id="statTotalValue">—</div>
+      <div class="hint" id="statTotalHint">Cargando...</div>
+    </article>
+    <article class="stat-card acrylic-surface" id="statSize">
+      <div class="label">Almacenamiento Total</div>
+      <div class="value" id="statSizeValue">—</div>
+      <div class="hint" id="statSizeHint">En MinIO</div>
+    </article>
+    <article class="stat-card acrylic-surface" id="statOk">
+      <div class="label">Indexados OK</div>
+      <div class="value" id="statOkValue">—</div>
+      <div class="hint" id="statOkHint">Con texto extraido</div>
+    </article>
+    <article class="stat-card acrylic-surface" id="statErr">
+      <div class="label">Con Errores / Sin texto</div>
+      <div class="value" id="statErrValue">—</div>
+      <div class="hint" id="statErrHint">Pendientes de revision</div>
+    </article>
+  </section>
+
+  <!-- ── EXPLORADOR DE ARCHIVOS ─────────────────────────────── -->
+  <section id="files-section" class="search-panel acrylic-surface">
+    <div class="panel-title"><i class="ti ti-folder-open"></i> EXPLORADOR DE ARCHIVOS</div>
+
+    <!-- Breadcrumbs -->
+    <nav id="filesBreadcrumb" class="files-breadcrumb" aria-label="Navegación de carpetas">
+      <ol class="breadcrumb-list">
+        <li class="breadcrumb-item">
+          <a href="#" onclick="window._filesGoHome(); return false;" class="breadcrumb-link">
+            <i class="ti ti-home"></i> Inicio
+          </a>
+        </li>
+      </ol>
+    </nav>
+
+    <!-- Filtros -->
+    <div class="files-filter-toolbar">
+      <div class="files-search-wrap">
+        <i class="ti ti-search files-search-icon"></i>
+        <input id="filesSearchInput" class="form-control files-search-input" type="text"
+               placeholder="Buscar por nombre de archivo..." autocomplete="off">
+      </div>
+      <select id="filesYearFilter" class="form-select files-filter-select"><option value="">Todos los años</option></select>
+      <select id="filesMonthFilter" class="form-select files-filter-select">
+        <option value="">Todos los meses</option>
+        <option value="01">Enero</option><option value="02">Febrero</option>
+        <option value="03">Marzo</option><option value="04">Abril</option>
+        <option value="05">Mayo</option><option value="06">Junio</option>
+        <option value="07">Julio</option><option value="08">Agosto</option>
+        <option value="09">Septiembre</option><option value="10">Octubre</option>
+        <option value="11">Noviembre</option><option value="12">Diciembre</option>
+      </select>
+      <select id="filesRazonFilter" class="form-select files-filter-select"><option value="">Todas las razones</option></select>
+      <button id="filesClearFilters" class="btn btn-ghost btn-sm" title="Limpiar filtros">
+        <i class="ti ti-rotate"></i>
+      </button>
+    </div>
+
+    <!-- Batch actions bar (visible when rows selected) -->
+    <div id="batchActionsBar" class="batch-actions-bar hidden">
+      <span id="batchCount" class="batch-count">0 seleccionados</span>
+      <button id="batchDownloadBtn" class="btn btn-primary btn-sm">
+        <i class="ti ti-file-download"></i> Descargar como PDF combinado
+      </button>
+      <button id="batchClearBtn" class="btn btn-ghost btn-sm">Deseleccionar</button>
+    </div>
+
+    <!-- Table states -->
+    <div id="filesStateEmpty" class="empty-state" style="padding: 2.5rem 1.5rem;">
+      <div class="empty-icon"><i class="ti ti-folder-off"></i></div>
+      <h3 style="margin:0;">Sin archivos en el índice</h3>
+      <p style="margin:0;">El repositorio documental está vacío o no hay resultados para los filtros aplicados.</p>
+    </div>
+    <div id="filesStateLoading" class="loading-state hidden">
+      <div class="spinner"></div>
+      <span>Consultando índice...</span>
+    </div>
+
+    <div id="filesStateTable" class="results-table-wrapper hidden">
+      <table class="table" id="filesTable">
+        <thead>
+          <tr>
+            <th style="width:36px;">
+              <input type="checkbox" id="selectAllCheckbox" title="Seleccionar todos" aria-label="Seleccionar todos">
+            </th>
+            <th>Archivo</th>
+            <th>Carpeta / Ruta</th>
+            <th>Año / Mes</th>
+            <th>Razon Social</th>
+            <th>Banco</th>
+            <th>Tamaño</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="filesTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div id="filesPagination" class="table-pagination hidden">
+      <button type="button" class="pagination-btn" id="filesPrevBtn" aria-label="Pagina anterior">
+        <i class="ti ti-chevron-left"></i>
+      </button>
+      <span class="pagination-info" id="filesPaginationInfo">Pagina 1 de 1</span>
+      <button type="button" class="pagination-btn" id="filesNextBtn" aria-label="Pagina siguiente">
+        <i class="ti ti-chevron-right"></i>
+      </button>
+      <span class="pagination-total" id="filesTotalInfo"></span>
+    </div>
+  </section>
+
+  <!-- ── CARGA DE ARCHIVOS ───────────────────────────────────── -->
+  <section id="upload-section" class="results-panel acrylic-surface files-upload-panel">
+    <div class="results-header">
+      <div class="results-count"><i class="ti ti-cloud-upload"></i> CARGA DE ARCHIVOS</div>
+    </div>
+
+    <!-- Drop zone -->
+    <div id="dropZone" class="drop-zone" role="button" tabindex="0"
+         aria-label="Zona de arrastre de archivos PDF">
+      <div class="drop-zone-inner">
+        <i class="ti ti-file-upload drop-zone-icon"></i>
+        <p class="drop-zone-title">Arrastra PDFs aquí o haz clic para seleccionar</p>
+        <p class="drop-zone-hint">Solo archivos .pdf · Máx. 50 archivos por lote</p>
+      </div>
+      <input id="fileInput" type="file" accept=".pdf" multiple style="display:none">
+    </div>
+
+    <!-- Preview area (hidden until files dropped) -->
+    <div id="uploadPreviewArea" class="hidden">
+      <div class="upload-preview-header">
+        <span id="previewSummary" class="preview-summary"></span>
+        <div class="upload-preview-actions">
+          <button id="classifyAgainBtn" class="btn btn-ghost btn-sm">
+            <i class="ti ti-refresh"></i> Reclasificar
+          </button>
+          <button id="uploadApprovedBtn" class="btn btn-primary btn-sm">
+            <i class="ti ti-upload"></i> Subir archivos aprobados
+          </button>
+        </div>
+      </div>
+
+      <div class="results-table-wrapper">
+        <table class="table classify-preview-table">
+          <thead>
+            <tr>
+              <th>Archivo</th>
+              <th>Estado</th>
+              <th>Confianza</th>
+              <th>Dominio</th>
+              <th>Año / Mes</th>
+              <th>Razon Social</th>
+              <th>Ruta lógica</th>
+              <th>Advertencias</th>
+            </tr>
+          </thead>
+          <tbody id="classifyPreviewBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Upload progress -->
+      <div id="uploadProgressArea" class="upload-progress-area hidden">
+        <div class="sync-progress-label">
+          <span id="uploadProgressText">Preparando subida...</span>
+          <span id="uploadProgressCount" class="sync-count-badge"></span>
+        </div>
+        <div class="sync-progress-wrap">
+          <div id="uploadProgressBar" class="sync-progress-bar" style="width:0%"></div>
+        </div>
+        <div id="uploadLog" class="sync-log"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SINCRONIZACION ─────────────────────────────────────── -->
+  <section id="sync-section" class="results-panel acrylic-surface">
+    <div class="results-header">
+      <div class="results-count"><i class="ti ti-refresh"></i> SINCRONIZACION DE INDICE</div>
+    </div>
+
+    <div class="sync-info-grid">
+      <div class="sync-info-card">
+        <div class="sync-info-label">Que hace la sincronizacion</div>
+        <ul class="sync-info-list">
+          <li><i class="ti ti-plus"></i> Indexa nuevos PDFs detectados en MinIO</li>
+          <li><i class="ti ti-arrows-exchange"></i> Detecta y registra archivos movidos (via hash MD5)</li>
+          <li><i class="ti ti-trash"></i> Desactiva entradas huerfanas del indice</li>
+        </ul>
+      </div>
+      <div class="sync-info-card">
+        <div class="sync-info-label">Parametros</div>
+        <div class="sync-params-row">
+          <label class="sync-param-label">Tamaño de lote</label>
+          <input id="syncBatchSize" type="number" class="form-control sync-param-input"
+                 value="50" min="10" max="200">
+        </div>
+        <div class="sync-params-row" style="margin-top: 6px;">
+          <label class="sync-param-label">
+            <input id="syncSkipNew" type="checkbox"> Solo detectar movidos/huerfanos (no indexar nuevos)
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="search-actions" style="padding: 0 1.5rem 1rem;">
+      <button id="runSyncBtn" class="btn btn-primary">
+        <i class="ti ti-refresh"></i> Ejecutar Sincronizacion
+      </button>
+      <button id="stopSyncBtn" class="btn btn-ghost hidden">
+        <i class="ti ti-player-stop"></i> Detener
+      </button>
+    </div>
+
+    <div id="syncProgressArea" class="hidden" style="padding: 0 1.5rem 1.5rem;">
+      <div class="sync-progress-label">
+        <span id="syncProgressText">Iniciando...</span>
+        <span id="syncProgressPercent" class="sync-count-badge">0%</span>
+      </div>
+      <div class="sync-progress-wrap">
+        <div id="syncProgressBar" class="sync-progress-bar" style="width:0%"></div>
+      </div>
+      <div class="sync-stats-row" id="syncStatsRow" style="display:none;">
+        <span><i class="ti ti-plus"></i> <strong id="syncNewCount">0</strong> nuevos</span>
+        <span><i class="ti ti-arrows-exchange"></i> <strong id="syncMovedCount">0</strong> movidos</span>
+        <span><i class="ti ti-trash"></i> <strong id="syncRemovedCount">0</strong> desactivados</span>
+        <span><i class="ti ti-alert-triangle"></i> <strong id="syncErrorCount">0</strong> errores</span>
+      </div>
+      <div id="syncLog" class="sync-log"></div>
+    </div>
+  </section>
+
+  <!-- ── MODAL CONFIRMACION ELIMINAR ───────────────────────── -->
+  <div id="deleteModal" class="modal-backdrop hidden" role="dialog" aria-modal="true"
+       aria-labelledby="deleteModalTitle">
+    <div class="modal-card acrylic-surface">
+      <div class="modal-header">
+        <span id="deleteModalTitle" class="modal-title"><i class="ti ti-alert-triangle"></i> Confirmar eliminacion</span>
+      </div>
+      <div class="modal-body">
+        <p>¿Estas seguro de que deseas eliminar el archivo?</p>
+        <code id="deleteModalPath" class="delete-path-code"></code>
+        <p class="modal-warning">Esta accion eliminara el archivo de MinIO y su entrada en el indice PostgreSQL. No se puede deshacer.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="deleteModalCancel" class="btn btn-ghost">Cancelar</button>
+        <button id="deleteModalConfirm" class="btn btn-danger">
+          <i class="ti ti-trash"></i> Eliminar
+        </button>
+      </div>
+    </div>
+  </div>
+
+{% endblock %}
+
+{% block page_scripts %}
+  <script src="{% static 'documents/js/search_files_v2.js' %}"></script>
+{% endblock %}
