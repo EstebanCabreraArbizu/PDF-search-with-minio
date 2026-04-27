@@ -71,7 +71,7 @@ services:
     volumes:
       - ./flask_project:/app  # 🔄 Hot-reload: cambios en código se reflejan al instante
     networks:
-      - pdf-network
+       - pdf-network
 
   django-app:
     build:
@@ -107,6 +107,8 @@ services:
       - MINIO_ACCESS_KEY=admin
       - MINIO_SECRET_KEY=password123  # ⚠️ Cambiar en producción
       - DEBUG=True
+    volumes:
+      - ./documents:/app/documents  # 🔄 Sync static files and templates
     depends_on:
       postgres:
         condition: service_healthy

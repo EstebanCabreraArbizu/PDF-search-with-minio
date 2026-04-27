@@ -19,7 +19,13 @@ const OBFUSCATOR_CONFIG = {
     deadCodeInjectionThreshold: 0.4,
     sourceMap: true,
     sourceMapMode: 'separate',
-    reservedNames: ['DocSearchCore', 'DocSearchShared', 'state', 'results', 'count', 'init', 'search', 'renderResults', 'renderPagination', 'isLoading', 'metadata']
+    reservedNames: [
+        'DocSearchCore', 'DocSearchShared', 
+        'state', 'results', 'count', 'init', 'search', 'renderResults', 'renderPagination', 'isLoading', 'metadata',
+        'toggleTheme', 'initTheme', 'syncThemeToggle', 'initGlobalUI', 'getAuthToken', 'getAuthHeaders', 'ensureAuth',
+        'redirectToLogin', 'logout', 'fetchJson', 'validateToken', 'safeText', 'formatPathLabel', 'formatPeriodo',
+        'showToast', 'setLoading', 'createSearchApp', 'downloadFile', 'loadFilterOptions', 'populateSelect'
+    ]
 };
 
 /**
@@ -39,7 +45,10 @@ const getAllJSFiles = (dirPath, arrayOfFiles = []) => {
                 getAllJSFiles(fullPath, arrayOfFiles);
             }
         } else if (file.endsWith('.js')) {
-            arrayOfFiles.push(fullPath);
+            // Skip ui_core_v2.js for debugging
+            if (!fullPath.endsWith('ui_core_v2.js')) {
+                arrayOfFiles.push(fullPath);
+            }
         }
     });
 
@@ -93,6 +102,14 @@ filesToObfuscate.forEach(filePath => {
         console.error(`✗ [ERROR] Failed to obfuscate ${relativePath}:`, err.message);
     }
 });
+
+// Copy ui_core_v2.js without obfuscation (for debugging)
+const uiCoreSource = path.join(JS_ROOT, 'ui_core_v2.js');
+const uiCoreDest = path.join(OUTPUT_DIR, 'ui_core_v2.js');
+if (fs.existsSync(uiCoreSource)) {
+    fs.copyFileSync(uiCoreSource, uiCoreDest);
+    console.log(`✓ [OK] ui_core_v2.js (copied without obfuscation)`);
+}
 
 console.log('\n--- OBFUSCATION COMPLETE ---');
 console.log(`Files are available in: ${OUTPUT_DIR}`);
