@@ -883,7 +883,7 @@ function bindAllEvents() {
   });
 
   /* Logout */
-  document.getElementById('logoutBtn')?.addEventListener('click', logout);
+  document.getElementById('btnLogout')?.addEventListener('click', logout);
 
   /* Paginación */
   document.getElementById('filesPrevBtn')?.addEventListener('click', () => {
