@@ -47,6 +47,14 @@ function initializeConstanciasSearch() {
         type: 'constancias',
         apiPaths: API_PATHS,
         formId: 'constanciasForm',
+        resultsTableId: 'stateTable',
+        resultsTableBodyId: 'tableBody',
+        paginationContainerId: 'paginationControls',
+        emptyStateId: 'stateEmpty',
+        loaderId: 'stateLoading',
+        simpleFiltersId: 'simpleMode',
+        masivoFiltersId: 'masivaMode',
+        masivoInputId: 'dniMasivo',
         columns: [
             { 
                 label: 'Documento', 
@@ -80,10 +88,39 @@ function initializeConstanciasSearch() {
             }
         ],
         onBeforeSearch: (params, isMasivo) => {
+            const payload = {};
+
+            const empresa = document.getElementById('empresaSelect')?.value;
+            const banco = document.getElementById('bancoSelect')?.value;
+            const planilla = document.getElementById('planillaSelect')?.value;
+            const periodo = document.getElementById('periodoSelect')?.value;
+
+            if (empresa) payload.razon_social = empresa;
+            if (banco) payload.banco = banco;
+            if (planilla) payload.payroll_type = planilla;
+            if (periodo) payload.periodo = periodo;
+
             if (isMasivo) {
-                // Core handles masivoInput validation/parsing if configured, 
-                // but we can add extra logic here if needed.
+                const massInput = document.getElementById('dniMasivo')?.value || '';
+                const codes = massInput.split(/[\s,;\n]+/).map(c => c.trim()).filter(c => c.length >= 4);
+                if (codes.length === 0) {
+                    window.DocSearchCore.showToast('Ingresa al menos un codigo para busqueda masiva.', 'warning');
+                    return null;
+                }
+                payload.codigos = codes;
+            } else {
+                const codigoSimple = document.getElementById('dniInput')?.value;
+                if (codigoSimple) payload.codigo_empleado = codigoSimple.trim();
             }
+
+            Object.keys(payload).forEach(key => {
+                if (Array.isArray(payload[key])) {
+                    payload[key].forEach(val => params.append(key, val));
+                } else {
+                    params.append(key, payload[key]);
+                }
+            });
+
             return params;
         }
     });

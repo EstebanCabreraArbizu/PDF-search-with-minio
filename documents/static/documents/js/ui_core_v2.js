@@ -374,6 +374,16 @@
 
                 // Global components
                 DocSearchCore.initGlobalUI();
+
+                const downloadZipBtn = document.getElementById('downloadZipBtn');
+                if (downloadZipBtn) {
+                    downloadZipBtn.onclick = () => {
+                        DocSearchCore.downloadResultsZip(
+                            state.results,
+                            `${type}_resultados_${state.results.length}.zip`
+                        ).catch(err => DocSearchCore.showToast(err.message, 'error'));
+                    };
+                }
             };
 
             const setMode = (masivo) => {
@@ -460,13 +470,13 @@
                 emptyState?.classList.add('hidden');
 
                 resultsTableBody.innerHTML = results.map(doc => {
-                    const filename = this.formatPathLabel(doc.filename);
+                    const filename = DocSearchCore.formatPathLabel(doc.filename);
                     return `
                         <tr data-id="${doc.id}">
                             ${columns.map(col => `<td>${col.render(doc)}</td>`).join('')}
                             <td>
                                 <div class="flex gap-2">
-                                    <button class="btn-icon btn-primary js-download" data-id="${doc.id}" data-name="${this.safeText(filename)}">
+                                    <button class="btn-icon btn-primary js-download" data-id="${doc.id}" data-name="${DocSearchCore.safeText(filename)}">
                                         <i class="ti ti-download"></i>
                                     </button>
                                 </div>
@@ -481,7 +491,7 @@
                     if (btn) {
                         e.preventDefault();
                         const { id, name } = btn.dataset;
-                        this.downloadFile(id, name).catch(err => {
+                        DocSearchCore.downloadFile(id, name).catch(err => {
                             console.error('Download error:', err);
                             alert('Error al descargar el archivo: ' + err.message);
                         });
@@ -548,9 +558,37 @@
             return app;
         },
 
+        async downloadResultsZip(results, filename = 'documentos.zip') {
+            const ids = (results || []).map(doc => doc.id).filter(Boolean);
+            if (ids.length === 0) {
+                this.showToast('No hay documentos para descargar.', 'warning');
+                return;
+            }
+
+            const response = await fetch('/api/v2/documents/download-zip', {
+                method: 'POST',
+                headers: DocSearchCore.getAuthHeaders(),
+                body: JSON.stringify({ document_ids: ids })
+            });
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ error: 'Error generando ZIP' }));
+                throw new Error(err.error || err.detail || 'Error generando ZIP');
+            }
+
+            const blob = await response.blob();
+            const dlUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = dlUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(dlUrl);
+            a.remove();
+        },
+
         async downloadFile(id, filename) {
             const url = `${this.API_PATHS.download}${id}/download`;
-            const response = await fetch(url, { headers: this.getAuthHeaders() });
+            const response = await fetch(url, { headers: DocSearchCore.getAuthHeaders() });
             if (!response.ok) throw new Error('Error al descargar');
             
             const blob = await response.blob();
@@ -599,7 +637,7 @@
 
             try {
                 const url = `/api/filter-options-bulk?document_type=${encodeURIComponent(documentType)}`;
-                const response = await fetch(url, { headers: this.getAuthHeaders(false) });
+                const response = await fetch(url, { headers: DocSearchCore.getAuthHeaders(false) });
                 
                 if (!response.ok) {
                     console.error(`Failed to load filter options: ${response.status}`);
@@ -626,12 +664,23 @@
             const select = document.getElementById(selectId);
             if (!select) return;
 
-            // Keep the first option (placeholder) if it exists
-            const firstOption = select.options[0];
-            select.innerHTML = '';
-            if (firstOption) {
-                select.appendChild(firstOption);
+            const placeholderText = {
+                empresaSelect: '- Todas -',
+                bancoSelect: '- Todos -',
+                planillaSelect: '- Todos -',
+                tipoSelect: '- Todos -',
+                subtipoSelect: '- Todos -',
+                periodoSelect: '- Todos -'
+            };
+            let firstOption = select.options[0];
+            if (!firstOption || firstOption.value !== '') {
+                firstOption = document.createElement('option');
+                firstOption.value = '';
+                firstOption.textContent = placeholderText[selectId] || '- Todos -';
             }
+
+            select.innerHTML = '';
+            select.appendChild(firstOption);
 
             options.forEach(optionValue => {
                 if (optionValue) {
