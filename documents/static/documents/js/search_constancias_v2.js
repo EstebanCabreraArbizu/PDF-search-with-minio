@@ -2,12 +2,23 @@
  * DocSearch v2 - Search Constancias
  * Powered by UI Core Framework
  */
-document.addEventListener('DOMContentLoaded', () => {
-    const { createSearchApp, safeText, formatPeriodo, API_PATHS, initTheme, syncThemeToggle, loadFilterOptions, populateSelect } = window.DocSearchCore;
+
+// Ensure DocSearchCore is available, or wait for it
+if (typeof window.DocSearchCore === 'undefined') {
+    console.warn('DocSearchCore not loaded yet, waiting...');
+    document.addEventListener('DOMContentLoaded', initializeConstanciasSearch);
+} else {
+    // DocSearchCore is already loaded, initialize immediately
+    initializeConstanciasSearch();
+}
+
+function initializeConstanciasSearch() {
+    const { createSearchApp, safeText, formatPeriodo, API_PATHS, loadFilterOptions, populateSelect } = window.DocSearchCore;
     
-    // Initialize theme system
-    initTheme();
-    syncThemeToggle();
+    // Initialize theme system - call as methods to preserve 'this' context
+    window.DocSearchCore.initTheme();
+    window.DocSearchCore.initGlobalUI();  // 🎨 Wire up theme toggle button and other global UI elements
+    window.DocSearchCore.syncThemeToggle();
 
     // Load dynamic filters
     loadFilterOptions('CONSTANCIA_ABONO').then(filters => {
@@ -78,4 +89,4 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     app.init();
-});
+}

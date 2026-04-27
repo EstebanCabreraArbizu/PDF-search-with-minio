@@ -981,6 +981,7 @@ function focusSectionFromQuery() {
 /* ── BOOTSTRAP ──────────────────────────────────────────────────────── */
 async function bootstrap() {
   SHARED.initTheme();
+  SHARED.initGlobalUI();  // 🎨 Wire up theme toggle button and other global UI elements
   renderSidebarUser();
 
   const hasSession = await restoreSession();
