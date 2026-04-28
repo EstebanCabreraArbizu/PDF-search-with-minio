@@ -172,4 +172,26 @@ function initializeTregistroSearch() {
     }
 
     app.init();
+
+    // Reset filters listener
+    const limpiarBtn = document.getElementById('limpiarBtn');
+    if (limpiarBtn) {
+        limpiarBtn.addEventListener('click', () => {
+            document.querySelectorAll('select').forEach(s => s.value = '');
+            const dniInput = document.getElementById('dniInput');
+            if (dniInput) dniInput.value = '';
+            const dniMasivo = document.getElementById('dniMasivo');
+            if (dniMasivo) dniMasivo.value = '';
+            const resultCount = document.getElementById('resultCount');
+            if (resultCount) resultCount.textContent = '0 documentos encontrados';
+            const stateTable = document.getElementById('stateTable');
+            if (stateTable) stateTable.classList.add('hidden');
+            const stateEmpty = document.getElementById('stateEmpty');
+            if (stateEmpty) stateEmpty.classList.remove('hidden');
+            const pagination = document.getElementById('paginationControls');
+            if (pagination) pagination.classList.add('hidden');
+            const tableBody = document.getElementById('tableBody');
+            if (tableBody) tableBody.innerHTML = '';
+        });
+    }
 }
