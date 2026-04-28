@@ -693,6 +693,90 @@
                     select.appendChild(opt);
                 }
             });
+        },
+
+        renderCodesBadge(codes) {
+            if (!codes || codes.length === 0) {
+                return '<span class="codes-badge">👤 0 códigos</span>';
+            }
+            const codesList = codes.map(c => this.safeText(c)).join(', ');
+            return `
+                <span class="codes-badge" tabindex="0" data-codes='${JSON.stringify(codes)}'>
+                    👤 ${codes.length} códigos
+                    <div class="codes-popover">
+                        <div class="codes-popover-header">
+                            <span>Códigos</span>
+                            <button class="codes-popover-copy" onclick="event.stopPropagation(); window.DocSearchCore.copyAllCodes(this)">
+                                <i class="ti ti-copy"></i> Copiar todos
+                            </button>
+                        </div>
+                        <div class="codes-popover-list">${codesList}</div>
+                    </div>
+                </span>
+            `;
+        },
+
+        copyAllCodes(button) {
+            const badge = button.closest('.codes-badge');
+            const codes = JSON.parse(badge.dataset.codes || '[]');
+            const text = codes.join(', ');
+            navigator.clipboard.writeText(text).then(() => {
+                this.showToast('Códigos copiados al portapapeles', 'success');
+            }).catch(() => {
+                this.showToast('Error al copiar', 'error');
+            });
+        },
+
+        renderSkeletonRows(count) {
+            let html = '';
+            for (let i = 0; i < count; i++) {
+                html += `
+                    <tr class="skeleton-row">
+                        <td><div class="shimmer"></div></td>
+                        <td><div class="shimmer"></div></td>
+                        <td><div class="shimmer"></div></td>
+                        <td><div class="shimmer"></div></td>
+                        <td><div class="shimmer"></div></td>
+                    </tr>
+                `;
+            }
+            return html;
+        },
+
+        renderErrorState(message) {
+            return `
+                <div class="error-state">
+                    <i class="ti ti-alert-circle error-state-icon"></i>
+                    <p class="error-state-message">${this.safeText(message)}</p>
+                    <button class="btn btn-primary error-state-retry" onclick="window.DocSearchCore.onRetryError()">
+                        <i class="ti ti-refresh"></i> Reintentar
+                    </button>
+                </div>
+            `;
+        },
+
+        onRetryError() {
+            if (typeof window._currentApp !== 'undefined' && window._currentApp.search) {
+                window._currentApp.search(1);
+            }
+        },
+
+        renderMetaSummary(metadata, domain) {
+            if (!metadata || typeof metadata !== 'object') return '';
+            
+            const domainFields = {
+                'seguros': ['empresa', 'planilla', 'tipo', 'subtipo', 'periodo'],
+                'constancias': ['empresa', 'banco', 'tipo'],
+                'tregistro': ['empresa', 'tipo']
+            };
+            
+            const fields = domainFields[domain] || Object.keys(metadata);
+            const chips = fields
+                .filter(key => metadata[key] !== undefined && metadata[key] !== null && metadata[key] !== '')
+                .map(key => `<span class="meta-chip">${this.safeText(key)}: ${this.safeText(metadata[key])}</span>`)
+                .join('');
+            
+            return chips ? `<div class="meta-summary">${chips}</div>` : '';
         }
     };
 
