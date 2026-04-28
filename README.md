@@ -618,6 +618,12 @@ PDF-search-with-minio/
 - Los resultados V2 y el explorador de carpetas excluyen rutas raíz sueltas tipo `2026/`; la ruta documental válida es `Planillas 202X/`.
 - Validación: `manage.py check`, `node --check` y Playwright autenticado para Seguros, T-Registro, Constancias, ZIP de resultados y no regresión de Gestión de Archivos.
 
+### 9. **Validación E2E con Usuario de Prueba**
+- Los smoke tests Playwright versionados usan `testadmin` / `Test123456!` por defecto y permiten sobreescritura con `E2E_USERNAME` y `E2E_PASSWORD`.
+- El usuario `testadmin` se verifica dentro de Docker Compose con PostgreSQL real y permisos `staff`/`superuser` para cubrir flujos administrativos.
+- Los timeouts de los specs de integración contemplan la latencia real del endpoint de Constancias con filtros y ZIP en Docker.
+- Validación ejecutada: `docker compose exec django-app python manage.py check` y `npx playwright test tests/e2e/file-management-folders-theme.spec.js tests/e2e/document-search-smoke.spec.js --project=chromium --reporter=list`.
+
 ---
 
 ## 🔐 Seguridad
@@ -649,8 +655,8 @@ Usuario: ecabrera
 Acción: Descargar todas las boletas de un área para un mes
 1. Búsqueda Masiva con 200 códigos
 2. Filtro: Mes=Marzo, Razón Social=RESGUARDO
-3. Fusionar todos en 1 PDF
-4. Descargar documento combinado
+3. Generar un archivo ZIP con los PDFs encontrados
+4. Descargar el ZIP de resultados
 ```
 
 ### Caso 3: Carga de Nuevas Planillas
