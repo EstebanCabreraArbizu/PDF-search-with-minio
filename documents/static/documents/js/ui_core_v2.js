@@ -404,8 +404,17 @@
                 state.loading = true;
                 state.currentPage = page;
 
-                if (loader) loader.classList.remove('hidden');
-                DocSearchCore.setLoading('btnSubmit', true);
+                // Show skeleton rows immediately - before fetch
+                renderSkeletonRows(5);
+                
+                // Show table, hide empty and loading states
+                resultsTable?.classList.remove('hidden');
+                emptyState?.classList.add('hidden');
+                if (loader) loader.classList.add('hidden');
+                
+                // Disable submit button
+                const submitBtn = document.getElementById('btnSubmit');
+                if (submitBtn) submitBtn.disabled = true;
 
                 try {
                     const params = new URLSearchParams({
@@ -446,12 +455,57 @@
                     
                     app.renderResults(state.results, state.currentPage);
                 } catch (err) {
-                    DocSearchCore.showToast(err.message, 'error');
+                    // Show error state instead of toast
+                    renderErrorState(err.message);
+                    console.error('Search error:', err);
                 } finally {
                     state.loading = false;
-                    if (loader) loader.classList.add('hidden');
-                    DocSearchCore.setLoading('btnSubmit', false);
+                    // Re-enable submit button
+                    if (submitBtn) submitBtn.disabled = false;
                 }
+            };
+
+            const renderSkeletonRows = (count = 5) => {
+                if (!resultsTableBody) return;
+                
+                // Show table, hide empty and loading states
+                resultsTable?.classList.remove('hidden');
+                emptyState?.classList.add('hidden');
+                if (loader) loader.classList.add('hidden');
+                
+                resultsTableBody.innerHTML = Array(count).fill().map(() => `
+                    <tr class="skeleton-row">
+                        ${columns.map(() => `<td><div class="skeleton-cell"></div></td>`).join('')}
+                        <td>
+                            <div class="flex gap-2">
+                                <div class="skeleton-cell" style="width: 32px; height: 32px;"></div>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            };
+
+            const renderErrorState = (errorMessage) => {
+                if (!resultsTableBody) return;
+                
+                resultsTable?.classList.add('hidden');
+                emptyState?.classList.add('hidden');
+                if (loader) loader.classList.add('hidden');
+                
+                resultsTableBody.innerHTML = `
+                    <tr class="error-state">
+                        <td colspan="${columns.length + 1}">
+                            <div class="error-container text-center p-6">
+                                <i class="ti ti-alert-circle text-danger mb-3" style="font-size: 2rem;"></i>
+                                <h4 class="text-danger mb-2">Error en la búsqueda</h4>
+                                <p class="text-muted mb-4">${DocSearchCore.safeText(errorMessage)}</p>
+                                <button class="btn btn-primary" onclick="window._currentApp.search(${state.currentPage})">
+                                    <i class="ti ti-refresh me-2"></i>Reintentar
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
             };
 
             const renderResults = (customResults) => {
@@ -470,13 +524,13 @@
                 emptyState?.classList.add('hidden');
 
                 resultsTableBody.innerHTML = results.map(doc => {
-                    const filename = DocSearchCore.formatPathLabel(doc.filename);
+                    const filename = this.formatPathLabel(doc.filename);
                     return `
                         <tr data-id="${doc.id}">
                             ${columns.map(col => `<td>${col.render(doc)}</td>`).join('')}
                             <td>
                                 <div class="flex gap-2">
-                                    <button class="btn-icon btn-primary js-download" data-id="${doc.id}" data-name="${DocSearchCore.safeText(filename)}">
+                                    <button class="btn-icon btn-primary js-download" data-id="${doc.id}" data-name="${this.safeText(filename)}">
                                         <i class="ti ti-download"></i>
                                     </button>
                                 </div>
@@ -491,7 +545,7 @@
                     if (btn) {
                         e.preventDefault();
                         const { id, name } = btn.dataset;
-                        DocSearchCore.downloadFile(id, name).catch(err => {
+                        this.downloadFile(id, name).catch(err => {
                             console.error('Download error:', err);
                             alert('Error al descargar el archivo: ' + err.message);
                         });

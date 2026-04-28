@@ -996,6 +996,15 @@ body.search-page-body {
   }
 }
 
+@keyframes shimmer {
+  0% {
+    background-position: -468px 0;
+  }
+  100% {
+    background-position: 468px 0;
+  }
+}
+
 .results-table-wrapper {
   overflow: auto;
   border: 1px solid var(--line-soft);
@@ -2278,6 +2287,23 @@ body.search-page-body.login-page {
 
 .skeleton-row td {
   padding: 12px 11px;
+}
+
+.skeleton-row {
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-cell {
+  height: 16px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--line) 25%, transparent) 0%,
+    color-mix(in srgb, var(--line) 40%, transparent) 50%,
+    color-mix(in srgb, var(--line) 25%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: 2px;
+  animation: shimmer 1.5s ease-in-out infinite;
 }
 
 .shimmer {
