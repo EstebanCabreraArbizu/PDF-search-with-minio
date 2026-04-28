@@ -624,6 +624,12 @@ PDF-search-with-minio/
 - Los timeouts de los specs de integración contemplan la latencia real del endpoint de Constancias con filtros y ZIP en Docker.
 - Validación ejecutada: `docker compose exec django-app python manage.py check` y `npx playwright test tests/e2e/file-management-folders-theme.spec.js tests/e2e/document-search-smoke.spec.js --project=chromium --reporter=list`.
 
+### 10. **Validación de Carga, Persistencia y Sincronización**
+- El smoke `file-upload-sync-smoke.spec.js` genera un PDF único en memoria, lo clasifica desde la UI de Gestión de Archivos y valida la carga real hacia MinIO.
+- La prueba confirma persistencia en PostgreSQL/docrepo mediante `/api/files/list`, render del archivo cargado en la tabla y ejecución de `/api/index/sync` con `skip_new=true` sin errores.
+- El archivo temporal se elimina al final con `DELETE /api/files/delete`; el test también limpia restos `E2E_` activos al inicio para mantener reintentos idempotentes.
+- Validación ejecutada: `npx playwright test tests/e2e/file-management-folders-theme.spec.js tests/e2e/document-search-smoke.spec.js tests/e2e/file-upload-sync-smoke.spec.js --project=chromium --reporter=list`.
+
 ---
 
 ## 🔐 Seguridad
