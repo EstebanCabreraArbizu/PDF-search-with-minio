@@ -1,17 +1,22 @@
 import { test, expect } from '@playwright/test';
 
+const E2E_USERNAME = process.env.E2E_USERNAME || 'testadmin';
+const E2E_PASSWORD = process.env.E2E_PASSWORD || 'Test123456!';
+
+test.setTimeout(90000);
+
 async function authenticate(page, request) {
   const response = await request.post('/api/auth/login/', {
-    data: { username: 'admin', password: 'admin123' },
+    data: { username: E2E_USERNAME, password: E2E_PASSWORD },
   });
   expect(response.ok()).toBeTruthy();
   const payload = await response.json();
 
-  await page.addInitScript(({ token, user }) => {
+  await page.addInitScript(({ token, user, username }) => {
     localStorage.setItem('docsearch_v2_access_token', token);
-    localStorage.setItem('docsearch_v2_user', JSON.stringify(user || { username: 'admin', is_staff: true }));
+    localStorage.setItem('docsearch_v2_user', JSON.stringify(user || { username, is_staff: true }));
     sessionStorage.clear();
-  }, { token: payload.access, user: payload.user });
+  }, { token: payload.access, user: payload.user, username: E2E_USERNAME });
 
   return payload.access;
 }
@@ -53,9 +58,10 @@ test.describe('Document search smoke', () => {
     expect(apiPayload.results[0].filename).toMatch(/^Planillas 20\d{2}\//);
 
     await page.goto('/ui/constancias/', { waitUntil: 'networkidle' });
+    await page.waitForFunction(() => window._currentApp && !window._currentApp.state.loading);
     await page.locator('#empresaSelect').selectOption('RESGUARDO');
     const searchResponsePromise = page.waitForResponse(response => response.url().includes('/api/v2/constancias/search/'));
-    await page.locator('#constanciasForm').evaluate(form => form.requestSubmit());
+    await page.getByRole('button', { name: /buscar/i }).click();
     const searchResponse = await searchResponsePromise;
     expect(searchResponse.ok()).toBeTruthy();
     const searchPayload = await searchResponse.json();
