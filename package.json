@@ -3,16 +3,20 @@
     "version": "1.0.0",
     "description": "Frontend assets build and obfuscation",
     "scripts": {
-        "obfuscate": "node tools/obfuscate.js",
-        "sync:corp-style": "node tools/sync-corp-style.js",
-        "build": "npm run sync:corp-style && npm run obfuscate",
+        "obfuscate": "npx dotenv-cli -- node tools/obfuscate.js",
+        "sync:corp-style": "npx dotenv-cli -- node tools/sync-corp-style.js",
+        "build": "npx dotenv-cli -- npm run sync:corp-style && npx dotenv-cli -- npm run obfuscate",
         "lint": "echo \"Linting... (no linter configured)\" && exit 0",
-        "test": "npm run lint && npm run build"
+        "test": "npx dotenv-cli -- npm run lint && npx dotenv-cli -- npm run build",
+        "install:deps": "npx dotenv-cli -- npm install"
     },
     "dependencies": {
         "@richard-paredes-1/corp-style": "1.0.0"
     },
     "devDependencies": {
-        "javascript-obfuscator": "4.1.0"
+        "@playwright/test": "^1.59.1",
+        "dotenv-cli": "^11.0.0",
+        "javascript-obfuscator": "4.1.0",
+        "playwright": "^1.59.1"
     }
 }
