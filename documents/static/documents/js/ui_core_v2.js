@@ -473,28 +473,19 @@
                 emptyState?.classList.add('hidden');
                 if (loader) loader.classList.add('hidden');
                 
-                resultsTableBody.innerHTML = Array(count).fill().map(() => `
-                    <tr class="skeleton-row">
-                        ${columns.map(() => `<td><div class="skeleton-cell"></div></td>`).join('')}
-                        <td>
-                            <div class="flex gap-2">
-                                <div class="skeleton-cell" style="width: 32px; height: 32px;"></div>
-                            </div>
-                        </td>
-                    </tr>
-                `).join('');
+                resultsTableBody.innerHTML = window.DocSearchCore.renderSkeletonRows(count);
             };
 
             const renderErrorState = (errorMessage) => {
                 if (!resultsTableBody) return;
                 
-                resultsTable?.classList.add('hidden');
+                resultsTable?.classList.remove('hidden');
                 emptyState?.classList.add('hidden');
                 if (loader) loader.classList.add('hidden');
                 
                 resultsTableBody.innerHTML = `
                     <tr class="error-state">
-                        <td colspan="${columns.length + 1}">
+                        <td colspan="${columns.length || 1}">
                             <div class="error-container text-center p-6">
                                 <i class="ti ti-alert-circle text-danger mb-3" style="font-size: 2rem;"></i>
                                 <h4 class="text-danger mb-2">Error en la búsqueda</h4>
@@ -514,41 +505,52 @@
                 const results = customResults || state.results || [];
 
                 if (results.length === 0) {
-                    resultsTable?.classList.add('hidden');
-                    emptyState?.classList.remove('hidden');
+                    resultsTable?.classList.remove('hidden');
+                    emptyState?.classList.add('hidden');
                     if (paginationContainer) paginationContainer.innerHTML = '';
+                    resultsTableBody.innerHTML = `
+                        <tr class="no-results-row">
+                            <td colspan="${columns.length || 1}">
+                                <div class="empty-results text-center p-6">
+                                    <i class="ti ti-search-off text-muted mb-3" style="font-size: 2rem;"></i>
+                                    <h4 class="mb-2">Sin resultados</h4>
+                                    <p class="text-muted mb-0">No se encontraron documentos con los filtros aplicados.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
                     return;
                 }
 
                 resultsTable?.classList.remove('hidden');
                 emptyState?.classList.add('hidden');
 
-                resultsTableBody.innerHTML = results.map(doc => {
-                    const filename = this.formatPathLabel(doc.filename);
-                    return `
-                        <tr data-id="${doc.id}">
-                            ${columns.map(col => `<td>${col.render(doc)}</td>`).join('')}
-                            <td>
-                                <div class="flex gap-2">
-                                    <button class="btn-icon btn-primary js-download" data-id="${doc.id}" data-name="${this.safeText(filename)}">
-                                        <i class="ti ti-download"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
+                resultsTableBody.innerHTML = results.map(doc => `
+                    <tr data-id="${doc.id}">
+                        ${columns.map(col => `<td>${col.render(doc)}</td>`).join('')}
+                    </tr>
+                `).join('');
 
                 // Delegate download event
-                resultsTableBody.onclick = (e) => {
+                resultsTableBody.onclick = async (e) => {
                     const btn = e.target.closest('.js-download');
                     if (btn) {
                         e.preventDefault();
-                        const { id, name } = btn.dataset;
-                        this.downloadFile(id, name).catch(err => {
+                        const { id, name, url } = btn.dataset;
+                        try {
+                            if (url) {
+                                if (window.DocSearchShared && window.DocSearchShared.downloadWithAuth) {
+                                    await window.DocSearchShared.downloadWithAuth(url, { fallbackName: name });
+                                } else {
+                                    await window.DocSearchCore.downloadUrl(url, name);
+                                }
+                                return;
+                            }
+                            await window.DocSearchCore.downloadFile(id, name);
+                        } catch (err) {
                             console.error('Download error:', err);
                             alert('Error al descargar el archivo: ' + err.message);
-                        });
+                        }
                     }
                 };
 
@@ -615,7 +617,7 @@
         async downloadResultsZip(results, filename = 'documentos.zip') {
             const ids = (results || []).map(doc => doc.id).filter(Boolean);
             if (ids.length === 0) {
-                this.showToast('No hay documentos para descargar.', 'warning');
+                DocSearchCore.showToast('No hay documentos para descargar.', 'warning');
                 return;
             }
 
@@ -641,7 +643,12 @@
         },
 
         async downloadFile(id, filename) {
-            const url = `${this.API_PATHS.download}${id}/download`;
+            if (!id) throw new Error('Documento sin identificador de descarga');
+            const url = `${DocSearchCore.API_PATHS.download}${id}/download`;
+            return DocSearchCore.downloadUrl(url, filename);
+        },
+
+        async downloadUrl(url, filename) {
             const response = await fetch(url, { headers: DocSearchCore.getAuthHeaders() });
             if (!response.ok) throw new Error('Error al descargar');
             
@@ -649,7 +656,7 @@
             const dlUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = dlUrl;
-            a.download = filename;
+            a.download = filename || 'documento.pdf';
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(dlUrl);
@@ -661,13 +668,13 @@
             const btnTheme = document.getElementById('themeToggleBtn') || document.getElementById('btnThemeToggle');
             if (btnTheme) {
                 btnTheme.onclick = () => {
-                    this.toggleTheme();
+                    DocSearchCore.toggleTheme();
                 };
             }
 
             const btnLogout = document.getElementById('btnLogout');
             if (btnLogout) {
-                btnLogout.onclick = () => this.logout();
+                btnLogout.onclick = () => DocSearchCore.logout();
             }
         },
 
@@ -753,7 +760,7 @@
             if (!codes || codes.length === 0) {
                 return '<span class="codes-badge">👤 0 códigos</span>';
             }
-            const codesList = codes.map(c => this.safeText(c)).join(', ');
+            const codesList = codes.map(c => DocSearchCore.safeText(c)).join(', ');
             return `
                 <span class="codes-badge" tabindex="0" data-codes='${JSON.stringify(codes)}'>
                     👤 ${codes.length} códigos
@@ -775,10 +782,37 @@
             const codes = JSON.parse(badge.dataset.codes || '[]');
             const text = codes.join(', ');
             navigator.clipboard.writeText(text).then(() => {
-                this.showToast('Códigos copiados al portapapeles', 'success');
+                DocSearchCore.showToast('Códigos copiados al portapapeles', 'success');
             }).catch(() => {
-                this.showToast('Error al copiar', 'error');
+                DocSearchCore.showToast('Error al copiar', 'error');
             });
+        },
+
+        renderDocumentActions(doc) {
+            const rawName = doc?.filename || doc?.name || doc?.original_filename || doc?.path || 'documento.pdf';
+            const filename = DocSearchCore.formatPathLabel(rawName) || 'documento.pdf';
+            const downloadUrl = doc?.download_url || doc?.file_url || '';
+            const documentId = doc?.id || doc?.document_id || '';
+
+            if (!downloadUrl && !documentId) {
+                return `
+                    <button class="btn-icon btn-primary" disabled title="Descarga no disponible">
+                        <i class="ti ti-download"></i>
+                    </button>
+                `;
+            }
+
+            return `
+                <div class="flex gap-2">
+                    <button class="btn-icon btn-primary js-download"
+                            data-id="${DocSearchCore.safeText(documentId)}"
+                            data-url="${DocSearchCore.safeText(downloadUrl)}"
+                            data-name="${DocSearchCore.safeText(filename)}"
+                            title="Descargar">
+                        <i class="ti ti-download"></i>
+                    </button>
+                </div>
+            `;
         },
 
         renderSkeletonRows(count) {
@@ -786,6 +820,8 @@
             for (let i = 0; i < count; i++) {
                 html += `
                     <tr class="skeleton-row">
+                        <td><div class="shimmer"></div></td>
+                        <td><div class="shimmer"></div></td>
                         <td><div class="shimmer"></div></td>
                         <td><div class="shimmer"></div></td>
                         <td><div class="shimmer"></div></td>
@@ -801,7 +837,7 @@
             return `
                 <div class="error-state">
                     <i class="ti ti-alert-circle error-state-icon"></i>
-                    <p class="error-state-message">${this.safeText(message)}</p>
+                    <p class="error-state-message">${DocSearchCore.safeText(message)}</p>
                     <button class="btn btn-primary error-state-retry" onclick="window.DocSearchCore.onRetryError()">
                         <i class="ti ti-refresh"></i> Reintentar
                     </button>
@@ -827,7 +863,7 @@
             const fields = domainFields[domain] || Object.keys(metadata);
             const chips = fields
                 .filter(key => metadata[key] !== undefined && metadata[key] !== null && metadata[key] !== '')
-                .map(key => `<span class="meta-chip">${this.safeText(key)}: ${this.safeText(metadata[key])}</span>`)
+                .map(key => `<span class="meta-chip">${DocSearchCore.safeText(key)}: ${DocSearchCore.safeText(metadata[key])}</span>`)
                 .join('');
             
             return chips ? `<div class="meta-summary">${chips}</div>` : '';

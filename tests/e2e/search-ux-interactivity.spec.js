@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const E2E_USERNAME = process.env.E2E_USERNAME || 'testadmin';
 const E2E_PASSWORD = process.env.E2E_PASSWORD || 'Test123456!';
+let cachedAuth = null;
 
 test.setTimeout(90000);
 
@@ -10,19 +11,21 @@ test.setTimeout(90000);
 // ───────────────────────────────────────────────
 
 async function authenticate(page, request) {
-  const response = await request.post('/api/auth/login/', {
-    data: { username: E2E_USERNAME, password: E2E_PASSWORD },
-  });
-  expect(response.ok()).toBeTruthy();
-  const payload = await response.json();
+  if (!cachedAuth) {
+    const response = await request.post('/api/auth/login/', {
+      data: { username: E2E_USERNAME, password: E2E_PASSWORD },
+    });
+    expect(response.ok()).toBeTruthy();
+    cachedAuth = await response.json();
+  }
 
   await page.addInitScript(({ token, user, username }) => {
     localStorage.setItem('docsearch_v2_access_token', token);
     localStorage.setItem('docsearch_v2_user', JSON.stringify(user || { username, is_staff: true }));
     sessionStorage.clear();
-  }, { token: payload.access, user: payload.user, username: E2E_USERNAME });
+  }, { token: cachedAuth.access, user: cachedAuth.user, username: E2E_USERNAME });
 
-  return payload.access;
+  return cachedAuth.access;
 }
 
 async function navigateAndWaitForApp(page, path) {
