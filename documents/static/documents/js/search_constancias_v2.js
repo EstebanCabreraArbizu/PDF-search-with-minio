@@ -59,32 +59,37 @@ function initializeConstanciasSearch() {
             { 
                 label: 'Documento', 
                 render: doc => {
-                    const name = doc.filename.split('/').pop();
-                    return `<div class="font-medium">${safeText(name)}</div>
-                            <div class="text-xs text-muted">${DocSearchCore.renderCodesBadge(doc.employee_codes)}</div>`;
+                    const name = window.DocSearchCore.formatPathLabel(doc.filename);
+                    const sizeText = `${Number(doc.size_kb || 0).toFixed(2)} KB`;
+                    return `
+                        <div class="fw-500">${safeText(name)}</div>
+                        <div class="doc-meta text-xs opacity-70">${safeText(sizeText)}</div>
+                    `;
                 }
             },
             { 
-                label: 'Razón Social', 
-                render: doc => `<div class="truncate max-w-xs" title="${safeText(doc.metadata.razon_social)}">${safeText(doc.metadata.razon_social)}</div>` 
+                label: 'Empresa', 
+                render: doc => safeText(doc.metadata.razon_social || '—')
             },
             { 
-                label: 'Banco', 
+                label: 'Tipo', 
+                render: doc => `<span class="badge badge-info">${safeText(doc.metadata.tipo_planilla || 'Constancia')}</span>` 
+            },
+            { 
+                label: 'Detalle', 
                 render: doc => `<span class="text-sm">${safeText(doc.metadata.banco || '—')}</span>` 
             },
             { 
-                label: 'Tipo Planilla', 
-                render: doc => `<span class="badge badge-info">${safeText(doc.metadata.tipo_planilla || 'Constancia')}</span>` 
+                label: 'Códigos', 
+                render: doc => DocSearchCore.renderCodesBadge(doc.employee_codes)
             },
             { 
                 label: 'Periodo', 
                 render: doc => formatPeriodo(doc.metadata, mesesMap) 
             },
             { 
-                label: 'Estado', 
-                render: doc => doc.indexed 
-                    ? `<span class="badge badge-success">✓ Indexado</span>` 
-                    : `<span class="badge badge-warning">⚠ Pendiente</span>`
+                label: 'Acciones', 
+                render: doc => DocSearchCore.renderDocumentActions(doc)
             }
         ],
         onBeforeSearch: (params, isMasivo) => {
@@ -125,6 +130,59 @@ function initializeConstanciasSearch() {
         }
     });
 
+    // Custom Stats for Constancias
+    const originalRenderResults = app.renderResults;
+    app.renderResults = (results, page) => {
+        originalRenderResults(results, page);
+        renderStats(results);
+    };
+
+    function renderStats(results) {
+        const bancosCount = {};
+        const tiposCount = {};
+        
+        results.forEach(doc => {
+            const banco = doc.metadata.banco || 'Sin especificar';
+            const tipo = doc.metadata.tipo_planilla || 'Sin especificar';
+            
+            bancosCount[banco] = (bancosCount[banco] || 0) + 1;
+            tiposCount[tipo] = (tiposCount[tipo] || 0) + 1;
+        });
+
+        const bancosHtml = Object.entries(bancosCount)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([banco, count]) => `${count} ${banco}`)
+            .join(', ');
+
+        const tiposHtml = Object.entries(tiposCount)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([tipo, count]) => `${count} ${tipo}`)
+            .join(', ');
+
+        const html = `
+            <article class="stat-card acrylic-surface stat-border-1">
+                <div class="label">Total</div>
+                <div class="value">${results.length}</div>
+                <div class="hint">Documentos encontrados</div>
+            </article>
+            <article class="stat-card acrylic-surface stat-border-2">
+                <div class="label">Bancos</div>
+                <div class="value">${Object.keys(bancosCount).length}</div>
+                <div class="hint">${bancosHtml}</div>
+            </article>
+            <article class="stat-card acrylic-surface stat-border-3">
+                <div class="label">Tipos</div>
+                <div class="value">${Object.keys(tiposCount).length}</div>
+                <div class="hint">${tiposHtml}</div>
+            </article>
+        `;
+        
+        const statsContainer = document.getElementById('statsConstancias');
+        if (statsContainer) statsContainer.innerHTML = html;
+    }
+
     app.init();
 
     // Reset filters listener
@@ -146,6 +204,8 @@ function initializeConstanciasSearch() {
             if (pagination) pagination.classList.add('hidden');
             const tableBody = document.getElementById('tableBody');
             if (tableBody) tableBody.innerHTML = '';
+            const statsContainer = document.getElementById('statsConstancias');
+            if (statsContainer) statsContainer.innerHTML = '';
         });
     }
 }

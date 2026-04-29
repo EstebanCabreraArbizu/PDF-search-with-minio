@@ -61,11 +61,11 @@ function initializeTregistroSearch() {
                 }
             },
             {
-                label: 'Razon Social',
+                label: 'Empresa',
                 render: doc => safeText(doc.metadata.razon_social || '—')
             },
             {
-                label: 'Movimiento',
+                label: 'Tipo',
                 render: doc => {
                     const mov = (doc.metadata.tipo_movimiento || '—').toUpperCase();
                     const badge = mov === 'ALTA' ? 'badge-green' : (mov === 'BAJA' ? 'badge-red' : 'badge-blue');
@@ -73,30 +73,24 @@ function initializeTregistroSearch() {
                 }
             },
             {
-                label: 'Persona',
+                label: 'Detalle',
                 render: doc => {
                     const detail = doc.metadata || {};
-                    const titular = detail.nombre_trabajador || detail.titular || '—';
                     const dni = detail.dni || '—';
-                    return `
-                        <div class="text-sm font-medium">${safeText(titular)}</div>
-                        <div class="text-xs opacity-70">DNI: <span class="badge badge-blue-soft">${safeText(dni)}</span></div>
-                    `;
+                    return `<span class="badge badge-blue-soft">${safeText(dni)}</span>`;
                 }
-            },
-            {
-                label: 'Periodo',
-                render: doc => formatPeriodo(doc.metadata)
             },
             {
                 label: 'Códigos',
                 render: doc => DocSearchCore.renderCodesBadge(doc.employee_codes)
             },
             {
-                label: 'Estado',
-                render: doc => doc.indexed 
-                    ? `<span class="badge badge-success">✓ Indexado</span>` 
-                    : `<span class="badge badge-warning">⚠ Pendiente</span>`
+                label: 'Periodo',
+                render: doc => formatPeriodo(doc.metadata)
+            },
+            {
+                label: 'Acciones',
+                render: doc => DocSearchCore.renderDocumentActions(doc)
             }
         ],
 
@@ -196,6 +190,8 @@ function initializeTregistroSearch() {
             if (pagination) pagination.classList.add('hidden');
             const tableBody = document.getElementById('tableBody');
             if (tableBody) tableBody.innerHTML = '';
+            const statsContainer = document.getElementById('statsTRegistro');
+            if (statsContainer) statsContainer.innerHTML = '';
         });
     }
 }

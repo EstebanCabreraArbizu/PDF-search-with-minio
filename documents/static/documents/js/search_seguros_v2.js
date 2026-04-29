@@ -71,21 +71,22 @@ function initializeSegurosSearch() {
                 }
             },
             {
-                label: 'Razon Social',
+                label: 'Empresa',
                 render: doc => safeText(doc.metadata.razon_social || '—')
             },
             {
                 label: 'Tipo',
                 render: doc => {
                     const detail = doc.metadata || {};
-                    return `
-                        <div class="text-sm font-medium">${safeText(detail.tipo_seguro || '—')}</div>
-                        <div class="text-xs opacity-70">${safeText(detail.subtipo_seguro || '')}</div>
-                    `;
+                    const tipo = detail.tipo_seguro || '—';
+                    const subtipo = detail.subtipo_seguro || '';
+                    return subtipo 
+                        ? `<span class="badge badge-info">${safeText(tipo)}: ${safeText(subtipo)}</span>`
+                        : `<span class="badge badge-info">${safeText(tipo)}</span>`;
                 }
             },
             {
-                label: 'Titular',
+                label: 'Detalle',
                 render: doc => {
                     const detail = doc.metadata || {};
                     const titular = detail.titular || '—';
@@ -97,18 +98,16 @@ function initializeSegurosSearch() {
                 }
             },
             {
-                label: 'Periodo',
-                render: doc => formatPeriodo(doc.metadata)
-            },
-            {
                 label: 'Códigos',
                 render: doc => DocSearchCore.renderCodesBadge(doc.employee_codes)
             },
             {
-                label: 'Estado',
-                render: doc => doc.indexed 
-                    ? `<span class="badge badge-success">✓ Indexado</span>` 
-                    : `<span class="badge badge-warning">⚠ Pendiente</span>`
+                label: 'Periodo',
+                render: doc => formatPeriodo(doc.metadata)
+            },
+            {
+                label: 'Acciones',
+                render: doc => DocSearchCore.renderDocumentActions(doc)
             }
         ],
 
@@ -190,7 +189,7 @@ function initializeSegurosSearch() {
     // Reset filters listener
     const limpiarBtn = document.getElementById('limpiarBtn');
     if (limpiarBtn) {
-        limpiarBtn.addEventListener('click', () =>
+        limpiarBtn.addEventListener('click', () => {
             document.querySelectorAll('select').forEach(s => s.value = '');
             const dniInput = document.getElementById('dniInput');
             if (dniInput) dniInput.value = '';
@@ -206,6 +205,8 @@ function initializeSegurosSearch() {
             if (pagination) pagination.classList.add('hidden');
             const tableBody = document.getElementById('tableBody');
             if (tableBody) tableBody.innerHTML = '';
-        );
+            const statsContainer = document.getElementById('statsSeguros');
+            if (statsContainer) statsContainer.innerHTML = '';
+        });
     }
 }
