@@ -941,6 +941,8 @@ class SyncIndexView(APIView):
                         )
                         if document:
                             removed_orphans += 1
+                            # Delete the orphaned StorageObject entry – it no longer exists in MinIO.
+                            StorageObject.objects.filter(object_key=orphan_name).delete()
                     except Exception as orphan_error:
                         logger.error(f'✗ Error desactivando huérfano {orphan_name}: {orphan_error}')
                         errors += 1
