@@ -1,0 +1,164 @@
+version: "2"
+type: frontend
+tech_stack:
+  - python
+  - django
+  - vanilla-javascript
+  - postgresql
+  - minio-s3
+  - tabler-icons
+  - outfit-font
+routes:
+  - path: /ui/login/
+    file: documents/templates/documents/login.html
+    auth_required: false
+    description: User login page with credentials form
+  - path: /ui/constancias/
+    file: documents/templates/documents/search_constancias.html
+    auth_required: true
+    description: Search and download constancias de abono documents
+  - path: /ui/seguros/
+    file: documents/templates/documents/search_seguros.html
+    auth_required: true
+    description: Search and download insurance documents
+  - path: /ui/tregistro/
+    file: documents/templates/documents/search_tregistro.html
+    auth_required: true
+    description: Search and download T-Registro (alta/baja) documents
+  - path: /ui/files/
+    file: documents/templates/documents/search_files.html
+    auth_required: true
+    description: File management - upload, browse, delete, sync
+features:
+  - name: User Login
+    description: Login with username and password, stores JWT token in localStorage
+    files:
+      - documents/templates/documents/login.html
+      - documents/static/documents/js/login_v2.js
+      - documents/auth_views.py
+    entry_route: /ui/login/
+    user_interactions:
+      - Fill username input field
+      - Fill password input field
+      - Click Login button to submit
+      - See error toast on invalid credentials
+      - Redirected to constancias on success
+    api_calls:
+      - method: POST
+        endpoint: /api/auth/login/
+    auth_required: false
+  - name: Search Constancias
+    description: Search constancias de abono by empresa, banco, tipo, periodo, and employee code
+    files:
+      - documents/templates/documents/search_constancias.html
+      - documents/static/documents/js/search_constancias_v2.js
+      - documents/static/documents/js/ui_core_v2.js
+      - docrepo/views.py
+    entry_route: /ui/constancias/
+    user_interactions:
+      - Select empresa from dropdown filter
+      - Select banco from dropdown filter
+      - Select tipo de planilla from dropdown filter
+      - Enter employee code in search input
+      - Click Buscar button to search
+      - View skeleton loader during search
+      - View results table with document rows
+      - Click codes badge to see popover with employee codes
+      - Click Copiar todos in popover to copy codes
+      - Click download button on a result row
+      - Click Descargar todo ZIP button
+      - Click Limpiar button to reset all filters
+      - Toggle between simple and masiva search modes
+      - View stats cards showing total, bancos, tipos
+    api_calls:
+      - method: POST
+        endpoint: /api/v2/constancias/search/
+      - method: GET
+        endpoint: /api/filter-options-bulk?document_type=CONSTANCIA_ABONO
+      - method: POST
+        endpoint: /api/v2/documents/download-zip
+    auth_required: true
+  - name: Search Seguros
+    description: Search insurance documents by empresa, tipo, subtipo, periodo, and DNI
+    files:
+      - documents/templates/documents/search_seguros.html
+      - documents/static/documents/js/search_seguros_v2.js
+      - documents/static/documents/js/ui_core_v2.js
+      - docrepo/views.py
+    entry_route: /ui/seguros/
+    user_interactions:
+      - Select empresa from dropdown filter
+      - Select tipo de seguro from dropdown
+      - Select sub-tipo from dropdown
+      - Enter DNI in search input
+      - Click Buscar to search
+      - View skeleton loader during search
+      - View results with codes badge column
+      - Click Descargar todo ZIP button
+      - Click Limpiar filtros to reset
+      - View stats cards after search
+    api_calls:
+      - method: POST
+        endpoint: /api/v2/seguros/search/
+      - method: GET
+        endpoint: /api/filter-options-bulk?document_type=SEGUROS
+    auth_required: true
+  - name: Search T-Registro
+    description: Search T-Registro alta/baja documents by empresa, tipo, periodo, and DNI
+    files:
+      - documents/templates/documents/search_tregistro.html
+      - documents/static/documents/js/search_tregistro_v2.js
+      - documents/static/documents/js/ui_core_v2.js
+      - docrepo/views.py
+    entry_route: /ui/tregistro/
+    user_interactions:
+      - Select empresa from dropdown
+      - Select tipo de documento (Alta/Baja)
+      - Enter DNI in search input
+      - Click Buscar to search
+      - View skeleton loader during search
+      - View results with movement type badges
+      - Click codes badge to see popover
+      - Click Descargar todo ZIP button
+      - Click Limpiar to reset
+      - View stats cards after search
+    api_calls:
+      - method: POST
+        endpoint: /api/v2/tregistro/search/
+      - method: GET
+        endpoint: /api/filter-options-bulk?document_type=TREGISTRO
+    auth_required: true
+  - name: Theme Switching
+    description: Toggle between 4 visual themes (corp, corp-dark, light, dark)
+    files:
+      - documents/static/documents/js/ui_core_v2.js
+      - documents/static/documents/css/search-document.css
+      - documents/static/documents/css/theme.css
+    entry_route: /ui/constancias/
+    user_interactions:
+      - Click theme toggle button in topbar
+      - Observe theme changes across sidebar, panels, and tables
+    api_calls: []
+    auth_required: true
+  - name: Sidebar Navigation
+    description: Navigate between modules using the sidebar
+    files:
+      - documents/templates/documents/partials/sidebar.html
+    entry_route: /ui/constancias/
+    user_interactions:
+      - Click Seguros link in sidebar
+      - Click T-Registro link in sidebar
+      - Click Constancias link in sidebar
+      - Click Gestion de Archivos link in sidebar
+      - Click logout button
+    api_calls:
+      - method: POST
+        endpoint: /api/auth/logout/
+    auth_required: true
+known_limitations:
+  - issue: Period select options in seguros/tregistro were previously hardcoded, now dynamic
+    location: documents/templates/documents/search_seguros.html
+    impact: Periods now populate from API, empty if no data
+  - issue: ZIP download preserves MinIO folder structure in archive paths
+    location: docrepo/views.py
+    impact: ZIP entries include full Planillas 20XX/... path structure
