@@ -1739,6 +1739,7 @@ class FilesUploadView(APIView):
 
         files = request.FILES.getlist('files[]')
         requested_folder = request.POST.get('folder', '').strip()
+        correction_reason = request.POST.get('correction_reason', '').strip()[:500]
 
         if not files:
             return Response({'error': 'No se proporcionaron archivos.'}, status=400)
@@ -1800,6 +1801,9 @@ class FilesUploadView(APIView):
                         normalized_folder += '/'
                     object_name = f"{normalized_folder}{file.name}"
                     meta = extract_metadata(object_name)
+                    for hint_key, hint_value in hints.items():
+                        if str(hint_value or '').strip():
+                            meta[hint_key] = hint_value
                 elif auto_route_enabled:
                     preview_text, preview_codes = extract_text_from_pdf_bytes(file_content)
                     meta = infer_upload_metadata(file.name, preview_text, hints)
@@ -1841,6 +1845,7 @@ class FilesUploadView(APIView):
                     employee_codes=codigos,
                     is_indexed=indexed,
                     actor=request.user,
+                    correction_reason=correction_reason,
                 )
 
                 legacy_synced = False
@@ -1881,6 +1886,7 @@ class FilesUploadView(APIView):
                         'domain_preview': preview_domain,
                         'auto_routed': auto_routed,
                         'requested_folder': requested_folder,
+                        'correction_reason': correction_reason,
                         'md5_hash': file_md5,
                         'indexed': indexed,
                         'size_bytes': file_size,
