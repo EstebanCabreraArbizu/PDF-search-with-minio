@@ -61,7 +61,7 @@ function initializeConstanciasSearch() {
                 render: doc => {
                     const name = doc.filename.split('/').pop();
                     return `<div class="font-medium">${safeText(name)}</div>
-                            <div class="text-xs text-muted">${safeText(doc.employee_codes.join(', ') || '—')}</div>`;
+                            <div class="text-xs text-muted">${DocSearchCore.renderCodesBadge(doc.employee_codes)}</div>`;
                 }
             },
             { 

@@ -101,6 +101,10 @@ function initializeSegurosSearch() {
                 render: doc => formatPeriodo(doc.metadata)
             },
             {
+                label: 'Códigos',
+                render: doc => DocSearchCore.renderCodesBadge(doc.employee_codes)
+            },
+            {
                 label: 'Estado',
                 render: doc => doc.indexed 
                     ? `<span class="badge badge-success">✓ Indexado</span>` 
