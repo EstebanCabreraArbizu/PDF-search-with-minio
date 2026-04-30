@@ -9,7 +9,7 @@
    ==========================================================================
    Import this single file to get the full design system:
 
-     CSS:  /* @import removed for Django static manifest */
+     CSS:   @import removed for Django static manifest 
      JS:   import "@liderman/corp-style";
 
    Load order matters:
