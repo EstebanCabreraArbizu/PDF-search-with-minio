@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Skeleton Loader</title>
+    <link rel="stylesheet" href="documents/static/documents/css/search-document.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .table th, .table td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        .table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .btn {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Test Skeleton Loader</h1>
+        
+        <form id="testForm">
+            <button type="submit" id="testBtn" class="btn">Iniciar Búsqueda</button>
+        </form>
+
+        <table class="table" id="testTable">
+            <thead>
+                <tr>
+                    <th>Columna 1</th>
+                    <th>Columna 2</th>
+                    <th>Columna 3</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="testTableBody"></tbody>
+        </table>
+
+        <div id="testEmpty" class="hidden">
+            <p>No se encontraron resultados</p>
+        </div>
+
+        <div id="testLoading" class="hidden">
+            <p>Cargando...</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('testForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Show skeleton rows immediately
+            renderSkeletonRows(5);
+            
+            // Disable button
+            document.getElementById('testBtn').disabled = true;
+            
+            // Simulate API call
+            setTimeout(() => {
+                // Show results after delay
+                document.getElementById('testTableBody').innerHTML = `
+                    <tr>
+                        <td>Resultado 1</td>
+                        <td>Dato 1</td>
+                        <td>Info 1</td>
+                        <td><button class="btn">Descargar</button></td>
+                    </tr>
+                    <tr>
+                        <td>Resultado 2</td>
+                        <td>Dato 2</td>
+                        <td>Info 2</td>
+                        <td><button class="btn">Descargar</button></td>
+                    </tr>
+                `;
+                
+                // Re-enable button
+                document.getElementById('testBtn').disabled = false;
+            }, 2000);
+        });
+
+        function renderSkeletonRows(count = 5) {
+            const tableBody = document.getElementById('testTableBody');
+            
+            // Show table, hide empty and loading states
+            document.getElementById('testTable').classList.remove('hidden');
+            document.getElementById('testEmpty').classList.add('hidden');
+            document.getElementById('testLoading').classList.add('hidden');
+            
+            tableBody.innerHTML = Array(count).fill().map(() => `
+                <tr class="skeleton-row">
+                    <td><div class="skeleton-cell"></div></td>
+                    <td><div class="skeleton-cell"></div></td>
+                    <td><div class="skeleton-cell"></div></td>
+                    <td>
+                        <div class="flex gap-2">
+                            <div class="skeleton-cell" style="width: 32px; height: 32px;"></div>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    </script>
+</body>
+</html>

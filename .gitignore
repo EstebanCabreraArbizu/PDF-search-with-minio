@@ -3,6 +3,12 @@ minio/data/*
 postgres-data/*
 __pycache__/
 *.playwright-mcp
+playwright-report/
+test-results/
+debug-*.png
+screenshot-*.png
+login.html
+.local-artifacts/
 *.pyc
 *.pyo
 *.pyd

@@ -22,11 +22,10 @@ const API = {
 };
 
 const SHARED = window.DocSearchShared;
-if (!SHARED) throw new Error('DocSearchShared no disponible. Verifica la carga de scripts base.');
 
-const TOKEN_KEY = SHARED.STORAGE_KEYS.AUTH_TOKEN;
-const REFRESH_TOKEN_KEY = SHARED.STORAGE_KEYS.REFRESH_TOKEN;
-const USER_KEY = SHARED.STORAGE_KEYS.USER_DATA;
+const TOKEN_KEY = SHARED?.STORAGE_KEYS?.AUTH_TOKEN || 'docsearch_v2_access_token';
+const REFRESH_TOKEN_KEY = SHARED?.STORAGE_KEYS?.REFRESH_TOKEN || 'docsearch_v2_refresh_token';
+const USER_KEY = SHARED?.STORAGE_KEYS?.USER_DATA || 'docsearch_v2_user';
 
 /* ── Estado global ──────────────────────────────────────────────────── */
 let authToken = null;
@@ -608,6 +607,201 @@ function initDropZone() {
   });
 }
 
+function getSuggestedFolder(item) {
+  const prefix = String(item?.logical_prefix || '').trim();
+  if (prefix) return prefix.replace(/^\/+|\/+$/g, '');
+
+  const logicalPath = String(item?.logical_path || '').trim();
+  if (!logicalPath || !logicalPath.includes('/')) return '';
+  return logicalPath.split('/').slice(0, -1).join('/');
+}
+
+function normalizeFolderValue(path) {
+  return String(path || '').trim().replace(/^\/+|\/+$/g, '');
+}
+
+function folderLabel(path) {
+  const normalized = normalizeFolderValue(path);
+  return normalized ? formatPathLabel(normalized) : 'Raiz del repositorio';
+}
+
+async function loadFolderOptions(suggestedFolder) {
+  const options = [];
+  const seen = new Set();
+
+  const addOption = (path, labelPrefix = '') => {
+    const normalized = normalizeFolderValue(path);
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    options.push({
+      value: normalized,
+      label: `${labelPrefix}${folderLabel(normalized)}`,
+    });
+  };
+
+  addOption(suggestedFolder, 'Sugerida: ');
+  addOption(rutaActiva.join('/'), 'Actual: ');
+  addOption('', 'Alternativa: ');
+
+  try {
+    const params = new URLSearchParams();
+    if (rutaActiva.length > 0) params.set('folder', `${rutaActiva.join('/')}/`);
+    const data = await fetchJson(`${API.foldersList}?${params}`, { headers: getAuthHeaders() });
+    (data.folders || []).forEach(folder => addOption(folder.path, 'Alternativa: '));
+  } catch (e) {
+    console.warn('No se pudieron cargar carpetas alternativas:', e);
+  }
+
+  return options;
+}
+
+function renderDuplicateBanner(items) {
+  const previewArea = document.getElementById('uploadPreviewArea');
+  if (!previewArea) return;
+
+  previewArea.querySelector('.duplicate-warning-banner')?.remove();
+  const duplicates = items.filter(item => item.status === 'DUPLICATE' && item.duplicate);
+  if (!duplicates.length) return;
+
+  const banner = document.createElement('div');
+  banner.className = 'duplicate-warning-banner';
+  const links = duplicates.map(item => {
+    const objectKey = item.duplicate?.object_key || '';
+    const href = objectKey ? encodeURI(`/api/download/${objectKey}`) : '#';
+    return `<a href="${safeText(href)}" class="duplicate-doc-link" data-download-url="${safeText(href)}">${safeText(item.filename)}</a>`;
+  }).join(', ');
+
+  banner.innerHTML = `
+    <i class="ti ti-alert-triangle"></i>
+    <span>Archivo duplicado detectado. Ya existe en el repositorio: ${links}</span>
+  `;
+  previewArea.prepend(banner);
+  bindDuplicateDownloadLinks(banner);
+}
+
+function bindDuplicateDownloadLinks(root) {
+  root.querySelectorAll('.duplicate-doc-link').forEach(link => {
+    link.addEventListener('click', async e => {
+      e.preventDefault();
+      const url = link.getAttribute('data-download-url') || link.getAttribute('href');
+      if (!url || url === '#') return;
+      try {
+        await SHARED.downloadWithAuth(url, { fallbackName: link.textContent.trim() || 'documento.pdf' });
+      } catch (err) {
+        alert(err.message || 'Error al descargar duplicado');
+      }
+    });
+  });
+}
+
+async function openClassifyConfirmationModal(filename) {
+  const entry = pendingUploadMap.get(filename);
+  if (!entry) return false;
+
+  const item = entry.previewItem || {};
+  const meta = item.metadata || {};
+  const suggestedFolder = getSuggestedFolder(item);
+  const folderOptions = await loadFolderOptions(suggestedFolder);
+  const conf = item.confidence != null ? Math.round(item.confidence * 100) : 0;
+  const missing = new Set(item.missing_fields || []);
+  if (missing.has('aÃ±o')) missing.add('año');
+  const warnings = item.warnings || [];
+  const fieldLabels = [
+    ['año', 'Año', meta.año || meta.anio],
+    ['mes', 'Mes', meta.mes],
+    ['razon_social', 'Razon social', meta.razon_social],
+    ['banco', 'Banco', meta.banco],
+    ['tipo_documento', 'Tipo documento', meta.tipo_documento],
+    ['tipo_movimiento', 'Movimiento', meta.tipo_documento],
+    ['tipo_seguro', 'Tipo seguro', meta.tipo_documento],
+  ];
+
+  return new Promise(resolve => {
+    document.querySelector('.classify-modal-backdrop')?.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop classify-modal-backdrop';
+    backdrop.setAttribute('role', 'dialog');
+    backdrop.setAttribute('aria-modal', 'true');
+    backdrop.innerHTML = `
+      <div class="modal-card acrylic-surface classify-modal">
+        <div class="modal-header">
+          <span class="modal-title"><i class="ti ti-adjustments-check"></i> Confirmar clasificacion</span>
+        </div>
+        <div class="modal-body">
+          <div class="classify-modal-file" title="${safeText(filename)}">${safeText(filename)}</div>
+          <label class="classify-modal-label">Ruta sugerida</label>
+          <code class="classify-modal-path">${safeText(item.logical_path || `${suggestedFolder}/${filename}`)}</code>
+
+          <div class="classify-confidence-row">
+            <span>Confianza</span>
+            <div class="confidence-bar-wrap">
+              <div class="confidence-bar" style="width:${conf}%"></div>
+              <span class="confidence-label">${conf}%</span>
+            </div>
+          </div>
+
+          <div class="classify-field-grid">
+            ${fieldLabels.map(([key, label, value]) => `
+              <div class="classify-field ${missing.has(key) ? 'is-missing' : ''}">
+                <span>${safeText(label)}</span>
+                <strong>${safeText(value || 'Pendiente')}</strong>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="classify-warning-list">
+            ${(warnings.length ? warnings : ['revision_manual']).map(warning => `
+              <span class="classify-warning-chip">${safeText(warning)}</span>
+            `).join('')}
+          </div>
+
+          <label class="classify-modal-label" for="classifyFolderSelect">Carpeta alternativa</label>
+          <select id="classifyFolderSelect" class="form-select classify-modal-select">
+            ${folderOptions.map(option => `
+              <option value="${safeText(option.value)}">${safeText(option.label)}</option>
+            `).join('')}
+          </select>
+
+          <label class="classify-modal-label" for="classifyCorrectionReason">Motivo de correccion</label>
+          <input id="classifyCorrectionReason" class="form-control classify-modal-input"
+                 type="text" maxlength="500" placeholder="Ej. Ruta corregida por revision manual"
+                 value="${safeText(entry.confirmation?.correctionReason || '')}">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost classify-cancel-btn">Cancelar</button>
+          <button type="button" class="btn btn-primary classify-confirm-btn">
+            <i class="ti ti-check"></i> Confirmar
+          </button>
+        </div>
+      </div>
+    `;
+
+    const close = confirmed => {
+      backdrop.remove();
+      resolve(confirmed);
+    };
+
+    backdrop.querySelector('.classify-cancel-btn').addEventListener('click', () => close(false));
+    backdrop.querySelector('.classify-confirm-btn').addEventListener('click', () => {
+      const selectedFolder = normalizeFolderValue(backdrop.querySelector('#classifyFolderSelect')?.value || suggestedFolder);
+      const correctionReason = String(backdrop.querySelector('#classifyCorrectionReason')?.value || '').trim().slice(0, 500);
+      entry.confirmation = { folder: selectedFolder, correctionReason };
+      const checkbox = document.querySelector(`.preview-checkbox[data-filename="${CSS.escape(filename)}"]`);
+      if (checkbox) checkbox.checked = true;
+      const row = document.querySelector(`tr[data-preview-filename="${CSS.escape(filename)}"]`);
+      if (row) row.classList.add('is-confirmed');
+      close(true);
+    });
+    backdrop.addEventListener('click', e => {
+      if (e.target === backdrop) close(false);
+    });
+
+    document.body.appendChild(backdrop);
+    backdrop.querySelector('#classifyCorrectionReason')?.focus();
+  });
+}
+
 async function triggerClassifyPreview(files) {
   const previewArea = document.getElementById('uploadPreviewArea');
   const tbody = document.getElementById('classifyPreviewBody');
@@ -641,6 +835,7 @@ async function triggerClassifyPreview(files) {
     });
 
     renderClassifyPreview(items);
+    renderDuplicateBanner(items);
 
     const ready = items.filter(i => i.status === 'READY').length;
     const confirm = items.filter(i => i.status === 'REQUIRES_CONFIRMATION').length;
@@ -649,6 +844,11 @@ async function triggerClassifyPreview(files) {
       `<span class="preview-badge ready">${ready} listos</span>` +
       `<span class="preview-badge warn">${confirm} requieren confirmación</span>` +
       `<span class="preview-badge dup">${dup} duplicados</span>`;
+
+    const firstRequiresConfirmation = items.find(i => i.status === 'REQUIRES_CONFIRMATION');
+    if (firstRequiresConfirmation) {
+      setTimeout(() => openClassifyConfirmationModal(firstRequiresConfirmation.filename), 80);
+    }
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="8" class="preview-error">Error clasificando: ${safeText(e.message)}</td></tr>`;
   } finally {
@@ -663,6 +863,7 @@ function renderClassifyPreview(items) {
 
   items.forEach(item => {
     const tr = document.createElement('tr');
+    tr.dataset.previewFilename = item.filename;
     const conf = item.confidence != null ? Math.round(item.confidence * 100) : null;
     const confBar = conf != null
       ? `<div class="confidence-bar-wrap"><div class="confidence-bar" style="width:${conf}%"></div>
@@ -681,17 +882,30 @@ function renderClassifyPreview(items) {
     const warns = (item.warnings || []).join(', ') || '—';
     const periodo = [meta.año, meta.mes ? String(meta.mes).padStart(2, '0') : ''].filter(Boolean).join('/') || '—';
 
+    const missingChips = (item.missing_fields || []).map(field =>
+      `<span class="missing-field-chip">${safeText(field)}</span>`
+    ).join('');
+
     // Checkbox para incluir en upload (solo no-duplicados, no-inválidos)
     const canUpload = item.status === 'READY' || item.status === 'REQUIRES_CONFIRMATION';
     const checkbox = canUpload
       ? `<input type="checkbox" class="preview-checkbox" data-filename="${safeText(item.filename)}"
                ${item.status === 'READY' ? 'checked' : ''}>`
       : '';
+    const reviewBtn = item.status === 'REQUIRES_CONFIRMATION'
+      ? `<button type="button" class="btn btn-ghost btn-sm classify-review-btn" data-filename="${safeText(item.filename)}">
+           <i class="ti ti-adjustments"></i> Revisar
+         </button>`
+      : '';
+    const duplicateLink = item.status === 'DUPLICATE' && item.duplicate?.object_key
+      ? `<a class="duplicate-doc-link" href="${safeText(encodeURI(`/api/download/${item.duplicate.object_key}`))}" data-download-url="${safeText(encodeURI(`/api/download/${item.duplicate.object_key}`))}">Ver existente</a>`
+      : '';
 
     tr.innerHTML = `
       <td>
         ${checkbox}
         <span class="preview-filename" title="${safeText(item.filename)}">${safeText(item.filename)}</span>
+        ${reviewBtn}
       </td>
       <td><span class="${cls}">${label}</span></td>
       <td>${confBar}</td>
@@ -701,9 +915,24 @@ function renderClassifyPreview(items) {
       <td class="logical-path-cell" title="${safeText(item.logical_path || '')}">
         ${safeText(item.logical_path || '—')}
       </td>
-      <td class="warns-cell">${safeText(warns)}</td>
+      <td class="warns-cell">${safeText(warns)} ${missingChips} ${duplicateLink}</td>
     `;
     tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('.classify-review-btn').forEach(btn => {
+    btn.addEventListener('click', () => openClassifyConfirmationModal(btn.dataset.filename));
+  });
+
+  bindDuplicateDownloadLinks(tbody);
+
+  tbody.querySelectorAll('.preview-checkbox').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const entry = pendingUploadMap.get(cb.dataset.filename);
+      if (!cb.checked || entry?.previewItem?.status !== 'REQUIRES_CONFIRMATION' || entry.confirmation) return;
+      const confirmed = await openClassifyConfirmationModal(cb.dataset.filename);
+      if (!confirmed) cb.checked = false;
+    });
   });
 }
 
@@ -738,6 +967,17 @@ async function handleUpload() {
     const entry = pendingUploadMap.get(filename);
     if (!entry) continue;
 
+    if (entry.previewItem?.status === 'REQUIRES_CONFIRMATION' && !entry.confirmation) {
+      const confirmed = await openClassifyConfirmationModal(filename);
+      if (!confirmed) {
+        done++;
+        const pct = Math.round((done / total) * 100);
+        progressBar.style.width = `${pct}%`;
+        addLogEntry(logEl, `${filename} - subida cancelada por falta de confirmacion`, 'warn');
+        continue;
+      }
+    }
+
     progressText.textContent = `Subiendo ${filename}...`;
     countEl.textContent = `${done}/${total}`;
 
@@ -750,6 +990,11 @@ async function handleUpload() {
     if (meta.mes) formData.append('mes', meta.mes);
     if (meta.razon_social) formData.append('razon_social', meta.razon_social);
     if (meta.banco) formData.append('banco', meta.banco);
+    if (meta.tipo_documento) formData.append('tipo_documento', meta.tipo_documento);
+    if (entry.confirmation?.folder) formData.append('folder', entry.confirmation.folder);
+    if (entry.confirmation?.correctionReason) {
+      formData.append('correction_reason', entry.confirmation.correctionReason);
+    }
 
     try {
       const resp = await fetchJson(API.filesUpload, {
@@ -980,6 +1225,20 @@ function focusSectionFromQuery() {
 
 /* ── BOOTSTRAP ──────────────────────────────────────────────────────── */
 async function bootstrap() {
+  if (!SHARED) {
+    console.error('DocSearchShared no disponible. Verifica la carga de scripts base.');
+    const container = document.getElementById('filesStateLoading');
+    if (container) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: #dc3545;">
+          <i class="ti ti-alert-circle" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
+          <h3>Error de carga</h3>
+          <p>No se pudo cargar el módulo de búsqueda. Por favor recarga la página o contacta al administrador.</p>
+        </div>
+      `;
+    }
+    return;
+  }
   SHARED.initTheme();
   SHARED.initGlobalUI();  // 🎨 Wire up theme toggle button and other global UI elements
   renderSidebarUser();

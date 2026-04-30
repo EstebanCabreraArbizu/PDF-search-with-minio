@@ -218,6 +218,7 @@ def upsert_document_from_upload(
     employee_codes: list[str] | None,
     is_indexed: bool,
     actor: Any | None = None,
+    correction_reason: str = "",
 ) -> UploadIngestionResult:
     object_key = _safe_text(object_key, 800)
     tipo_documento = _safe_text(metadata.get("tipo_documento") or "GENERAL", 300) or "GENERAL"
@@ -243,6 +244,7 @@ def upsert_document_from_upload(
     document.original_filename = _extract_filename(object_key)
     document.source_path_legacy = object_key
     document.source_hash_md5 = _safe_text(etag, 64) or None
+    document.correction_reason = _safe_text(correction_reason, 500)
     document.status = doc_status
     document.indexed_at = now if is_indexed else None
     document.is_active = True

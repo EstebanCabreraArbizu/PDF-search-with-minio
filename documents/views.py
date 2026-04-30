@@ -568,7 +568,7 @@ class FilterOptionsForBulkView(APIView):
         try:
             # Query distinct values from PDFIndex
             # Note: This assumes PDFIndex is used for all document types
-            queryset = PDFIndex.objects.filter(is_indexed=True)
+            queryset = PDFIndex.objects.filter(is_indexed=True).exclude(minio_object_name__regex=r'^20\d{2}/')
             
             if document_type == 'SEGUROS':
                 return {
@@ -941,6 +941,8 @@ class SyncIndexView(APIView):
                         )
                         if document:
                             removed_orphans += 1
+                            # Delete the orphaned StorageObject entry – it no longer exists in MinIO.
+                            StorageObject.objects.filter(object_key=orphan_name).delete()
                     except Exception as orphan_error:
                         logger.error(f'✗ Error desactivando huérfano {orphan_name}: {orphan_error}')
                         errors += 1
@@ -1737,6 +1739,7 @@ class FilesUploadView(APIView):
 
         files = request.FILES.getlist('files[]')
         requested_folder = request.POST.get('folder', '').strip()
+        correction_reason = request.POST.get('correction_reason', '').strip()[:500]
 
         if not files:
             return Response({'error': 'No se proporcionaron archivos.'}, status=400)
@@ -1798,6 +1801,9 @@ class FilesUploadView(APIView):
                         normalized_folder += '/'
                     object_name = f"{normalized_folder}{file.name}"
                     meta = extract_metadata(object_name)
+                    for hint_key, hint_value in hints.items():
+                        if str(hint_value or '').strip():
+                            meta[hint_key] = hint_value
                 elif auto_route_enabled:
                     preview_text, preview_codes = extract_text_from_pdf_bytes(file_content)
                     meta = infer_upload_metadata(file.name, preview_text, hints)
@@ -1839,6 +1845,7 @@ class FilesUploadView(APIView):
                     employee_codes=codigos,
                     is_indexed=indexed,
                     actor=request.user,
+                    correction_reason=correction_reason,
                 )
 
                 legacy_synced = False
@@ -1879,6 +1886,7 @@ class FilesUploadView(APIView):
                         'domain_preview': preview_domain,
                         'auto_routed': auto_routed,
                         'requested_folder': requested_folder,
+                        'correction_reason': correction_reason,
                         'md5_hash': file_md5,
                         'indexed': indexed,
                         'size_bytes': file_size,
@@ -2096,6 +2104,7 @@ class FoldersListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        import re
         import time
         from django.db.models import Q
 
@@ -2162,6 +2171,8 @@ class FoldersListView(APIView):
 
                 if len(parts) > 1:
                     folder_name = parts[0]
+                    if not parent and re.fullmatch(r'20\d{2}', folder_name):
+                        continue
                     folder_path = parent + folder_name + '/'
 
                     if folder_path not in folders:

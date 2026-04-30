@@ -27,6 +27,7 @@ class Document(TimestampedModel):
     source_path_legacy = models.CharField(max_length=700, blank=True, db_index=True)
     content_hash_sha256 = models.CharField(max_length=64, blank=True, null=True, db_index=True)
     source_hash_md5 = models.CharField(max_length=64, blank=True, null=True, db_index=True)
+    correction_reason = models.CharField(max_length=500, blank=True)
     status = models.ForeignKey(
         CatalogDocumentStatus,
         on_delete=models.PROTECT,

@@ -38,13 +38,9 @@
         </div>
         <div class="form-group">
           <label>Tipo de Seguro</label>
-          <select id="tipoSelect" class="form-select">
-            <option value="">- Todos -</option>
-            <option value="Vida">Vida</option>
-            <option value="EPS">EPS</option>
-            <option value="SCTR">SCTR</option>
-            <option value="Vehicular">Vehicular</option>
-          </select>
+            <select id="tipoSelect" class="form-select">
+              <option value="">- Todos -</option>
+            </select>
         </div>
         <div class="form-group">
           <label>Sub-tipo</label>
@@ -54,18 +50,16 @@
         </div>
         <div class="form-group">
           <label>Periodo</label>
-          <select id="periodoSelect" class="form-select">
-            <option value="">- Todos -</option>
-            <option value="Ene 2024">Ene 2024</option>
-            <option value="Feb 2024">Feb 2024</option>
-            <option value="Mar 2024">Mar 2024</option>
-          </select>
+            <select id="periodoSelect" class="form-select">
+              <option value="">- Todos -</option>
+            </select>
         </div>
       </div>
 
       <div class="search-actions">
         <button class="btn btn-primary" type="submit"><i class="ti ti-search"></i> Buscar</button>
         <button class="btn btn-soft" type="button" id="limpiarBtn"><i class="ti ti-rotate"></i> Limpiar filtros</button>
+        <button class="btn btn-primary" type="button" id="downloadZipBtn"><i class="ti ti-file-zip"></i> Descargar todo (ZIP)</button>
         <span id="chipDni" class="inline-chip hidden"></span>
       </div>
     </form>
@@ -92,11 +86,11 @@
         <thead>
           <tr>
             <th>Documento</th>
-            <th>Razon Social</th>
+            <th>Empresa</th>
             <th>Tipo</th>
-            <th>Personas Detectadas</th>
+            <th>Detalle</th>
+            <th>Códigos</th>
             <th>Periodo</th>
-            <th>Estado</th>
             <th class="text-right">Acciones</th>
           </tr>
         </thead>

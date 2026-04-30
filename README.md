@@ -605,6 +605,31 @@ PDF-search-with-minio/
 - Consultas SQL con `LIMIT` y `OFFSET`
 - No carga todos los datos en memoria
 
+### 7. **Corrección de Gestión de Archivos V2**
+- El módulo `search_files_v2.js` ya no colapsa durante la carga si el core compartido no está listo; muestra un error controlado y mantiene la inicialización dentro de `bootstrap()`.
+- El core compartido `ui_core_v2.js` expone los helpers de sesión usados por Gestión de Archivos: estado de autenticación, render de usuario, limpieza de sesión y logout con redirección.
+- El alternador de tema recorre los 4 temas (`corp`, `light`, `dark`, `corp-dark`) y persiste la selección en `localStorage` con la clave `docsearch_theme`.
+- Validación: `docker compose ps`, `node --check` en assets JS y smoke Playwright autenticado para `/ui/files/` verificando API de carpetas, render de carpetas, navegación y cambio de temas.
+
+### 8. **Validación y Corrección de Búsqueda Documental V2**
+- Los buscadores V2 cargan filtros dinámicos sin perder el contexto de `DocSearchCore` cuando los métodos se usan desestructurados desde los módulos.
+- Constancias de Abono envía correctamente filtros de razón social, banco, tipo de planilla, periodo y códigos simples o masivos.
+- La descarga total de resultados usa ZIP en lugar de fusionar PDFs; el endpoint `POST /api/v2/documents/download-zip` empaqueta documentos seleccionados respetando rutas `Planillas 20XX/`.
+- Los resultados V2 y el explorador de carpetas excluyen rutas raíz sueltas tipo `2026/`; la ruta documental válida es `Planillas 202X/`.
+- Validación: `manage.py check`, `node --check` y Playwright autenticado para Seguros, T-Registro, Constancias, ZIP de resultados y no regresión de Gestión de Archivos.
+
+### 9. **Validación E2E con Usuario de Prueba**
+- Los smoke tests Playwright versionados usan `testadmin` / `Test123456!` por defecto y permiten sobreescritura con `E2E_USERNAME` y `E2E_PASSWORD`.
+- El usuario `testadmin` se verifica dentro de Docker Compose con PostgreSQL real y permisos `staff`/`superuser` para cubrir flujos administrativos.
+- Los timeouts de los specs de integración contemplan la latencia real del endpoint de Constancias con filtros y ZIP en Docker.
+- Validación ejecutada: `docker compose exec django-app python manage.py check` y `npx playwright test tests/e2e/file-management-folders-theme.spec.js tests/e2e/document-search-smoke.spec.js --project=chromium --reporter=list`.
+
+### 10. **Validación de Carga, Persistencia y Sincronización**
+- El smoke `file-upload-sync-smoke.spec.js` genera un PDF único en memoria, lo clasifica desde la UI de Gestión de Archivos y valida la carga real hacia MinIO.
+- La prueba confirma persistencia en PostgreSQL/docrepo mediante `/api/files/list`, render del archivo cargado en la tabla y ejecución de `/api/index/sync` con `skip_new=true` sin errores.
+- El archivo temporal se elimina al final con `DELETE /api/files/delete`; el test también limpia restos `E2E_` activos al inicio para mantener reintentos idempotentes.
+- Validación ejecutada: `npx playwright test tests/e2e/file-management-folders-theme.spec.js tests/e2e/document-search-smoke.spec.js tests/e2e/file-upload-sync-smoke.spec.js --project=chromium --reporter=list`.
+
 ---
 
 ## 🔐 Seguridad
@@ -636,8 +661,8 @@ Usuario: ecabrera
 Acción: Descargar todas las boletas de un área para un mes
 1. Búsqueda Masiva con 200 códigos
 2. Filtro: Mes=Marzo, Razón Social=RESGUARDO
-3. Fusionar todos en 1 PDF
-4. Descargar documento combinado
+3. Generar un archivo ZIP con los PDFs encontrados
+4. Descargar el ZIP de resultados
 ```
 
 ### Caso 3: Carga de Nuevas Planillas

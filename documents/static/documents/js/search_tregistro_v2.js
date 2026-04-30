@@ -61,11 +61,11 @@ function initializeTregistroSearch() {
                 }
             },
             {
-                label: 'Razon Social',
+                label: 'Empresa',
                 render: doc => safeText(doc.metadata.razon_social || '—')
             },
             {
-                label: 'Movimiento',
+                label: 'Tipo',
                 render: doc => {
                     const mov = (doc.metadata.tipo_movimiento || '—').toUpperCase();
                     const badge = mov === 'ALTA' ? 'badge-green' : (mov === 'BAJA' ? 'badge-red' : 'badge-blue');
@@ -73,26 +73,24 @@ function initializeTregistroSearch() {
                 }
             },
             {
-                label: 'Persona',
+                label: 'Detalle',
                 render: doc => {
                     const detail = doc.metadata || {};
-                    const titular = detail.nombre_trabajador || detail.titular || '—';
                     const dni = detail.dni || '—';
-                    return `
-                        <div class="text-sm font-medium">${safeText(titular)}</div>
-                        <div class="text-xs opacity-70">DNI: <span class="badge badge-blue-soft">${safeText(dni)}</span></div>
-                    `;
+                    return `<span class="badge badge-blue-soft">${safeText(dni)}</span>`;
                 }
+            },
+            {
+                label: 'Códigos',
+                render: doc => DocSearchCore.renderCodesBadge(doc.employee_codes)
             },
             {
                 label: 'Periodo',
                 render: doc => formatPeriodo(doc.metadata)
             },
             {
-                label: 'Estado',
-                render: doc => doc.indexed 
-                    ? `<span class="badge badge-success">✓ Indexado</span>` 
-                    : `<span class="badge badge-warning">⚠ Pendiente</span>`
+                label: 'Acciones',
+                render: doc => DocSearchCore.renderDocumentActions(doc)
             }
         ],
 
@@ -172,4 +170,28 @@ function initializeTregistroSearch() {
     }
 
     app.init();
+
+    // Reset filters listener
+    const limpiarBtn = document.getElementById('limpiarBtn');
+    if (limpiarBtn) {
+        limpiarBtn.addEventListener('click', () => {
+            document.querySelectorAll('select').forEach(s => s.value = '');
+            const dniInput = document.getElementById('dniInput');
+            if (dniInput) dniInput.value = '';
+            const dniMasivo = document.getElementById('dniMasivo');
+            if (dniMasivo) dniMasivo.value = '';
+            const resultCount = document.getElementById('resultCount');
+            if (resultCount) resultCount.textContent = '0 documentos encontrados';
+            const stateTable = document.getElementById('stateTable');
+            if (stateTable) stateTable.classList.add('hidden');
+            const stateEmpty = document.getElementById('stateEmpty');
+            if (stateEmpty) stateEmpty.classList.remove('hidden');
+            const pagination = document.getElementById('paginationControls');
+            if (pagination) pagination.classList.add('hidden');
+            const tableBody = document.getElementById('tableBody');
+            if (tableBody) tableBody.innerHTML = '';
+            const statsContainer = document.getElementById('statsTRegistro');
+            if (statsContainer) statsContainer.innerHTML = '';
+        });
+    }
 }

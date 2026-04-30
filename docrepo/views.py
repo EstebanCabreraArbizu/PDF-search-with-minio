@@ -1,9 +1,11 @@
 import re
 import time
+import zipfile
+from io import BytesIO
 from typing import Any
 
 from django.conf import settings
-from django.http import StreamingHttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from django.db.models import Q
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -199,6 +201,9 @@ class BaseV2SearchView(APIView):
         queryset = Document.objects.filter(
             is_active=True,
             domain__code=self.domain_code,
+        ).filter(
+            Q(storage_object__object_key__startswith="Planillas 20")
+            | Q(source_path_legacy__startswith="Planillas 20")
         ).select_related(
             "domain",
             "company",
@@ -483,6 +488,97 @@ class DocumentDownloadV2View(APIView):
             content_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
         )
+
+
+class DocumentsZipDownloadV2View(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        document_ids = request.data.get("document_ids") or request.data.get("ids") or []
+        if not isinstance(document_ids, list):
+            return Response({"error": "document_ids debe ser una lista."}, status=400)
+
+        document_ids = [str(doc_id).strip() for doc_id in document_ids if str(doc_id).strip()]
+        if not document_ids:
+            return Response({"error": "No hay documentos para descargar."}, status=400)
+
+        max_zip_files = int(getattr(settings, "DOCREPO_MAX_ZIP_FILES", 500))
+        if len(document_ids) > max_zip_files:
+            return Response({"error": f"El ZIP admite como maximo {max_zip_files} documentos."}, status=400)
+
+        documents = list(
+            Document.objects.select_related("domain", "storage_object")
+            .filter(id__in=document_ids, is_active=True)
+            .order_by("domain__code", "created_at")
+        )
+        if not documents:
+            return Response({"error": "No se encontraron documentos validos."}, status=404)
+
+        buffer = BytesIO()
+        added = 0
+        errors: list[dict[str, str]] = []
+        used_names: set[str] = set()
+
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            for document in documents:
+                storage = getattr(document, "storage_object", None)
+                object_key = storage.object_key if storage and storage.object_key else document.source_path_legacy
+                if not object_key:
+                    errors.append({"document_id": str(document.id), "error": "storage_reference_missing"})
+                    continue
+
+                try:
+                    minio_response = minio_client.get_object(settings.MINIO_BUCKET, object_key)
+                    content = minio_response.read()
+                    minio_response.close()
+                    minio_response.release_conn()
+                except Exception:
+                    errors.append({"document_id": str(document.id), "object_key": object_key, "error": "storage_object_not_found"})
+                    continue
+
+                archive_name = object_key.strip("/").replace("\\", "/")
+                if not archive_name:
+                    archive_name = f"{document.id}.pdf"
+                if archive_name in used_names:
+                    parts = archive_name.rsplit("/", 1)
+                    filename = parts[-1]
+                    prefix = f"{document.id}_"
+                    archive_name = f"{parts[0]}/{prefix}{filename}" if len(parts) > 1 else f"{prefix}{filename}"
+                used_names.add(archive_name)
+
+                archive.writestr(archive_name, content)
+                added += 1
+
+                DownloadLog.objects.create(
+                    user=request.user,
+                    filename=object_key,
+                    ip_address=request.META.get("REMOTE_ADDR"),
+                )
+
+        if added == 0:
+            return Response({"error": "No se pudo agregar ningun documento al ZIP.", "details": errors}, status=404)
+
+        buffer.seek(0)
+        response = HttpResponse(buffer.getvalue(), content_type="application/zip")
+        response["Content-Disposition"] = f'attachment; filename="documentos_{added}.zip"'
+        response["X-Files-Zipped"] = str(added)
+        response["X-Zip-Errors"] = str(len(errors))
+
+        record_audit_event(
+            action="DOC_ZIP_DOWNLOAD_SUCCEEDED",
+            resource_type="document",
+            resource_id=f"zip:{added}",
+            request=request,
+            actor=request.user,
+            metadata={
+                "status_code": 200,
+                "documents_requested": len(document_ids),
+                "files_zipped": added,
+                "errors": errors[:20],
+            },
+        )
+
+        return response
 
 
 class SegurosV2SearchView(BaseV2SearchView):
