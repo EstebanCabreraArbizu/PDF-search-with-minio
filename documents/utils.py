@@ -335,14 +335,16 @@ def build_auto_storage_prefix(metadata, domain_code):
     company = _sanitize_path_segment(metadata.get('razon_social'), default_value='DESCONOCIDO', max_len=180)
     tipo = _sanitize_path_segment(metadata.get('tipo_documento'), default_value='GENERAL', max_len=120)
 
+    header_path = f"Planillas {year}/{company}/{month}.{month_label}"
     if domain_code == 'TREGISTRO':
-        return f"{year}/{company}/{month}.{month_label}/TREGISTRO/{tipo}"
+        return f"{header_path}.{month_label}/TREGISTRO/{tipo}"
 
     if domain_code == 'SEGUROS':
-        return f"{year}/{company}/{month}.{month_label}/SEGUROS/{tipo}"
+        return f"{header_path}.{month_label}/SEGUROS/{tipo}"
 
     bank = _sanitize_path_segment(metadata.get('banco'), default_value='GENERAL', max_len=80)
-    return f"{year}/{company}/{month}.{month_label}/{bank}/{tipo}"
+    
+    return f"{header_path}.{month_label}/{bank}/{tipo}"
 
 
 def _extract_text_and_codes_from_pdf_bytes(pdf_bytes):
