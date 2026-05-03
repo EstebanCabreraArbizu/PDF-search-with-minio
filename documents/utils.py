@@ -155,6 +155,11 @@ def _extract_tregistro_dates(text):
         r'FECHA\s+DE\s+INICIO[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
         r'FECHA\s+INICIO[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
         r'F\.\s*INICIO[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})'
+        r'Fecha\s+de\s+incio\s+de\s+la\s+relación\s+laboral[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'Fecha\s+de\s+inicio[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'Fecha\s+Inicio[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'F\.\s*Inicio[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})'
+
     ]
     
     for pattern in inicio_patterns:
@@ -167,9 +172,18 @@ def _extract_tregistro_dates(text):
             
     # Patrones para Fecha de Cese (Baja)
     cese_patterns = [
+        r'FECHA\s+DE\s+BAJA[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'FECHA\s+BAJA[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'F\.\s*BAJA[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
         r'FECHA\s+DE\s+CESE[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
         r'FECHA\s+CESE[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
         r'F\.\s*CESE[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})'
+        r'Fecha\s+de\s+baja[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'Fecha\s+Baja[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'F\.\s*Baja[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'Fecha\s+de\s+cese[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'Fecha\s+Cese[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
+        r'F\.\s*Cese[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})'
     ]
     
     for pattern in cese_patterns:
