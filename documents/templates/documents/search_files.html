@@ -19,7 +19,7 @@
     <article class="stat-card acrylic-surface" id="statSize">
       <div class="label">Almacenamiento Total</div>
       <div class="value" id="statSizeValue">—</div>
-      <div class="hint" id="statSizeHint">En MinIO</div>
+      <div class="hint" id="statSizeHint">En almacenamiento</div>
     </article>
     <article class="stat-card acrylic-surface" id="statOk">
       <div class="label">Indexados OK</div>
@@ -237,7 +237,7 @@
       <div class="sync-info-card">
         <div class="sync-info-label">Que hace la sincronizacion</div>
         <ul class="sync-info-list">
-          <li><i class="ti ti-plus"></i> Indexa nuevos PDFs detectados en MinIO</li>
+          <li><i class="ti ti-plus"></i> Indexa nuevos PDFs detectados en el almacenamiento</li>
           <li><i class="ti ti-arrows-exchange"></i> Detecta y registra archivos movidos (via hash MD5)</li>
           <li><i class="ti ti-trash"></i> Desactiva entradas huerfanas del indice</li>
         </ul>
@@ -294,7 +294,7 @@
       <div class="modal-body">
         <p>¿Estas seguro de que deseas eliminar el archivo?</p>
         <code id="deleteModalPath" class="delete-path-code"></code>
-        <p class="modal-warning">Esta accion eliminara el archivo de MinIO y su entrada en el indice PostgreSQL. No se puede deshacer.</p>
+        <p class="modal-warning">Esta accion eliminará el archivo del almacenamiento y su entrada en el indice PostgreSQL. No se puede deshacer.</p>
       </div>
       <div class="modal-footer">
         <button id="deleteModalCancel" class="btn btn-ghost">Cancelar</button>

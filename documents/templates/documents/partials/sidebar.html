@@ -12,13 +12,13 @@
 
   <nav class="sidebar-nav">
     <div class="nav-section-label">Modulos</div>
-    <a class="nav-item{% if active_module == 'seguros' %} active{% endif %}" href="{% url 'search_seguros_ui' %}"><i class="ti ti-shield"></i> Seguros</a>
-    <a class="nav-item{% if active_module == 'tregistro' %} active{% endif %}" href="{% url 'search_tregistro_ui' %}"><i class="ti ti-file-certificate"></i> T-Registro</a>
-    <a class="nav-item{% if active_module == 'constancias' %} active{% endif %}" href="{% url 'search_constancias_ui' %}"><i class="ti ti-folders"></i> Constancias</a>
+    <a class="nav-item{% if active_module == 'seguros' %} active{% endif %}" data-domain="SEGUROS" href="{% url 'search_seguros_ui' %}"><i class="ti ti-shield"></i> Seguros</a>
+    <a class="nav-item{% if active_module == 'tregistro' %} active{% endif %}" data-domain="TREGISTRO" href="{% url 'search_tregistro_ui' %}"><i class="ti ti-file-certificate"></i> T-Registro</a>
+    <a class="nav-item{% if active_module == 'constancias' %} active{% endif %}" data-domain="CONSTANCIA_ABONO" href="{% url 'search_constancias_ui' %}"><i class="ti ti-folders"></i> Constancias</a>
 
     <div class="nav-section-label">Administracion</div>
-    <a id="adminFilesLink" class="nav-item{% if active_admin == 'files' %} active{% endif %}" href="{% url 'files_management_ui' %}"><i class="ti ti-folder-cog"></i> Gestion de Archivos</a>
-    <a id="adminSyncLink" class="nav-item{% if active_admin == 'sync' %} active{% endif %}" href="{% url 'files_management_ui' %}?section=sync#sync-section"><i class="ti ti-refresh"></i> Sincronizacion</a>
+    <a id="adminFilesLink" class="nav-item{% if active_admin == 'files' %} active{% endif %}" data-requires-manage="true" href="{% url 'files_management_ui' %}"><i class="ti ti-folder-cog"></i> Gestion de Archivos</a>
+    <a id="adminSyncLink" class="nav-item{% if active_admin == 'sync' %} active{% endif %}" data-requires-manage="true" href="{% url 'files_management_ui' %}?section=sync#sync-section"><i class="ti ti-refresh"></i> Sincronizacion</a>
   </nav>
 
   <div class="sidebar-user">
