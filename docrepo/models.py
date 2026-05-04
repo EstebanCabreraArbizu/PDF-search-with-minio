@@ -57,6 +57,8 @@ class Document(TimestampedModel):
         indexes = [
             models.Index(fields=["domain", "company", "period"], name="docrepo_doc_dom_comp_per_idx"),
             models.Index(fields=["is_active", "indexed_at"], name="docrepo_doc_active_idx"),
+            models.Index(fields=["is_active", "domain", "company", "period"], name="docrepo_doc_active_scope_idx"),
+            models.Index(fields=["indexed_at"], name="docrepo_doc_indexed_at_idx"),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -88,7 +90,12 @@ class StorageObject(TimestampedModel):
             models.UniqueConstraint(fields=["bucket_name", "object_key"], name="docrepo_storage_bucket_key_uniq")
         ]
         indexes = [
-            models.Index(fields=["bucket_name", "object_key"], name="docrepo_storage_bucket_key_idx")
+            models.Index(fields=["bucket_name", "object_key"], name="docrepo_storage_bucket_key_idx"),
+            models.Index(fields=["object_key"], name="docrepo_storage_obj_key_idx"),
+            models.Index(fields=["bucket_name"], name="docrepo_storage_bucket_idx"),
+            models.Index(fields=["etag"], name="docrepo_storage_etag_idx"),
+            models.Index(fields=["size_bytes"], name="docrepo_storage_size_idx"),
+            models.Index(fields=["bucket_name", "etag", "size_bytes"], name="docrepo_storage_dup_idx"),
         ]
 
     def __str__(self):

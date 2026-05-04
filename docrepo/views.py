@@ -182,6 +182,13 @@ class BaseV2SearchView(APIView):
         queryset = self._build_v2_queryset(payload, employee_codes)
         max_results = int(getattr(settings, "DOCREPO_MAX_RESULTS", 500))
         documents = list(queryset[:max_results])
+        found_codes = set()
+        if employee_codes:
+            requested = set(employee_codes)
+            for document in documents:
+                for code in document.employee_codes.all():
+                    if code.employee_code in requested:
+                        found_codes.add(code.employee_code)
 
         response_data = {
             "total": len(documents),
@@ -189,6 +196,9 @@ class BaseV2SearchView(APIView):
             "source": "docrepo_v2",
             "search_time_ms": round((time.time() - start_time) * 1000, 2),
             "domain": self.domain_code,
+            "codigos_buscados": employee_codes,
+            "codigos_encontrados": sorted(found_codes),
+            "codigos_no_encontrados": [code for code in employee_codes if code not in found_codes],
         }
 
         comparison = self._build_dual_read_comparison(payload, employee_codes, documents)
@@ -518,6 +528,14 @@ class DocumentsZipDownloadV2View(APIView):
         added = 0
         errors: list[dict[str, str]] = []
         used_names: set[str] = set()
+        basename_counts: dict[str, int] = {}
+        basename_seen: dict[str, int] = {}
+
+        for document in documents:
+            storage = getattr(document, "storage_object", None)
+            object_key = storage.object_key if storage and storage.object_key else document.source_path_legacy
+            archive_name = object_key.strip("/").replace("\\", "/").rsplit("/", 1)[-1] if object_key else f"{document.id}.pdf"
+            basename_counts[archive_name] = basename_counts.get(archive_name, 0) + 1
 
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
             for document in documents:
@@ -536,14 +554,17 @@ class DocumentsZipDownloadV2View(APIView):
                     errors.append({"document_id": str(document.id), "object_key": object_key, "error": "storage_object_not_found"})
                     continue
 
-                archive_name = object_key.strip("/").replace("\\", "/")
-                if not archive_name:
-                    archive_name = f"{document.id}.pdf"
-                if archive_name in used_names:
-                    parts = archive_name.rsplit("/", 1)
-                    filename = parts[-1]
-                    prefix = f"{document.id}_"
-                    archive_name = f"{parts[0]}/{prefix}{filename}" if len(parts) > 1 else f"{prefix}{filename}"
+                base_name = object_key.strip("/").replace("\\", "/").rsplit("/", 1)[-1]
+                if not base_name:
+                    base_name = f"{document.id}.pdf"
+                if basename_counts.get(base_name, 0) > 1:
+                    basename_seen[base_name] = basename_seen.get(base_name, 0) + 1
+                    archive_name = f"{basename_seen[base_name]:03d}_{base_name}"
+                else:
+                    archive_name = base_name
+                while archive_name in used_names:
+                    basename_seen[base_name] = basename_seen.get(base_name, 0) + 1
+                    archive_name = f"{basename_seen[base_name]:03d}_{base_name}"
                 used_names.add(archive_name)
 
                 archive.writestr(archive_name, content)

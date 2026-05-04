@@ -2025,23 +2025,6 @@ class FilesUploadView(APIView):
                         'object_key': duplicate.object_key,
                     }
                     logger.info(f"Re-ingresando duplicado: {duplicate.object_key} → nuevo archivo")
-                    record_audit_event(
-                        action='FILE_UPLOAD_DUPLICATE_OVERRIDDEN',
-                        resource_type='file',
-                        resource_id=file.name,
-                        request=request,
-                        actor=request.user,
-                        document=duplicate.document,
-                        metadata={
-                            'status_code': 201,
-                            'filename': file.name,
-                            'size_bytes': file_size,
-                            'md5_hash': file_md5,
-                            'replaced_document_id': str(duplicate.document.id),
-                            'replaced_object_key': duplicate.object_key,
-                            'new_object_key': object_name,
-                        },
-                    )
 
                 hints = _build_upload_hints(request)
 
@@ -2163,6 +2146,25 @@ class FilesUploadView(APIView):
                         'legacy_sync_error': legacy_sync_error,
                     },
                 )
+
+                if duplicate_replaced:
+                    record_audit_event(
+                        action='FILE_UPLOAD_DUPLICATE_OVERRIDDEN',
+                        resource_type='file',
+                        resource_id=object_name,
+                        request=request,
+                        actor=request.user,
+                        document=duplicate.document,
+                        metadata={
+                            'status_code': 201,
+                            'filename': file.name,
+                            'size_bytes': file_size,
+                            'md5_hash': file_md5,
+                            'replaced_document_id': duplicate_replaced['document_id'],
+                            'replaced_object_key': duplicate_replaced['object_key'],
+                            'new_object_key': object_name,
+                        },
+                    )
 
                 uploaded.append({
                     'filename': file.name,
@@ -2672,12 +2674,13 @@ class BulkSearchView(APIView):
 
 class MergePdfsView(APIView):
     """
-    Combina múltiples PDFs en un único archivo para descargar.
+    Combina múltiples PDFs en un único archivo o genera ZIP plano para descargar.
     POST /api/merge-pdfs
-    
+
     JSON body: {
         "paths": ["Planillas 2025/archivo1.pdf", "Planillas 2025/archivo2.pdf"],
-        "output_name": "documentos_combinados" (opcional)
+        "output_name": "documentos_combinados" (opcional),
+        "output_format": "pdf" | "zip" (opcional)
     }
     """
     permission_classes = [IsAuthenticated]
@@ -2685,21 +2688,92 @@ class MergePdfsView(APIView):
     def post(self, request):
         from io import BytesIO
         from minio.error import S3Error
+        import os
         import fitz  # PyMuPDF
+        import zipfile
         import logging
         logger = logging.getLogger(__name__)
-        
+
         data = request.data
         paths = data.get('paths', [])
         output_name = data.get('output_name', 'documentos_combinados').strip()
-        
+        output_format = str(data.get('output_format', 'pdf')).strip().lower()
+
         if not paths or len(paths) < 1:
             return Response({'error': 'Debe proporcionar al menos un archivo PDF.'}, status=400)
-        
+
         if len(paths) > 100:
-            return Response({'error': 'Máximo 100 archivos por fusión.'}, status=400)
-        
+            return Response({'error': 'Máximo 100 archivos por descarga.'}, status=400)
+
+        if output_format not in {'pdf', 'zip'}:
+            return Response({'error': "output_format debe ser 'pdf' o 'zip'."}, status=400)
+
         try:
+            safe_name = re.sub(r'[^\w\s\-]', '', output_name)[:50]
+            if not safe_name:
+                safe_name = 'documentos_combinados'
+
+            if output_format == 'zip':
+                output = BytesIO()
+                files_zipped = []
+                errors = []
+                used_names = set()
+                basename_counts = {}
+                basename_seen = {}
+                for path in paths:
+                    base_name = os.path.basename(str(path).strip('/')) or 'documento.pdf'
+                    basename_counts[base_name] = basename_counts.get(base_name, 0) + 1
+
+                with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
+                    for path in paths:
+                        try:
+                            response = minio_client.get_object(settings.MINIO_BUCKET, path)
+                            pdf_bytes = response.read()
+                            response.close()
+                            response.release_conn()
+
+                            base_name = os.path.basename(path.strip('/')) or 'documento.pdf'
+                            if basename_counts.get(base_name, 0) > 1:
+                                basename_seen[base_name] = basename_seen.get(base_name, 0) + 1
+                                arcname = f"{basename_seen[base_name]:03d}_{base_name}"
+                            else:
+                                arcname = base_name
+                            while arcname in used_names:
+                                basename_seen[base_name] = basename_seen.get(base_name, 0) + 1
+                                arcname = f"{basename_seen[base_name]:03d}_{base_name}"
+                            used_names.add(arcname)
+                            archive.writestr(arcname, pdf_bytes)
+                            files_zipped.append(path)
+                        except S3Error as e:
+                            logger.error(f"✗ Error descargando {path}: {e}")
+                            errors.append({'path': path, 'error': str(e)})
+                        except Exception as e:
+                            logger.error(f"✗ Error procesando {path}: {e}")
+                            errors.append({'path': path, 'error': str(e)})
+
+                if not files_zipped:
+                    return Response({
+                        'error': 'No se pudo procesar ningún archivo.',
+                        'errors': errors
+                    }, status=400)
+
+                try:
+                    DownloadLog.objects.create(
+                        user=request.user,
+                        filename=f"ZIP:{len(files_zipped)}_archivos_{safe_name}.zip",
+                        ip_address=request.META.get('REMOTE_ADDR', '')
+                    )
+                except Exception as log_error:
+                    logger.warning(f"No se pudo registrar descarga ZIP: {log_error}")
+
+                output.seek(0)
+                from django.http import HttpResponse
+                response = HttpResponse(output.read(), content_type='application/zip')
+                response['Content-Disposition'] = f'attachment; filename="{safe_name}.zip"'
+                response['X-Files-Zipped'] = str(len(files_zipped))
+                response['X-Zip-Errors'] = str(len(errors))
+                return response
+
             # Crear documento PDF combinado
             merged_pdf = fitz.open()
             files_merged = []
@@ -2739,11 +2813,6 @@ class MergePdfsView(APIView):
             merged_pdf.save(output)
             merged_pdf.close()
             output.seek(0)
-            
-            # Sanitizar nombre de archivo
-            safe_name = re.sub(r'[^\w\s\-]', '', output_name)[:50]
-            if not safe_name:
-                safe_name = 'documentos_combinados'
             
             # Registrar descarga
             try:
