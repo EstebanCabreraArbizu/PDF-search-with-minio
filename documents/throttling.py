@@ -59,3 +59,8 @@ class BulkSearchRateThrottle(UserRateThrottle):
     scope = 'bulk_search'
     # Si no se define 'bulk_search' en settings, usamos un rate por defecto
     # Podrías añadir en settings: 'bulk_search': '10/minute'
+
+
+class MergeRateThrottle(UserRateThrottle):
+    """Throttle para fusión de PDFs, una operación pesada de I/O y CPU."""
+    scope = 'merge'

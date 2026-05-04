@@ -9,7 +9,7 @@ from docrepo.models import Document, StorageObject
 from docrepo.services import deactivate_document_by_storage_key, upsert_document_from_upload
 from .models import PDFIndex, DownloadLog
 from .serializers import PDFIndexSerializer
-from .throttling import SearchRateThrottle, BulkSearchRateThrottle
+from .throttling import SearchRateThrottle, BulkSearchRateThrottle, MergeRateThrottle
 from .permissions import CanManageFiles, allowed_domains_for_user, can_manage_files
 from .utils import (
     minio_client, extract_metadata, search_in_pdf,
@@ -18,6 +18,7 @@ from .utils import (
     BANCOS_VALIDOS, RAZONES_SOCIALES_VALIDAS
 )
 import hashlib
+import concurrent.futures
 import time
 from datetime import datetime
 import re
@@ -1639,7 +1640,9 @@ class FolderOptionsView(APIView):
             docs = Document.objects.filter(query).values(
                 'storage_object__object_key', 
                 'source_path_legacy'
-            ).distinct()
+            )
+            if hasattr(docs, 'distinct'):
+                docs = docs.distinct()
             
             folder_options = []
             seen_folders = set()
@@ -1651,6 +1654,8 @@ class FolderOptionsView(APIView):
                 
                 relative_path = path[len(parent):] if parent else path
                 parts = relative_path.split('/')
+                if not parent and len(parts) > 1 and re.fullmatch(r'Planillas\s+20\d{2}', parts[0], re.IGNORECASE):
+                    parts = parts[1:]
                 
                 # Skip years at root level (they're structural)
                 if not parent and len(parts) > 0 and re.fullmatch(r'20\d{2}', parts[0]):
@@ -2706,6 +2711,7 @@ class MergePdfsView(APIView):
     }
     """
     permission_classes = [IsAuthenticated]
+    throttle_classes = [MergeRateThrottle]
 
     def post(self, request):
         from io import BytesIO
@@ -2724,11 +2730,26 @@ class MergePdfsView(APIView):
         if not paths or len(paths) < 1:
             return Response({'error': 'Debe proporcionar al menos un archivo PDF.'}, status=400)
 
-        if len(paths) > 100:
-            return Response({'error': 'Máximo 100 archivos por descarga.'}, status=400)
+        if len(paths) > 80:
+            return Response({'error': 'Máximo 80 archivos por descarga.'}, status=400)
 
         if output_format not in {'pdf', 'zip'}:
             return Response({'error': "output_format debe ser 'pdf' o 'zip'."}, status=400)
+
+        def download_one(path):
+            response = None
+            try:
+                response = minio_client.get_object(settings.MINIO_BUCKET, path)
+                return path, response.read(), None
+            except Exception as exc:
+                return path, None, exc
+            finally:
+                if response is not None:
+                    try:
+                        response.close()
+                        response.release_conn()
+                    except Exception:
+                        pass
 
         try:
             safe_name = re.sub(r'[^\w\s\-]', '', output_name)[:50]
@@ -2796,30 +2817,38 @@ class MergePdfsView(APIView):
                 response['X-Zip-Errors'] = str(len(errors))
                 return response
 
-            # Crear documento PDF combinado
+            downloaded_pdfs = {}
+            errors = []
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                future_to_path = {executor.submit(download_one, path): path for path in paths}
+                for future in concurrent.futures.as_completed(future_to_path):
+                    path, pdf_bytes, error = future.result()
+                    if error is not None:
+                        logger.error(f"✗ Error descargando {path}: {error}")
+                        errors.append({'path': path, 'error': str(error)})
+                        continue
+
+                    downloaded_pdfs[path] = pdf_bytes
+                    logger.info(f"✓ Descargado: {path}")
+
+            # Crear documento PDF combinado preservando el orden original
             merged_pdf = fitz.open()
             files_merged = []
-            errors = []
             
             for path in paths:
+                if path not in downloaded_pdfs:
+                    continue
+
                 try:
-                    # Descargar PDF de MinIO
-                    response = minio_client.get_object(settings.MINIO_BUCKET, path)
-                    pdf_bytes = response.read()
-                    response.close()
-                    response.release_conn()
-                    
                     # Abrir y añadir al documento combinado
-                    src_pdf = fitz.open(stream=pdf_bytes, filetype="pdf")
+                    src_pdf = fitz.open(stream=downloaded_pdfs[path], filetype="pdf")
                     merged_pdf.insert_pdf(src_pdf)
                     src_pdf.close()
                     
                     files_merged.append(path)
                     logger.info(f"✓ Añadido al merge: {path}")
                     
-                except S3Error as e:
-                    logger.error(f"✗ Error descargando {path}: {e}")
-                    errors.append({'path': path, 'error': str(e)})
                 except Exception as e:
                     logger.error(f"✗ Error procesando {path}: {e}")
                     errors.append({'path': path, 'error': str(e)})

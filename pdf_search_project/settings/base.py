@@ -124,6 +124,7 @@ REST_FRAMEWORK = {
         'login': '5/minute',      # Intentos de login: 5/min (CRÍTICO)
         'search': '60/minute',    # Búsquedas: 60/min
         'bulk_search': '10/minute',  # Búsquedas masivas: 10/min (más pesado)
+        'merge': '2/minute',      # Merge PDFs: 2/min (operación pesada)
     }
 }
 

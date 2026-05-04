@@ -521,8 +521,8 @@ async function mergeAndDownload() {
         return;
     }
 
-    if (currentSearchResults.length > 100) {
-        alert('Máximo 100 archivos por fusión. Aplica más filtros para reducir los resultados.');
+    if (currentSearchResults.length > 80) {
+        alert('Máximo 80 archivos por fusión. Aplica más filtros para reducir los resultados.');
         return;
     }
 

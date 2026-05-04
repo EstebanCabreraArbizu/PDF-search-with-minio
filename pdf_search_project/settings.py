@@ -135,6 +135,7 @@ REST_FRAMEWORK = {
         'login': '5/minute',
         'search': '60/minute',
         'bulk_search': '10/minute',
+        'merge': '2/minute',
     },
 }
 
