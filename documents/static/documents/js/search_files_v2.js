@@ -702,7 +702,8 @@ function initUploadModeToggle() {
     let currentPath = rutaActiva.length > 0 ? rutaActiva.join('/') + '/' : '';
 
     function buildBreadcrumb(path) {
-      const parts = path ? path.rstrip('/').split('/') : [];
+      const clean = path ? path.replace(/\/+$/, '') : '';
+      const parts = clean ? clean.split('/') : [];
       const crumbs = [];
       let accumulated = '';
       for (const part of parts) {
