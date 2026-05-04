@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from auditlog.services import record_audit_event
 from documents.models import DownloadLog, PDFIndex
+from documents.permissions import allowed_domains_for_user
 from documents.utils import minio_client
 
 from .domain_inference import infer_domain_code
@@ -144,6 +145,16 @@ class BaseV2SearchView(APIView):
     def post(self, request):
         start_time = time.time()
         payload = request.data if request.method == "POST" else request.query_params
+
+        if self.domain_code not in allowed_domains_for_user(request.user):
+            return Response(
+                {
+                    "error": "No tiene permisos para consultar este dominio documental.",
+                    "total": 0,
+                    "results": [],
+                },
+                status=403,
+            )
 
         try:
             employee_codes = _parse_employee_codes(payload)
@@ -364,8 +375,15 @@ class FilterOptionsV2View(APIView):
     def get(self, request):
         domain_filter = str(request.query_params.get("domain") or "").strip().upper()
         valid_domains = {"SEGUROS", "TREGISTRO", "CONSTANCIA_ABONO"}
+        allowed_domains = allowed_domains_for_user(request.user)
 
-        queryset = Document.objects.filter(is_active=True)
+        if not allowed_domains:
+            return Response({"error": "No tiene permisos para consultar filtros."}, status=403)
+
+        if domain_filter in valid_domains and domain_filter not in allowed_domains:
+            return Response({"error": "No tiene permisos para consultar este dominio documental."}, status=403)
+
+        queryset = Document.objects.filter(is_active=True, domain__code__in=allowed_domains)
         if domain_filter in valid_domains:
             queryset = queryset.filter(domain__code=domain_filter)
 
@@ -430,7 +448,7 @@ class DocumentDownloadV2View(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, document_id):
-        document = Document.objects.select_related("storage_object").filter(id=document_id, is_active=True).first()
+        document = Document.objects.select_related("domain", "storage_object").filter(id=document_id, is_active=True).first()
         if document is None:
             record_audit_event(
                 action="DOC_DOWNLOAD_FAILED",
@@ -440,6 +458,9 @@ class DocumentDownloadV2View(APIView):
                 metadata={"reason": "document_not_found", "status_code": 404},
             )
             return Response({"error": "Documento no encontrado."}, status=404)
+
+        if document.domain.code not in allowed_domains_for_user(request.user):
+            return Response({"error": "No tiene permisos para descargar este documento."}, status=403)
 
         storage = getattr(document, "storage_object", None)
         object_key = ""
@@ -518,7 +539,7 @@ class DocumentsZipDownloadV2View(APIView):
 
         documents = list(
             Document.objects.select_related("domain", "storage_object")
-            .filter(id__in=document_ids, is_active=True)
+            .filter(id__in=document_ids, is_active=True, domain__code__in=allowed_domains_for_user(request.user))
             .order_by("domain__code", "created_at")
         )
         if not documents:

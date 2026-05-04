@@ -163,7 +163,7 @@ async function restoreSession() {
     const raw = localStorage.getItem(USER_KEY);
     if (raw) {
       currentUser = JSON.parse(raw);
-      isAdmin = currentUser?.role === 'admin' || currentUser?.is_staff === true;
+      isAdmin = currentUser?.can_manage_files === true || currentUser?.role === 'admin' || currentUser?.is_staff === true;
     }
   } catch (_) { }
 
@@ -1472,7 +1472,7 @@ async function bootstrap() {
   const hasSession = await restoreSession();
   if (!hasSession) { redirectToLogin(); return; }
 
-applyAdminVisibility();
+  applyAdminVisibility();
   bindAllEvents();
   initUploadModeToggle();
   initDropZone();

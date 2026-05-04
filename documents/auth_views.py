@@ -8,6 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from auditlog.services import record_audit_event
 
+from .permissions import allowed_domains_for_user, can_manage_files
 from .throttling import LoginRateThrottle
 
 
@@ -97,6 +98,9 @@ class AuthLoginView(APIView):
                     "id": user.id,
                     "username": user.username,
                     "role": user_role,
+                    "groups": list(user.groups.values_list("name", flat=True)),
+                    "can_manage_files": can_manage_files(user),
+                    "allowed_domains": sorted(allowed_domains_for_user(user)),
                     "is_active": user.is_active,
                 },
             },

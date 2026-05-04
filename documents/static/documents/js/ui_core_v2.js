@@ -57,6 +57,9 @@
                 this.redirectToLogin();
                 return null;
             }
+            try {
+                await this.validateToken(API_PATHS.me, token);
+            } catch (_) {}
             return token;
         },
 
@@ -103,14 +106,39 @@
             }
 
             const username = user.username || 'admin';
+            const groups = Array.isArray(user.groups) ? user.groups.map(g => String(g).toLowerCase()) : [];
+            const canManage = user.can_manage_files === true || user.is_staff === true || user.role === 'admin' || groups.includes('planillas');
             const isStaff = user.is_staff === true || user.role === 'admin';
             const nameEl = document.getElementById('sidebarUserName');
             const roleEl = document.getElementById('sidebarUserRole');
             const avatarEl = document.querySelector('.sidebar-avatar');
 
             if (nameEl) nameEl.textContent = username;
-            if (roleEl) roleEl.textContent = isStaff ? 'ADMINISTRADOR' : 'USUARIO';
+            if (roleEl) {
+                roleEl.textContent = canManage ? 'PLANILLAS' : (groups.includes('seleccion') ? 'SELECCION' : (isStaff ? 'ADMINISTRADOR' : 'USUARIO'));
+            }
             if (avatarEl && username) avatarEl.textContent = username.slice(0, 2).toUpperCase();
+            this.applyPermissionVisibility(user);
+        },
+
+        applyPermissionVisibility(user = {}) {
+            const groups = Array.isArray(user.groups) ? user.groups.map(g => String(g).toLowerCase()) : [];
+            const canManage = user.can_manage_files === true || user.is_staff === true || user.role === 'admin' || groups.includes('planillas');
+            const allowedDomains = new Set(
+                (Array.isArray(user.allowed_domains) ? user.allowed_domains : [])
+                    .map(domain => String(domain).toUpperCase())
+            );
+
+            document.querySelectorAll('[data-requires-manage="true"]').forEach(el => {
+                el.classList.toggle('hidden', !canManage);
+            });
+
+            document.querySelectorAll('[data-domain]').forEach(el => {
+                const domain = String(el.getAttribute('data-domain') || '').toUpperCase();
+                if (allowedDomains.size > 0) {
+                    el.classList.toggle('hidden', !allowedDomains.has(domain));
+                }
+            });
         },
 
         async logoutAndRedirect(options = {}) {
@@ -154,7 +182,12 @@
                 const response = await fetch(meUrl, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                return response.ok;
+                if (!response.ok) return false;
+                const user = await response.json().catch(() => null);
+                if (user) {
+                    localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+                }
+                return true;
             } catch (e) {
                 return false;
             }
@@ -426,6 +459,7 @@
                 await DocSearchCore.ensureAuth();
                 setupListeners();
                 DocSearchCore.initTheme();
+                DocSearchCore.renderSidebarUser();
                 renderUser();
             };
 

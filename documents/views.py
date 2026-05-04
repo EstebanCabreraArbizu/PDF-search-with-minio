@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q, Sum, Count
 from django.http import StreamingHttpResponse
 from django.core.cache import cache
@@ -10,6 +10,7 @@ from docrepo.services import deactivate_document_by_storage_key, upsert_document
 from .models import PDFIndex, DownloadLog
 from .serializers import PDFIndexSerializer
 from .throttling import SearchRateThrottle, BulkSearchRateThrottle
+from .permissions import CanManageFiles, allowed_domains_for_user, can_manage_files
 from .utils import (
     minio_client, extract_metadata, search_in_pdf,
     extract_text_from_pdf, extract_text_from_pdf_bytes,
@@ -405,6 +406,9 @@ class CurrentUserView(APIView):
             'id': user.id,
             'username': user.username,
             'role': 'admin' if user.is_staff else 'user',
+            'groups': list(user.groups.values_list('name', flat=True)),
+            'can_manage_files': can_manage_files(user),
+            'allowed_domains': sorted(allowed_domains_for_user(user)),
             'is_active': user.is_active
         })
 
@@ -781,6 +785,21 @@ class DownloadView(APIView):
 
     def get(self, request, filename):
         try:
+            allowed_domains = allowed_domains_for_user(request.user)
+            storage = StorageObject.objects.select_related('document__domain').filter(
+                bucket_name=settings.MINIO_BUCKET,
+                object_key=filename,
+                document__is_active=True,
+            ).first()
+            if storage and storage.document.domain.code not in allowed_domains:
+                return Response({'error': 'No tiene permisos para descargar este documento.'}, status=403)
+            if storage is None:
+                legacy_row = PDFIndex.objects.filter(minio_object_name=filename).only('minio_object_name', 'tipo_documento').first()
+                if legacy_row is not None:
+                    from docrepo.domain_inference import infer_domain_code
+                    if infer_domain_code(legacy_row.minio_object_name, legacy_row.tipo_documento) not in allowed_domains:
+                        return Response({'error': 'No tiene permisos para descargar este documento.'}, status=403)
+
             # MinIO response
             response = minio_client.get_object(settings.MINIO_BUCKET, filename)
             
@@ -810,7 +829,7 @@ class SyncIndexView(APIView):
     
     DETECTA ARCHIVOS MOVIDOS usando tamaño + hash MD5.
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [CanManageFiles]
 
     def post(self, request):
         import logging
@@ -1062,7 +1081,7 @@ class PopulateHashesView(APIView):
     - NO extrae texto
     - Solo lee el ETag de MinIO (ya contiene el MD5)
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [CanManageFiles]
 
     def post(self, request):
         import logging
@@ -1255,7 +1274,7 @@ class ReindexView(APIView):
     
     INCLUYE: Eliminación de índices huérfanos (PDFs eliminados de MinIO)
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [CanManageFiles]
     
     def post(self, request):
         import logging
@@ -1416,7 +1435,7 @@ class FilesListView(APIView):
     Listar PDFs indexados desde PostgreSQL con paginación y filtros.
     GET /api/files/list
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanManageFiles]
 
     def get(self, request):
         def safe_int(value, default=None):
@@ -1593,7 +1612,7 @@ class FolderOptionsView(APIView):
     - domain: SEGUROS | TREGISTRO | CONSTANCIA_ABONO (filtra estructura)
     - parent: ruta padre para drill-down
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [CanManageFiles]
 
     def get(self, request):
         import re
@@ -1698,7 +1717,7 @@ class FilesClassifyPreviewView(APIView):
     - folder: ruta destino para modo manual
     - domain_hint: forzar dominio (SEGUROS|TREGISTRO|CONSTANCIA_ABONO)
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [CanManageFiles]
 
     def post(self, request):
         import logging
@@ -1937,7 +1956,7 @@ class FilesUploadView(APIView):
     FEAT-1: Soporta upload_mode='auto'|'manual'
     FEAT-3: Soporta allow_duplicate=true para re-ingresar archivos duplicados
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [CanManageFiles]
 
     def post(self, request):
         from io import BytesIO
@@ -1955,7 +1974,7 @@ class FilesUploadView(APIView):
         
         # FEAT-3: Permitir duplicados solo para admins (planillas/admin)
         # No se audita aquí porque el override real ocurre en la línea de éxito
-        is_admin_override = request.user.is_staff
+        is_admin_override = can_manage_files(request.user)
         allow_duplicate_raw = request.POST.get('allow_duplicate', 'false').strip().lower()
         allow_duplicate = allow_duplicate_raw in {'true', '1', 'yes'} and is_admin_override
 
@@ -2214,7 +2233,7 @@ class CreateFolderView(APIView):
     Crea una 'carpeta' en MinIO creando un objeto placeholder.
     POST /api/files/create-folder
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [CanManageFiles]
 
     def post(self, request):
         from io import BytesIO
@@ -2256,7 +2275,7 @@ class FilesDeleteView(APIView):
     Eliminar un archivo de MinIO y su índice en PostgreSQL.
     DELETE /api/files/delete
     """
-    permission_classes = [IsAdminUser]
+    permission_classes = [CanManageFiles]
 
     def delete(self, request):
         from minio.error import S3Error
@@ -2373,7 +2392,7 @@ class FoldersListView(APIView):
     Maneja filtros dinámicos y compatibilidad con objetos legacy.
     GET /api/folders/list
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanManageFiles]
 
     def get(self, request):
         import re
