@@ -47,6 +47,22 @@ RAZONES_SOCIALES_MAP = {
 RAZONES_SOCIALES_VALIDAS = sorted(set(RAZONES_SOCIALES_MAP.values()))
 BANCOS_VALIDOS = ['BBVA', 'BCP', 'INTERBANK', 'SCOTIABANK']
 
+INVALID_COMPANY_VALUES = {
+    'PDF',
+    'PDF.PDF',
+    'GENERAL',
+    'TREGISTRO',
+    'T-REGISTRO',
+    'SEGUROS',
+    'SCTR',
+    'VIDA LEY',
+    'ALTA',
+    'BAJA',
+    'CONSTANCIA',
+    'PLANILLA',
+    'PLANILLAS',
+}
+
 MESES_TOKEN_MAP = {
     'ENERO': '01',
     'ENE': '01',
@@ -184,6 +200,20 @@ def _extract_tregistro_dates(text):
     text_upper = _strip_accents(text).upper()
     date_pattern = r'(\d{2})[/-](\d{2})[/-](20\d{2})'
 
+    laborales_match = re.search(
+        rf'PERIODOS?\s+LABORALES?:?(?P<block>.{{0,1200}}?)(?:TIPOS?\s+DE\s+TRABAJADOR|ESTABLECIMIENTOS|$)',
+        text_upper,
+        re.DOTALL,
+    )
+    if laborales_match:
+        dates = re.findall(date_pattern, laborales_match.group('block'))
+        if len(dates) >= 2:
+            _, mes, año = dates[1]
+            return año, mes
+        if len(dates) == 1:
+            _, mes, año = dates[0]
+            return año, mes
+
     periodos_match = re.search(
         rf'PERIODOS?\s+DE\s+FORMACION(?P<block>.{{0,1200}})',
         text_upper,
@@ -238,6 +268,42 @@ def _detect_company_from_text(text):
     return ''
 
 
+def _clean_company_candidate(value):
+    company = normalize_razon_social(value)
+    normalized = _strip_accents(company).upper().strip()
+    raw_normalized = _strip_accents(value).upper().strip()
+
+    if not normalized or normalized == 'DESCONOCIDO':
+        return ''
+    if normalized in INVALID_COMPANY_VALUES or raw_normalized in INVALID_COMPANY_VALUES:
+        return ''
+    if raw_normalized.endswith('.PDF') and normalized not in RAZONES_SOCIALES_VALIDAS:
+        return ''
+
+    return company
+
+
+def _infer_tregistro_movement_from_text(text):
+    text_upper = _strip_accents(text).upper()
+    if not text_upper:
+        return None
+
+    periodos_match = re.search(
+        r'PERIODOS?\s+LABORALES?:?(?P<block>.{0,1200}?)(?:TIPOS?\s+DE\s+TRABAJADOR|ESTABLECIMIENTOS|$)',
+        text_upper,
+        re.DOTALL,
+    )
+    if periodos_match:
+        block = periodos_match.group('block')
+        dates = re.findall(r'(?<!\d)\d{2}[/-]\d{2}[/-]20\d{2}(?!\d)', block)
+        if len(dates) >= 2:
+            return 'BAJA'
+        if len(dates) == 1:
+            return 'ALTA'
+
+    return None
+
+
 def _detect_bank_from_text(text):
     text_upper = _strip_accents(text).upper()
     for pattern, bank in BANK_PATTERNS:
@@ -251,6 +317,10 @@ def _detect_tipo_documento_from_content(filename, text):
     tokens = set(re.findall(r'\b\w+\b', joined))
 
     if 'T-REGISTRO' in joined or 'TREGISTRO' in joined:
+        movement = _infer_tregistro_movement_from_text(text)
+        if movement:
+            return movement
+
         header_text = _get_document_header(text)
         header_upper = header_text.upper()
         if re.search(r'\bBAJA\b', header_upper):
@@ -346,12 +416,12 @@ def infer_upload_metadata(filename, pdf_text=None, hints=None):
     if not month:
         month = _extract_month_token(filename_upper) or _extract_month_token(text_upper) or '01'
 
-    company = normalize_razon_social(hint_company) if hint_company else ''
-    if not company or company == 'DESCONOCIDO':
-        company = normalize_razon_social(base_meta.get('razon_social'))
-    if not company or company == 'DESCONOCIDO':
+    company = _clean_company_candidate(hint_company) if hint_company else ''
+    if not company:
         detected_company = _detect_company_from_text(text_upper)
-        company = normalize_razon_social(detected_company) if detected_company else 'DESCONOCIDO'
+        company = _clean_company_candidate(detected_company)
+    if not company:
+        company = _clean_company_candidate(base_meta.get('razon_social')) or 'DESCONOCIDO'
 
     bank = (hint_bank or '').upper().strip()
     if bank not in BANCOS_VALIDOS:

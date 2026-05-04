@@ -42,6 +42,8 @@ let syncRunning = false;
 let syncShouldStop = false;
 let uploadMode = 'auto';
 let selectedManualFolder = '';
+let manualFolderFromPreview = false;
+let classifyPreviewRequestId = 0;
 
 /* ── Helpers de autenticación ───────────────────────────────────────── */
 function getAuthHeaders(includeContentType = true) {
@@ -660,6 +662,7 @@ function initUploadModeToggle() {
 
   function setUploadMode(mode) {
     uploadMode = mode;
+    manualFolderFromPreview = false;
     if (mode === 'auto') {
       autoOpt.checked = true;
       manualOpt.closest('.auto-option')?.classList.add('active');
@@ -685,6 +688,7 @@ function initUploadModeToggle() {
   useCurrentBtn?.addEventListener('click', () => {
     if (rutaActiva.length > 0) {
       selectedManualFolder = rutaActiva.join('/');
+      manualFolderFromPreview = false;
       manualInput.value = selectedManualFolder;
       if (folderBrowserResult) {
         folderBrowserResult.classList.remove('hidden');
@@ -783,6 +787,7 @@ function initUploadModeToggle() {
         btn.addEventListener('click', () => {
           const chosen = btn.dataset.path;
           selectedManualFolder = chosen;
+          manualFolderFromPreview = false;
           manualInput.value = chosen;
           if (folderBrowserResult) {
             folderBrowserResult.classList.remove('hidden');
@@ -810,6 +815,7 @@ function initUploadModeToggle() {
   });
 
   manualInput?.addEventListener('input', () => {
+    manualFolderFromPreview = false;
     selectedManualFolder = normalizeFolderValue(manualInput.value);
     if (folderBrowserResult) {
       if (selectedManualFolder) {
@@ -840,6 +846,33 @@ function normalizeFolderValue(path) {
 function folderLabel(path) {
   const normalized = normalizeFolderValue(path);
   return normalized ? formatPathLabel(normalized) : 'Raiz del repositorio';
+}
+
+function resetPreviewRoutingState() {
+  document.querySelector('.classify-modal-backdrop')?.remove();
+  document.querySelector('.duplicate-warning-banner')?.remove();
+
+  if (!manualFolderFromPreview) return;
+
+  uploadMode = 'auto';
+  selectedManualFolder = '';
+  manualFolderFromPreview = false;
+
+  const autoOpt = document.getElementById('uploadModeAuto');
+  const manualOpt = document.getElementById('uploadModeManual');
+  const manualControls = document.getElementById('uploadManualControls');
+  const manualInput = document.getElementById('manualFolderInput');
+  const folderBrowserResult = document.getElementById('folderBrowserResult');
+  const selectedFolderPath = document.getElementById('selectedFolderPath');
+
+  if (autoOpt) autoOpt.checked = true;
+  if (manualOpt) manualOpt.checked = false;
+  document.querySelector('.auto-option')?.classList.add('active');
+  document.querySelector('.manual-option')?.classList.remove('active');
+  manualControls?.classList.add('hidden');
+  if (manualInput) manualInput.value = '';
+  folderBrowserResult?.classList.add('hidden');
+  if (selectedFolderPath) selectedFolderPath.textContent = '';
 }
 
 async function loadFolderOptions(suggestedFolder) {
@@ -926,6 +959,7 @@ function renderDuplicateBanner(items) {
       if (folder) {
         uploadMode = 'manual';
         selectedManualFolder = folder;
+        manualFolderFromPreview = true;
         const manualOpt = document.getElementById('uploadModeManual');
         const manualControls = document.getElementById('uploadManualControls');
         const manualInput = document.getElementById('manualFolderInput');
@@ -1101,6 +1135,9 @@ async function openClassifyConfirmationModal(filename) {
 }
 
 async function triggerClassifyPreview(files) {
+  const requestId = ++classifyPreviewRequestId;
+  resetPreviewRoutingState();
+
   const previewArea = document.getElementById('uploadPreviewArea');
   const tbody = document.getElementById('classifyPreviewBody');
   const summaryEl = document.getElementById('previewSummary');
@@ -1129,6 +1166,8 @@ async function triggerClassifyPreview(files) {
       body: formData
     });
 
+    if (requestId !== classifyPreviewRequestId) return;
+
     const items = data.files || [];
     items.forEach((item, i) => {
       if (item.status !== 'INVALID_FILE') {
@@ -1149,11 +1188,17 @@ async function triggerClassifyPreview(files) {
 
     const firstRequiresConfirmation = items.find(i => i.status === 'REQUIRES_CONFIRMATION');
     if (firstRequiresConfirmation) {
-      setTimeout(() => openClassifyConfirmationModal(firstRequiresConfirmation.filename), 80);
+      setTimeout(() => {
+        if (requestId === classifyPreviewRequestId) {
+          openClassifyConfirmationModal(firstRequiresConfirmation.filename);
+        }
+      }, 80);
     }
   } catch (e) {
+    if (requestId !== classifyPreviewRequestId) return;
     tbody.innerHTML = `<tr><td colspan="8" class="preview-error">Error clasificando: ${safeText(e.message)}</td></tr>`;
   } finally {
+    if (requestId !== classifyPreviewRequestId) return;
     zone.classList.remove('drop-zone-loading');
     zone.querySelector('.drop-zone-title').textContent = 'Arrastra PDFs aquí o haz clic para seleccionar';
   }
@@ -1498,6 +1543,7 @@ function bindAllEvents() {
   /* Upload */
   document.getElementById('uploadApprovedBtn')?.addEventListener('click', handleUpload);
   document.getElementById('classifyAgainBtn')?.addEventListener('click', () => {
+    resetPreviewRoutingState();
     document.getElementById('fileInput').click();
   });
 

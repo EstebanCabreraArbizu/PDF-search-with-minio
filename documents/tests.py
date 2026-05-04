@@ -23,8 +23,10 @@ from documents.utils import (
 	_detect_bank_from_text,
 	_detect_company_from_text,
 	_detect_tipo_documento_from_content,
+	_infer_tregistro_movement_from_text,
 	_extract_tregistro_dates,
 	build_auto_storage_prefix,
+	infer_upload_metadata,
 )
 
 
@@ -60,6 +62,40 @@ class UploadMetadataInferenceUnitTests(TestCase):
 
 	def test_detect_sctr_subtype_with_accented_pension(self):
 		self.assertEqual(_detect_tipo_documento_from_content('sctr.pdf', 'SCTR PENSIÓN'), 'SCTR PENSION')
+
+	def test_infer_upload_metadata_prefers_pdf_company_over_invalid_filename_company(self):
+		meta = infer_upload_metadata(
+			'PDF.pdf',
+			'SCTR PENSION\nJ & V RESGUARDO S.A.C.\nVigencia 02/01/2026',
+		)
+
+		self.assertEqual(meta['domain_code'], 'SEGUROS')
+		self.assertEqual(meta['razon_social'], 'RESGUARDO')
+		self.assertNotEqual(meta['razon_social'], 'PDF')
+
+	def test_tregistro_periodos_laborales_without_fecha_fin_is_alta(self):
+		text = '''
+		TRABAJADOR - Datos laborales
+		Periodos laborales:
+		Fecha de inicio Fecha de fin Motivo de baja
+		01/03/2025 - -
+		Tipos de trabajador:
+		Fecha de inicio Fecha de fin Tipo de trabajador
+		01/03/2025 - EMPLEADO
+		'''
+
+		self.assertEqual(_infer_tregistro_movement_from_text(text), 'ALTA')
+
+	def test_tregistro_periodos_laborales_with_fecha_fin_is_baja(self):
+		text = '''
+		TRABAJADOR - Datos laborales
+		Periodos laborales:
+		Fecha de inicio Fecha de fin Motivo de baja
+		01/03/2025 15/04/2025 CESE
+		'''
+
+		self.assertEqual(_infer_tregistro_movement_from_text(text), 'BAJA')
+		self.assertEqual(_extract_tregistro_dates(text), ('2025', '04'))
 
 
 class SearchViewFallbackTests(APITestCase):

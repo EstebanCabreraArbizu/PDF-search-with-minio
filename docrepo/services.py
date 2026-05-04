@@ -31,6 +31,7 @@ from .models import (
     StorageObject,
     TRegistroDocument,
 )
+from documents.utils import _infer_tregistro_movement_from_text
 
 
 @dataclass
@@ -323,15 +324,19 @@ def upsert_document_from_upload(
 
     _clear_non_domain_details(document, domain_code)
 
+    joined_text = f"{object_key} {tipo_documento}".lower()
+
     if domain_code == "TREGISTRO":
         is_baja = False
         if pdf_text:
-            header = pdf_text[:4000]
-            header_upper = header.upper()
-            if re.search(r'\bBAJA\b', header_upper):
-                is_baja = True
+            movement_code = _infer_tregistro_movement_from_text(pdf_text)
+            if movement_code:
+                is_baja = movement_code == "BAJA"
+            else:
+                header = pdf_text[:4000]
+                header_upper = header.upper()
+                is_baja = bool(re.search(r'\bBAJA\b', header_upper))
         else:
-            joined_text = f"{object_key} {tipo_documento}".lower()
             is_baja = "baja" in joined_text
         movement_type = _tregistro_type(is_baja=is_baja)
         TRegistroDocument.objects.update_or_create(
