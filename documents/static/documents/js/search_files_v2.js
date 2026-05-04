@@ -696,32 +696,116 @@ function initUploadModeToggle() {
   });
 
   browseBtn?.addEventListener('click', async () => {
-    const params = new URLSearchParams();
-    if (rutaActiva.length > 0) params.set('folder', rutaActiva.join('/') + '/');
-    try {
-      const data = await fetchJson(`${API.foldersList}?${params}`, { headers: getAuthHeaders() });
-      const folders = data.folders || [];
-      if (folders.length === 0) {
-        alert('No hay subcarpetas disponibles en la ruta actual.');
-        return;
+    const existingBackdrop = document.querySelector('.folder-browser-backdrop');
+    if (existingBackdrop) existingBackdrop.remove();
+
+    let currentPath = rutaActiva.length > 0 ? rutaActiva.join('/') + '/' : '';
+
+    function buildBreadcrumb(path) {
+      const parts = path ? path.rstrip('/').split('/') : [];
+      const crumbs = [];
+      let accumulated = '';
+      for (const part of parts) {
+        accumulated += part + '/';
+        crumbs.push({ name: part, path: accumulated });
       }
-      const selected = prompt(
-        'Seleccione una carpeta:\n\n' +
-        folders.map((f, i) => `${i + 1}. ${f.name}`).join('\n') +
-        '\n\nIngrese el número:'
-      );
-      const idx = parseInt(selected, 10) - 1;
-      if (!isNaN(idx) && idx >= 0 && idx < folders.length) {
-        selectedManualFolder = folders[idx].path.replace(/\/$/, '');
-        manualInput.value = selectedManualFolder;
-        if (folderBrowserResult) {
-          folderBrowserResult.classList.remove('hidden');
-          if (selectedFolderPath) selectedFolderPath.textContent = selectedManualFolder;
-        }
-      }
-    } catch (e) {
-      alert('Error al cargar carpetas: ' + (e.message || e));
+      return crumbs;
     }
+
+    function closeBrowser() {
+      document.querySelector('.folder-browser-backdrop')?.remove();
+    }
+
+    function renderFolderBrowser(path, folders, breadcrumb) {
+      const backdrop = document.querySelector('.folder-browser-backdrop') || (() => {
+        const el = document.createElement('div');
+        el.className = 'modal-backdrop folder-browser-backdrop';
+        el.setAttribute('role', 'dialog');
+        el.setAttribute('aria-modal', 'true');
+        el.addEventListener('click', e => { if (e.target === el) closeBrowser(); });
+        document.body.appendChild(el);
+        return el;
+      })();
+
+      const crumbs = buildBreadcrumb(path);
+      backdrop.innerHTML = `
+        <div class="modal-card folder-browser-modal acrylic-surface">
+          <div class="modal-header">
+            <span class="modal-title"><i class="ti ti-folder"></i> Examinar carpetas</span>
+            <button type="button" class="btn btn-ghost btn-sm folder-browser-close" aria-label="Cerrar">&times;</button>
+          </div>
+          <div class="modal-body" style="padding:0;overflow:hidden;">
+            ${crumbs.length > 0 ? `
+              <div class="folder-browser-breadcrumb">
+                <button type="button" class="btn btn-ghost btn-sm crumb-home" data-path="">Raíz</button>
+                ${crumbs.map((c, i) => `
+                  <span class="crumb-sep">/</span>
+                  <button type="button" class="btn btn-ghost btn-sm crumb-btn" data-path="${c.path}">${safeText(c.name)}</button>
+                `).join('')}
+              </div>
+            ` : ''}
+            <div class="folder-browser-list">
+              ${folders.length === 0 ? `
+                <div class="folder-browser-empty">No hay subcarpetas en esta ubicación.</div>
+              ` : folders.map(f => `
+                <div class="folder-browser-item">
+                  <span class="folder-browser-item-name"><i class="ti ti-folder"></i> ${safeText(f.name)}</span>
+                  <div class="folder-browser-item-actions">
+                    <button type="button" class="btn btn-ghost btn-sm folder-browser-open" data-path="${f.path}" title="Entrar">
+                      <i class="ti ti-arrow-right"></i> Entrar
+                    </button>
+                    <button type="button" class="btn btn-sm folder-browser-pick" data-path="${f.path.replace(/\/$/, '')}" title="Seleccionar esta carpeta">
+                      <i class="ti ti-check"></i> Seleccionar
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="modal-footer">
+            <span class="folder-browser-hint">Usa <strong>Entrar</strong> para navegar o <strong>Seleccionar</strong> para usar esta carpeta</span>
+            <button type="button" class="btn btn-ghost folder-browser-cancel">Cancelar</button>
+          </div>
+        </div>
+      `;
+
+      backdrop.querySelector('.folder-browser-close')?.addEventListener('click', closeBrowser);
+      backdrop.querySelector('.folder-browser-cancel')?.addEventListener('click', closeBrowser);
+      backdrop.querySelectorAll('.crumb-btn').forEach(btn => {
+        btn.addEventListener('click', () => loadFolderLevel(btn.dataset.path));
+      });
+      backdrop.querySelector('.crumb-home')?.addEventListener('click', () => loadFolderLevel(''));
+      backdrop.querySelectorAll('.folder-browser-open').forEach(btn => {
+        btn.addEventListener('click', () => loadFolderLevel(btn.dataset.path));
+      });
+      backdrop.querySelectorAll('.folder-browser-pick').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const chosen = btn.dataset.path;
+          selectedManualFolder = chosen;
+          manualInput.value = chosen;
+          if (folderBrowserResult) {
+            folderBrowserResult.classList.remove('hidden');
+            if (selectedFolderPath) selectedFolderPath.textContent = chosen;
+          }
+          closeBrowser();
+        });
+      });
+    }
+
+    async function loadFolderLevel(path) {
+      currentPath = path;
+      const params = new URLSearchParams();
+      if (path) params.set('folder', path);
+      try {
+        const data = await fetchJson(`${API.foldersList}?${params}`, { headers: getAuthHeaders() });
+        renderFolderBrowser(path, data.folders || [], data.breadcrumb || []);
+      } catch (e) {
+        alert('Error al cargar carpetas: ' + (e.message || e));
+        closeBrowser();
+      }
+    }
+
+    await loadFolderLevel(currentPath);
   });
 
   manualInput?.addEventListener('input', () => {
