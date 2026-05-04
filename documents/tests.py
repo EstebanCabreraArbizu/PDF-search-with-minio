@@ -4,6 +4,7 @@ from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from rest_framework.test import APITestCase
 
 from documents.views import (
@@ -98,6 +99,7 @@ class UploadMetadataInferenceUnitTests(TestCase):
 		self.assertEqual(_extract_tregistro_dates(text), ('2025', '04'))
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class SearchViewFallbackTests(APITestCase):
 	def setUp(self):
 		self.user = get_user_model().objects.create_user(

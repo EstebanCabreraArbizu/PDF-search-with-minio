@@ -14,7 +14,7 @@ def user_in_group(user, group_name):
 def can_manage_files(user):
     if not user or not getattr(user, "is_authenticated", False):
         return False
-    if user.is_superuser or user.is_staff:
+    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
         return True
     return user_in_group(user, "planillas")
 
