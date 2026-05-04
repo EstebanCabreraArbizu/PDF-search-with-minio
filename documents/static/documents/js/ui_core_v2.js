@@ -217,6 +217,109 @@
             setTimeout(remove, 5000);
         },
 
+        extractRequestedCodes(params) {
+            if (!params || typeof params.getAll !== 'function') return [];
+            const values = [
+                ...params.getAll('codigos'),
+                ...params.getAll('codigo_empleado'),
+                ...params.getAll('dni')
+            ];
+            return [...new Set(values.map(v => String(v || '').trim()).filter(Boolean))];
+        },
+
+        findMissingCodes(requestedCodes, results) {
+            const found = new Set();
+            (results || []).forEach(doc => {
+                (doc.employee_codes || doc.codigos_match || []).forEach(code => {
+                    if (code) found.add(String(code).trim());
+                });
+                const metadata = doc.metadata || {};
+                [metadata.dni, metadata.codigo_empleado, metadata.employee_code].forEach(code => {
+                    if (code) found.add(String(code).trim());
+                });
+            });
+            return (requestedCodes || []).filter(code => !found.has(String(code).trim()));
+        },
+
+        showMissingCodesModal(missingCodes, options = {}) {
+            const missing = [...new Set((missingCodes || []).map(code => String(code).trim()).filter(Boolean))];
+            document.querySelector('.missing-codes-backdrop')?.remove();
+            if (missing.length === 0) return;
+
+            const backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop missing-codes-backdrop';
+            backdrop.setAttribute('role', 'dialog');
+            backdrop.setAttribute('aria-modal', 'true');
+            const title = options.domain === 'constancias' ? 'Códigos no encontrados' : 'DNIs no encontrados';
+            const label = options.domain === 'constancias' ? 'códigos' : 'DNIs';
+
+            backdrop.innerHTML = `
+                <div class="modal-card acrylic-surface missing-codes-modal">
+                    <div class="modal-header">
+                        <span class="modal-title"><i class="ti ti-user-question"></i> ${title}</span>
+                    </div>
+                    <div class="modal-body">
+                        <p>Se buscaron ${DocSearchCore.safeText(String((options.requested || []).length))} ${label}; ${missing.length} no tuvieron resultados.</p>
+                        <div class="missing-codes-list">
+                            ${missing.map(code => `<code>${DocSearchCore.safeText(code)}</code>`).join('')}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-ghost missing-export-txt">Exportar .txt</button>
+                        <button type="button" class="btn btn-ghost missing-export-csv">Exportar .csv</button>
+                        <button type="button" class="btn btn-primary missing-close">Cerrar</button>
+                    </div>
+                </div>
+            `;
+
+            const close = () => backdrop.remove();
+            backdrop.querySelector('.missing-close')?.addEventListener('click', close);
+            backdrop.querySelector('.missing-export-txt')?.addEventListener('click', () => {
+                DocSearchCore.downloadTextFile(missing.join('\n'), `${label.toLowerCase()}_no_encontrados.txt`, 'text/plain');
+            });
+            backdrop.querySelector('.missing-export-csv')?.addEventListener('click', () => {
+                DocSearchCore.downloadTextFile(`codigo\n${missing.join('\n')}`, `${label.toLowerCase()}_no_encontrados.csv`, 'text/csv');
+            });
+            backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+            document.body.appendChild(backdrop);
+        },
+
+        showSearchError(message, options = {}) {
+            document.querySelector('.search-error-backdrop')?.remove();
+            const backdrop = document.createElement('div');
+            backdrop.className = 'search-error-backdrop';
+            backdrop.innerHTML = `
+                <div class="search-error-card acrylic-surface" role="alertdialog" aria-modal="true">
+                    <button type="button" class="search-error-close" aria-label="Cerrar">&times;</button>
+                    <i class="ti ti-alert-circle search-error-icon"></i>
+                    <h3>Error en la búsqueda</h3>
+                    <p>${DocSearchCore.safeText(message || 'Ocurrió un error inesperado.')}</p>
+                    <button type="button" class="btn btn-primary search-error-retry">
+                        <i class="ti ti-refresh"></i> Reintentar
+                    </button>
+                </div>
+            `;
+            const close = () => backdrop.remove();
+            backdrop.querySelector('.search-error-close')?.addEventListener('click', close);
+            backdrop.querySelector('.search-error-retry')?.addEventListener('click', () => {
+                close();
+                if (typeof options.retry === 'function') options.retry();
+            });
+            document.body.appendChild(backdrop);
+        },
+
+        downloadTextFile(content, filename, type = 'text/plain') {
+            const blob = new Blob([content], { type: `${type};charset=utf-8` });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        },
+
         initTheme() {
             const current = localStorage.getItem(STORAGE_KEYS.THEME) || 'corp';
             document.documentElement.setAttribute('data-theme', current);
@@ -303,7 +406,8 @@
                 count: 0,
                 currentPage: 1,
                 isMasivo: false,
-                loading: false
+                loading: false,
+                lastRequestedCodes: []
             };
 
             // DOM Elements
@@ -441,6 +545,13 @@
                     if (onBeforeSearch) {
                         finalParams = onBeforeSearch(params, state.isMasivo);
                     }
+                    if (!finalParams) {
+                        state.loading = false;
+                        if (submitBtn) submitBtn.disabled = false;
+                        return;
+                    }
+
+                    state.lastRequestedCodes = DocSearchCore.extractRequestedCodes(finalParams);
 
                     const url = `${DocSearchCore.API_PATHS.search[type]}?${finalParams.toString()}`;
                     const data = await DocSearchCore.fetchJson(url);
@@ -452,8 +563,17 @@
                         console.error('API results is not an array:', data);
                         state.results = [];
                     }
-                    
+
                     app.renderResults(state.results, state.currentPage);
+                    if (state.isMasivo && state.lastRequestedCodes.length > 0) {
+                        const missingCodes = Array.isArray(data.codigos_no_encontrados)
+                            ? data.codigos_no_encontrados
+                            : DocSearchCore.findMissingCodes(state.lastRequestedCodes, state.results);
+                        DocSearchCore.showMissingCodesModal(missingCodes, {
+                            requested: state.lastRequestedCodes,
+                            domain: type
+                        });
+                    }
                 } catch (err) {
                     // Show error state instead of toast
                     renderErrorState(err.message);
@@ -489,14 +609,12 @@
                             <div class="error-container text-center p-6">
                                 <i class="ti ti-alert-circle text-danger mb-3" style="font-size: 2rem;"></i>
                                 <h4 class="text-danger mb-2">Error en la búsqueda</h4>
-                                <p class="text-muted mb-4">${DocSearchCore.safeText(errorMessage)}</p>
-                                <button class="btn btn-primary" onclick="window._currentApp.search(${state.currentPage})">
-                                    <i class="ti ti-refresh me-2"></i>Reintentar
-                                </button>
+                                <p class="text-muted mb-0">Revisa el mensaje principal y vuelve a intentar.</p>
                             </div>
                         </td>
                     </tr>
                 `;
+                DocSearchCore.showSearchError(errorMessage, { retry: () => app.search(state.currentPage) });
             };
 
             const renderResults = (customResults) => {

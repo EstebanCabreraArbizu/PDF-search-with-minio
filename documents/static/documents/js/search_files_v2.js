@@ -559,7 +559,7 @@ async function handleBatchDownload() {
     const resp = await fetch(API.mergePdfs, {
       method: 'POST',
       headers: getAuthHeaders(true),
-      body: JSON.stringify({ paths, output_name: 'documentos_seleccionados' })
+      body: JSON.stringify({ paths, output_name: 'documentos_seleccionados', output_format: 'pdf' })
     });
 
     if (!resp.ok) {
@@ -580,7 +580,44 @@ async function handleBatchDownload() {
     alert(`Error al generar PDF combinado: ${e.message || e}`);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-file-download"></i> Descargar como PDF combinado';
+    btn.innerHTML = '<i class="ti ti-files"></i> Combinar PDF';
+  }
+}
+
+async function handleBatchZipDownload() {
+  const paths = [...selectedPaths];
+  if (paths.length === 0) return;
+
+  const btn = document.getElementById('batchZipBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i> Generando ZIP...';
+
+  try {
+    const resp = await fetch(API.mergePdfs, {
+      method: 'POST',
+      headers: getAuthHeaders(true),
+      body: JSON.stringify({ paths, output_name: 'documentos_seleccionados', output_format: 'zip' })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${resp.status}`);
+    }
+
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'documentos_seleccionados.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert(`Error al generar ZIP: ${e.message || e}`);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-file-zip"></i> Descargar ZIP';
   }
 }
 
@@ -1339,6 +1376,7 @@ function bindAllEvents() {
   });
 
   /* Batch actions */
+  document.getElementById('batchZipBtn')?.addEventListener('click', handleBatchZipDownload);
   document.getElementById('batchDownloadBtn')?.addEventListener('click', handleBatchDownload);
   document.getElementById('batchClearBtn')?.addEventListener('click', () => {
     selectedPaths.clear();
