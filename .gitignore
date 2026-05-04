@@ -27,3 +27,7 @@ documents/migrations/*
 staticfiles/*
 *.pdf
 .kilo/*
+testsprite_tests/tmp/
+testsprite_tests/**/tmp/
+testsprite_tests/**/execution.lock
+testsprite_tests/**/*.log
