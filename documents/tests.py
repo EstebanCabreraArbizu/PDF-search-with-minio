@@ -18,6 +18,47 @@ from documents.views import (
 	ReindexView,
 	SyncIndexView,
 )
+from documents.utils import (
+	_detect_bank_from_text,
+	_detect_company_from_text,
+	_detect_tipo_documento_from_content,
+	_extract_tregistro_dates,
+	build_auto_storage_prefix,
+)
+
+
+class UploadMetadataInferenceUnitTests(TestCase):
+	def test_build_auto_storage_prefix_uses_planillas_without_duplicate_month_label(self):
+		prefix = build_auto_storage_prefix({
+			'año': '2026',
+			'mes': '01',
+			'razon_social': 'FACILITIES',
+			'banco': 'INTERBANK',
+			'tipo_documento': 'SCTR PENSION',
+		}, 'SEGUROS')
+
+		self.assertEqual(prefix, 'Planillas 2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION')
+		self.assertNotIn('ENERO.ENERO', prefix)
+
+	def test_extract_tregistro_dates_prioritizes_periodos_formacion(self):
+		text = '''
+		RUC 20100000000 FECHA DE INSCRIPCION 01/01/2001
+		PERIODOS DE FORMACION
+		FECHA DE INICIO 15/03/2026 FECHA DE FIN 30/06/2026
+		'''
+
+		self.assertEqual(_extract_tregistro_dates(text), ('2026', '03'))
+
+	def test_detect_company_resguardo_with_sac_variants(self):
+		self.assertEqual(_detect_company_from_text('J & V RESGUARDO S.A.C.'), 'RESGUARDO')
+		self.assertEqual(_detect_company_from_text('JV RESGUARDO SAC'), 'RESGUARDO')
+
+	def test_detect_bank_uses_filename_or_path_tokens(self):
+		self.assertEqual(_detect_bank_from_text('constancia_interbank_logo.pdf'), 'INTERBANK')
+		self.assertEqual(_detect_bank_from_text('Planillas 2026/FACILITIES/01.ENERO/BBVA/file.pdf'), 'BBVA')
+
+	def test_detect_sctr_subtype_with_accented_pension(self):
+		self.assertEqual(_detect_tipo_documento_from_content('sctr.pdf', 'SCTR PENSIÓN'), 'SCTR PENSION')
 
 
 class SearchViewFallbackTests(APITestCase):
@@ -359,7 +400,7 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 			'tipo_documento': 'SCTR PENSION',
 			'domain_code': 'SEGUROS',
 		}
-		mock_build_auto_storage_prefix.return_value = '2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION'
+		mock_build_auto_storage_prefix.return_value = 'Planillas 2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION'
 		mock_find_duplicate.return_value = None
 
 		request = self._request(files=files, post={})
@@ -375,7 +416,7 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 		self.assertEqual(response.data['files'][0]['domain'], 'SEGUROS')
 		self.assertEqual(
 			response.data['files'][0]['logical_path'],
-			'2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION/SCTR PENSION 02012026 FACILITIES.pdf'
+			'Planillas 2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION/SCTR PENSION 02012026 FACILITIES.pdf'
 		)
 
 		mock_find_duplicate.assert_called_once()
@@ -411,10 +452,10 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 			'tipo_documento': 'FIN DE MES DESTACADOS',
 			'domain_code': 'CONSTANCIA_ABONO',
 		}
-		mock_build_auto_storage_prefix.return_value = '2024/RESGUARDO/02.FEBRERO/CONSTANCIA_ABONO/FIN DE MES DESTACADOS'
+		mock_build_auto_storage_prefix.return_value = 'Planillas 2024/RESGUARDO/02.FEBRERO/BCP/FIN DE MES DESTACADOS'
 		mock_find_duplicate.return_value = SimpleNamespace(
 			document=SimpleNamespace(id='dup-preview-id'),
-			object_key='2024/RESGUARDO/02.FEBRERO/CONSTANCIA_ABONO/FIN DE MES DESTACADOS/FIN DE MES DESTACADOS_27022024.pdf',
+			object_key='Planillas 2024/RESGUARDO/02.FEBRERO/BCP/FIN DE MES DESTACADOS/FIN DE MES DESTACADOS_27022024.pdf',
 		)
 
 		request = self._request(files=files, post={})
@@ -454,7 +495,7 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 
 		mock_find_duplicate.return_value = SimpleNamespace(
 			document=SimpleNamespace(id='dup-doc-id'),
-			object_key='2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION/duplicado.pdf',
+			object_key='Planillas 2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION/duplicado.pdf',
 		)
 
 		request = self._request(files=files, post={})
@@ -509,7 +550,7 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 			'tipo_documento': 'SCTR PENSION',
 			'domain_code': 'SEGUROS',
 		}
-		mock_build_auto_storage_prefix.return_value = '2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION'
+		mock_build_auto_storage_prefix.return_value = 'Planillas 2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION'
 		mock_find_duplicate.return_value = None
 
 		mock_stat_object.return_value = SimpleNamespace(
@@ -530,7 +571,7 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 		self.assertEqual(response.data['total_uploaded'], 1)
 		self.assertEqual(
 			response.data['uploaded'][0]['path'],
-			'2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION/SCTR PENSION 02012026 FACILITIES.pdf'
+			'Planillas 2026/FACILITIES/01.ENERO/SEGUROS/SCTR PENSION/SCTR PENSION 02012026 FACILITIES.pdf'
 		)
 		self.assertTrue(response.data['uploaded'][0]['auto_routed'])
 		self.assertEqual(response.data['uploaded'][0]['domain_preview'], 'SEGUROS')
@@ -681,10 +722,10 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 
 	@patch('documents.views.Document.objects.filter')
 	def test_folders_list_groups_paths_by_current_level(self, mock_document_filter):
-		mock_document_filter.return_value.values_list.return_value = [
-			'2025/RESGUARDO/01.ENERO/BCP/archivo_1.pdf',
-			'2025/RESGUARDO/02.FEBRERO/BCP/archivo_2.pdf',
-			'2025/TREGISTRO/01.ENERO/MOV/doc_3.pdf',
+		mock_document_filter.return_value.values.return_value = [
+			{'storage_object__object_key': '2025/RESGUARDO/01.ENERO/BCP/archivo_1.pdf', 'source_path_legacy': ''},
+			{'storage_object__object_key': '2025/RESGUARDO/02.FEBRERO/BCP/archivo_2.pdf', 'source_path_legacy': ''},
+			{'storage_object__object_key': '2025/TREGISTRO/01.ENERO/MOV/doc_3.pdf', 'source_path_legacy': ''},
 		]
 
 		request = self._request(query_params={'parent': '2025/'})

@@ -1,4 +1,5 @@
 import re
+import unicodedata
 import fitz  # PyMuPDF
 from datetime import datetime
 from django.conf import settings
@@ -20,6 +21,7 @@ minio_client = Minio(
 RAZONES_SOCIALES_MAP = {
     'J & V RESGUARDO': 'RESGUARDO',
     'J&V RESGUARDO': 'RESGUARDO',
+    'JV RESGUARDO': 'RESGUARDO',
     'RESGUARDO': 'RESGUARDO',
     'LIDERMAN ALARMAS':'ALARMAS',
     'ALARMAS': 'ALARMAS',
@@ -82,6 +84,10 @@ MESES_LABEL_MAP = {
 }
 
 DEFAULT_COMPANY_PATTERNS = [
+    (r'J\s*[&Y]\s*V\s+RESGUARDO\s+SELVA(?:\s+S\.?A\.?C\.?)?', 'SELVA'),
+    (r'J\s*&\s*V\s+RESGUARDO(?:\s+S\.?A\.?C\.?)?', 'RESGUARDO'),
+    (r'J\s*Y\s*V\s+RESGUARDO(?:\s+S\.?A\.?C\.?)?', 'RESGUARDO'),
+    (r'\bJV\s+RESGUARDO(?:\s+S\.?A\.?C\.?)?', 'RESGUARDO'),
     (r'J\s*[&Y]\s*V\s+RESGUARDO', 'RESGUARDO'),
     (r'LIDERMAN\s+FACILITIES', 'FACILITIES'),
     (r'\bFACILITIES\b', 'FACILITIES'),
@@ -89,6 +95,18 @@ DEFAULT_COMPANY_PATTERNS = [
     (r'\bAZZARO\b', 'AZZARO'),
     (r'\bSELVA\b', 'SELVA'),
 ]
+
+BANK_PATTERNS = [
+    (r'\bBBVA\b', 'BBVA'),
+    (r'\bBCP\b', 'BCP'),
+    (r'(?<![A-Z0-9])INTER[\s_\-]*BANK(?![A-Z0-9])', 'INTERBANK'),
+    (r'(?<![A-Z0-9])SCOTIA[\s_\-]*BANK(?![A-Z0-9])', 'SCOTIABANK'),
+]
+
+
+def _strip_accents(value):
+    normalized = unicodedata.normalize('NFKD', str(value or ''))
+    return ''.join(ch for ch in normalized if not unicodedata.combining(ch))
 
 
 def _safe_hint_value(hints, *keys):
@@ -150,51 +168,38 @@ def _extract_tregistro_dates(text):
     Especializado para T-Registro: busca Fecha de Inicio o Cese.
     Prioriza estas fechas sobre cualquier otra encontrada en el documento.
     """
-    text_upper = str(text or '').upper()
-    
-    # Patrones para Fecha de Inicio (Alta)
-    # Ejemplo: "FECHA DE INICIO: 01/01/2026", "FECHA INICIO 01-01-2026", "FECHA DE INICIO DE LA RELACION LABORAL: 01/01/2026"
-    inicio_patterns = [
-        r'FECHA\s+DE\s+INICIO\s+DE\s+LA\s+RELACION\s+LABORAL[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'FECHA\s+DE\s+INICIO[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'FECHA\s+INICIO[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'F\.\s*INICIO[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})'
-        r'Fecha\s+de\s+incio\s+de\s+la\s+relación\s+laboral[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'Fecha\s+de\s+inicio[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'Fecha\s+Inicio[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'F\.\s*Inicio[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})'
+    text_upper = _strip_accents(text).upper()
+    date_pattern = r'(\d{2})[/-](\d{2})[/-](20\d{2})'
 
+    periodos_match = re.search(
+        rf'PERIODOS?\s+DE\s+FORMACION(?P<block>.{{0,1200}})',
+        text_upper,
+        re.DOTALL,
+    )
+    if periodos_match:
+        block = periodos_match.group('block')
+        for label in ('INICIO', 'ALTA', 'BAJA', 'CESE'):
+            match = re.search(rf'FECHA\s+(?:DE\s+)?{label}[^\d]{{0,80}}{date_pattern}', block)
+            if match:
+                _, mes, año = match.groups()
+                return año, mes
+
+    labeled_patterns = [
+        rf'FECHA\s+DE\s+INICIO\s+DE\s+LA\s+RELACION\s+LABORAL[^\d]{{0,80}}{date_pattern}',
+        rf'FECHA\s+(?:DE\s+)?INICIO[^\d]{{0,80}}{date_pattern}',
+        rf'FECHA\s+(?:DE\s+)?ALTA[^\d]{{0,80}}{date_pattern}',
+        rf'F\.\s*INICIO[^\d]{{0,80}}{date_pattern}',
+        rf'FECHA\s+(?:DE\s+)?BAJA[^\d]{{0,80}}{date_pattern}',
+        rf'FECHA\s+(?:DE\s+)?CESE[^\d]{{0,80}}{date_pattern}',
+        rf'F\.\s*(?:BAJA|CESE)[^\d]{{0,80}}{date_pattern}',
     ]
-    
-    for pattern in inicio_patterns:
-        match = re.search(pattern, text_upper)
+
+    for pattern in labeled_patterns:
+        match = re.search(pattern, text_upper, re.DOTALL)
         if match:
             _, mes, año = match.groups()
-            # Validar que sea un año coherente para inicio laboral (no nacimiento)
             if int(año) >= 1990:
                 return año, mes
-            
-    # Patrones para Fecha de Cese (Baja)
-    cese_patterns = [
-        r'FECHA\s+DE\s+BAJA[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'FECHA\s+BAJA[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'F\.\s*BAJA[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'FECHA\s+DE\s+CESE[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'FECHA\s+CESE[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'F\.\s*CESE[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})'
-        r'Fecha\s+de\s+baja[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'Fecha\s+Baja[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'F\.\s*Baja[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'Fecha\s+de\s+cese[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'Fecha\s+Cese[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})',
-        r'F\.\s*Cese[:\s]+(\d{2})[/-](\d{2})[/-](20\d{2})'
-    ]
-    
-    for pattern in cese_patterns:
-        match = re.search(pattern, text_upper)
-        if match:
-            _, mes, año = match.groups()
-            return año, mes
 
     return None, None
 
@@ -221,15 +226,16 @@ def _detect_company_from_text(text):
 
 
 def _detect_bank_from_text(text):
-    text_upper = str(text or '').upper()
-    for bank in BANCOS_VALIDOS:
-        if bank in text_upper:
+    text_upper = _strip_accents(text).upper()
+    for pattern, bank in BANK_PATTERNS:
+        if re.search(pattern, text_upper):
             return bank
     return ''
 
 
 def _detect_tipo_documento_from_content(filename, text):
-    joined = f"{filename or ''} {text or ''}".upper()
+    joined = _strip_accents(f"{filename or ''} {text or ''}").upper()
+    tokens = set(re.findall(r'\b\w+\b', joined))
 
     if 'T-REGISTRO' in joined or 'TREGISTRO' in joined:
         if re.search(r'\bBAJA\b', joined):
@@ -239,9 +245,9 @@ def _detect_tipo_documento_from_content(filename, text):
         return 'TREGISTRO'
 
     if 'SCTR' in joined:
-        if 'PENSION' in joined:
+        if 'PENSION' in tokens:
             return 'SCTR PENSION'
-        if 'SALUD' in joined:
+        if 'SALUD' in tokens:
             return 'SCTR SALUD'
         return 'SCTR'
 
@@ -297,7 +303,7 @@ def infer_upload_metadata(filename, pdf_text=None, hints=None):
             # NO usar fechas genéricas (que podrían ser de nacimiento)
             text_year, text_month = '', ''
 
-    year = hint_year or filename_year or text_year or str(base_meta.get('año') or datetime.now().year)
+    year = hint_year or text_year or filename_year or str(base_meta.get('año') or datetime.now().year)
 
     month = _normalize_month(hint_month)
     if not month:
@@ -355,14 +361,14 @@ def build_auto_storage_prefix(metadata, domain_code):
 
     header_path = f"Planillas {year}/{company}/{month}.{month_label}"
     if domain_code == 'TREGISTRO':
-        return f"{header_path}.{month_label}/TREGISTRO/{tipo}"
+        return f"{header_path}/TREGISTRO/{tipo}"
 
     if domain_code == 'SEGUROS':
-        return f"{header_path}.{month_label}/SEGUROS/{tipo}"
+        return f"{header_path}/SEGUROS/{tipo}"
 
     bank = _sanitize_path_segment(metadata.get('banco'), default_value='GENERAL', max_len=80)
     
-    return f"{header_path}.{month_label}/{bank}/{tipo}"
+    return f"{header_path}/{bank}/{tipo}"
 
 
 def _extract_text_and_codes_from_pdf_bytes(pdf_bytes):

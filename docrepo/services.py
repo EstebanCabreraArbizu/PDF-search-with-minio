@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
@@ -50,6 +51,11 @@ def _safe_int(value: Any, default: int) -> int:
         return int(str(value).strip())
     except (TypeError, ValueError):
         return default
+
+
+def _normalize_search_text(value: Any) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch)).upper()
 
 
 def _extract_filename(object_key: str) -> str:
@@ -179,9 +185,11 @@ def _insurance_subtype(joined_text: str, insurance_type: CatalogInsuranceType):
     if not insurance_type.allows_subtype:
         return None
 
-    if "salud" in joined_text:
+    tokens = set(re.findall(r"\b\w+\b", _normalize_search_text(joined_text)))
+
+    if "SALUD" in tokens:
         code, name = "SALUD", "Salud"
-    elif "pension" in joined_text:
+    elif "PENSION" in tokens:
         code, name = "PENSION", "Pension"
     else:
         return None
