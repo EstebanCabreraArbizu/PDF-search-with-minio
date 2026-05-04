@@ -23,16 +23,25 @@ RAZONES_SOCIALES_MAP = {
     'J&V RESGUARDO': 'RESGUARDO',
     'JV RESGUARDO': 'RESGUARDO',
     'RESGUARDO': 'RESGUARDO',
+    'J & V RESGUARDO S.A.C.': 'RESGUARDO',
+    'J&V RESGUARDO S.A.C.': 'RESGUARDO',
+    'JV RESGUARDO S.A.C.': 'RESGUARDO',
+    'RESGUARDO S.A.C.': 'RESGUARDO',
     'LIDERMAN ALARMAS':'ALARMAS',
+    'LIDERMAN ALARMAS S.A.C.': 'ALARMAS',
     'ALARMAS': 'ALARMAS',
+    'ALARMAS S.A.C.': 'ALARMAS',
     'AZZARO': 'AZZARO',
+    'AZZARO S.A.C.': 'AZZARO',
     'LIDERMAN FACILITIES': 'FACILITIES',
     'FACILITIES': 'FACILITIES',
     'LIDERMAN SERVICIOS': 'LIDERMAN SERVICIOS',
+    'LIDERMAN SERVICIOS S.A.C.': 'LIDERMAN SERVICIOS',
     'LIDERMAN': 'LIDERMAN SERVICIOS',
     'J&V RESGUARDO SELVA': 'SELVA',
     'J & V RESGUARDO SELVA': 'SELVA',
     'SELVA': 'SELVA',
+    'SELVA S.A.C.': 'SELVA',
 }
 
 RAZONES_SOCIALES_VALIDAS = sorted(set(RAZONES_SOCIALES_MAP.values()))
@@ -86,14 +95,18 @@ MESES_LABEL_MAP = {
 DEFAULT_COMPANY_PATTERNS = [
     (r'J\s*[&Y]\s*V\s+RESGUARDO\s+SELVA(?:\s+S\.?A\.?C\.?)?', 'SELVA'),
     (r'J\s*&\s*V\s+RESGUARDO(?:\s+S\.?A\.?C\.?)?', 'RESGUARDO'),
-    (r'J\s*Y\s*V\s+RESGUARDO(?:\s+S\.?A\.?C\.?)?', 'RESGUARDO'),
+    (r'J\s*[&Y]\s*V\s+RESGUARDO(?:\s+S\.?A\.?C\.?)?', 'RESGUARDO'),
     (r'\bJV\s+RESGUARDO(?:\s+S\.?A\.?C\.?)?', 'RESGUARDO'),
     (r'J\s*[&Y]\s*V\s+RESGUARDO', 'RESGUARDO'),
+    (r'RESGUARDO\s+S\.?A\.?C\.?', 'RESGUARDO'),
+    (r'SELVA\s+S\.?A\.?C\.?', 'SELVA'),
     (r'LIDERMAN\s+FACILITIES', 'FACILITIES'),
     (r'\bFACILITIES\b', 'FACILITIES'),
-    (r'\bALARMAS\b', 'ALARMAS'),
-    (r'\bAZZARO\b', 'AZZARO'),
-    (r'\bSELVA\b', 'SELVA'),
+    (r'LIDERMAN\s+ALARMAS(?:\s+S\.?A\.?C\.?)?', 'ALARMAS'),
+    (r'\bALARMAS(?:\s+S\.?A\.?C\.?)?', 'ALARMAS'),
+    (r'AZZARO(?:\s+S\.?A\.?C\.?)?', 'AZZARO'),
+    (r'LIDERMAN\s+SERVICIOS(?:\s+S\.?A\.?C\.?)?', 'LIDERMAN SERVICIOS'),
+    (r'\bLIDERMAN\b(?!\s+FACILITIES)', 'LIDERMAN SERVICIOS'),
 ]
 
 BANK_PATTERNS = [
@@ -238,9 +251,11 @@ def _detect_tipo_documento_from_content(filename, text):
     tokens = set(re.findall(r'\b\w+\b', joined))
 
     if 'T-REGISTRO' in joined or 'TREGISTRO' in joined:
-        if re.search(r'\bBAJA\b', joined):
+        header_text = _get_document_header(text)
+        header_upper = header_text.upper()
+        if re.search(r'\bBAJA\b', header_upper):
             return 'BAJA'
-        if re.search(r'\bALTA\b', joined):
+        if re.search(r'\bALTA\b', header_upper):
             return 'ALTA'
         return 'TREGISTRO'
 
@@ -264,6 +279,22 @@ def _detect_tipo_documento_from_content(filename, text):
         return 'PLANILLA HABERES'
 
     return extract_tipo_from_filename(filename)
+
+
+def _get_document_header(text, max_chars=4000):
+    """
+    Extrae la cabecera del documento (primeros max_chars caracteres).
+    Esto permite detectar ALTA/BAJA en los títulos/encabezados sin falsos
+    positivos por historiales de reingresantes en el cuerpo del PDF.
+    """
+    if not text:
+        return ''
+    header_cut = text[:max_chars]
+    cut_marker = '\n\n\n'
+    marker_pos = header_cut.find(cut_marker)
+    if marker_pos > 0 and marker_pos < max_chars // 2:
+        return header_cut[:marker_pos]
+    return header_cut
 
 
 def infer_upload_metadata(filename, pdf_text=None, hints=None):
