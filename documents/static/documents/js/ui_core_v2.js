@@ -54,10 +54,29 @@
         async ensureAuth() {
             const token = this.getAuthToken();
             if (!token) {
+                this.applyPermissionVisibility({});
+                this.redirectToLogin();
+                return null;
+            }
+            try {
+                const isValid = await this.validateToken(API_PATHS.me, token);
+                if (!isValid) {
+                    this.clearSession({ updateUi: false });
+                    this.applyPermissionVisibility({});
+                    this.redirectToLogin();
+                    return null;
+                }
+            } catch (_) {
+                this.clearSession({ updateUi: false });
+                this.applyPermissionVisibility({});
                 this.redirectToLogin();
                 return null;
             }
             return token;
+        },
+
+        async ensureAuthToken() {
+            return this.ensureAuth();
         },
 
         redirectToLogin(loginUrl = '/ui/login/', options = {}) {
@@ -102,15 +121,38 @@
                 user = {};
             }
 
-            const username = user.username || 'admin';
+            const username = user.username || 'Validando...';
+            const groups = Array.isArray(user.groups) ? user.groups.map(g => String(g).toLowerCase()) : [];
+            const canManage = user.can_manage_files === true || groups.includes('planillas');
             const isStaff = user.is_staff === true || user.role === 'admin';
             const nameEl = document.getElementById('sidebarUserName');
             const roleEl = document.getElementById('sidebarUserRole');
             const avatarEl = document.querySelector('.sidebar-avatar');
 
             if (nameEl) nameEl.textContent = username;
-            if (roleEl) roleEl.textContent = isStaff ? 'ADMINISTRADOR' : 'USUARIO';
+            if (roleEl) {
+                roleEl.textContent = canManage ? 'PLANILLAS' : (groups.includes('seleccion') ? 'SELECCION' : (isStaff ? 'ADMINISTRADOR' : 'USUARIO'));
+            }
             if (avatarEl && username) avatarEl.textContent = username.slice(0, 2).toUpperCase();
+            this.applyPermissionVisibility(user);
+        },
+
+        applyPermissionVisibility(user = {}) {
+            const groups = Array.isArray(user.groups) ? user.groups.map(g => String(g).toLowerCase()) : [];
+            const canManage = user.can_manage_files === true || groups.includes('planillas');
+            const allowedDomains = new Set(
+                (Array.isArray(user.allowed_domains) ? user.allowed_domains : [])
+                    .map(domain => String(domain).toUpperCase())
+            );
+
+            document.querySelectorAll('[data-requires-manage="true"]').forEach(el => {
+                el.classList.toggle('hidden', !canManage);
+            });
+
+            document.querySelectorAll('[data-domain]').forEach(el => {
+                const domain = String(el.getAttribute('data-domain') || '').toUpperCase();
+                el.classList.toggle('hidden', !allowedDomains.has(domain));
+            });
         },
 
         async logoutAndRedirect(options = {}) {
@@ -154,7 +196,12 @@
                 const response = await fetch(meUrl, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                return response.ok;
+                if (!response.ok) return false;
+                const user = await response.json().catch(() => null);
+                if (user) {
+                    localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+                }
+                return true;
             } catch (e) {
                 return false;
             }
@@ -215,6 +262,109 @@
             };
             toast.querySelector('.toast-close').onclick = remove;
             setTimeout(remove, 5000);
+        },
+
+        extractRequestedCodes(params) {
+            if (!params || typeof params.getAll !== 'function') return [];
+            const values = [
+                ...params.getAll('codigos'),
+                ...params.getAll('codigo_empleado'),
+                ...params.getAll('dni')
+            ];
+            return [...new Set(values.map(v => String(v || '').trim()).filter(Boolean))];
+        },
+
+        findMissingCodes(requestedCodes, results) {
+            const found = new Set();
+            (results || []).forEach(doc => {
+                (doc.employee_codes || doc.codigos_match || []).forEach(code => {
+                    if (code) found.add(String(code).trim());
+                });
+                const metadata = doc.metadata || {};
+                [metadata.dni, metadata.codigo_empleado, metadata.employee_code].forEach(code => {
+                    if (code) found.add(String(code).trim());
+                });
+            });
+            return (requestedCodes || []).filter(code => !found.has(String(code).trim()));
+        },
+
+        showMissingCodesModal(missingCodes, options = {}) {
+            const missing = [...new Set((missingCodes || []).map(code => String(code).trim()).filter(Boolean))];
+            document.querySelector('.missing-codes-backdrop')?.remove();
+            if (missing.length === 0) return;
+
+            const backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop missing-codes-backdrop';
+            backdrop.setAttribute('role', 'dialog');
+            backdrop.setAttribute('aria-modal', 'true');
+            const title = options.domain === 'constancias' ? 'Códigos no encontrados' : 'DNIs no encontrados';
+            const label = options.domain === 'constancias' ? 'códigos' : 'DNIs';
+
+            backdrop.innerHTML = `
+                <div class="modal-card acrylic-surface missing-codes-modal">
+                    <div class="modal-header">
+                        <span class="modal-title"><i class="ti ti-user-question"></i> ${title}</span>
+                    </div>
+                    <div class="modal-body">
+                        <p>Se buscaron ${DocSearchCore.safeText(String((options.requested || []).length))} ${label}; ${missing.length} no tuvieron resultados.</p>
+                        <div class="missing-codes-list">
+                            ${missing.map(code => `<code>${DocSearchCore.safeText(code)}</code>`).join('')}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-ghost missing-export-txt">Exportar .txt</button>
+                        <button type="button" class="btn btn-ghost missing-export-csv">Exportar .csv</button>
+                        <button type="button" class="btn btn-primary missing-close">Cerrar</button>
+                    </div>
+                </div>
+            `;
+
+            const close = () => backdrop.remove();
+            backdrop.querySelector('.missing-close')?.addEventListener('click', close);
+            backdrop.querySelector('.missing-export-txt')?.addEventListener('click', () => {
+                DocSearchCore.downloadTextFile(missing.join('\n'), `${label.toLowerCase()}_no_encontrados.txt`, 'text/plain');
+            });
+            backdrop.querySelector('.missing-export-csv')?.addEventListener('click', () => {
+                DocSearchCore.downloadTextFile(`codigo\n${missing.join('\n')}`, `${label.toLowerCase()}_no_encontrados.csv`, 'text/csv');
+            });
+            backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+            document.body.appendChild(backdrop);
+        },
+
+        showSearchError(message, options = {}) {
+            document.querySelector('.search-error-backdrop')?.remove();
+            const backdrop = document.createElement('div');
+            backdrop.className = 'search-error-backdrop';
+            backdrop.innerHTML = `
+                <div class="search-error-card acrylic-surface" role="alertdialog" aria-modal="true">
+                    <button type="button" class="search-error-close" aria-label="Cerrar">&times;</button>
+                    <i class="ti ti-alert-circle search-error-icon"></i>
+                    <h3>Error en la búsqueda</h3>
+                    <p>${DocSearchCore.safeText(message || 'Ocurrió un error inesperado.')}</p>
+                    <button type="button" class="btn btn-primary search-error-retry">
+                        <i class="ti ti-refresh"></i> Reintentar
+                    </button>
+                </div>
+            `;
+            const close = () => backdrop.remove();
+            backdrop.querySelector('.search-error-close')?.addEventListener('click', close);
+            backdrop.querySelector('.search-error-retry')?.addEventListener('click', () => {
+                close();
+                if (typeof options.retry === 'function') options.retry();
+            });
+            document.body.appendChild(backdrop);
+        },
+
+        downloadTextFile(content, filename, type = 'text/plain') {
+            const blob = new Blob([content], { type: `${type};charset=utf-8` });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
         },
 
         initTheme() {
@@ -303,7 +453,8 @@
                 count: 0,
                 currentPage: 1,
                 isMasivo: false,
-                loading: false
+                loading: false,
+                lastRequestedCodes: []
             };
 
             // DOM Elements
@@ -322,6 +473,7 @@
                 await DocSearchCore.ensureAuth();
                 setupListeners();
                 DocSearchCore.initTheme();
+                DocSearchCore.renderSidebarUser();
                 renderUser();
             };
 
@@ -441,6 +593,13 @@
                     if (onBeforeSearch) {
                         finalParams = onBeforeSearch(params, state.isMasivo);
                     }
+                    if (!finalParams) {
+                        state.loading = false;
+                        if (submitBtn) submitBtn.disabled = false;
+                        return;
+                    }
+
+                    state.lastRequestedCodes = DocSearchCore.extractRequestedCodes(finalParams);
 
                     const url = `${DocSearchCore.API_PATHS.search[type]}?${finalParams.toString()}`;
                     const data = await DocSearchCore.fetchJson(url);
@@ -452,8 +611,17 @@
                         console.error('API results is not an array:', data);
                         state.results = [];
                     }
-                    
+
                     app.renderResults(state.results, state.currentPage);
+                    if (state.isMasivo && state.lastRequestedCodes.length > 0) {
+                        const missingCodes = Array.isArray(data.codigos_no_encontrados)
+                            ? data.codigos_no_encontrados
+                            : DocSearchCore.findMissingCodes(state.lastRequestedCodes, state.results);
+                        DocSearchCore.showMissingCodesModal(missingCodes, {
+                            requested: state.lastRequestedCodes,
+                            domain: type
+                        });
+                    }
                 } catch (err) {
                     // Show error state instead of toast
                     renderErrorState(err.message);
@@ -489,14 +657,12 @@
                             <div class="error-container text-center p-6">
                                 <i class="ti ti-alert-circle text-danger mb-3" style="font-size: 2rem;"></i>
                                 <h4 class="text-danger mb-2">Error en la búsqueda</h4>
-                                <p class="text-muted mb-4">${DocSearchCore.safeText(errorMessage)}</p>
-                                <button class="btn btn-primary" onclick="window._currentApp.search(${state.currentPage})">
-                                    <i class="ti ti-refresh me-2"></i>Reintentar
-                                </button>
+                                <p class="text-muted mb-0">Revisa el mensaje principal y vuelve a intentar.</p>
                             </div>
                         </td>
                     </tr>
                 `;
+                DocSearchCore.showSearchError(errorMessage, { retry: () => app.search(state.currentPage) });
             };
 
             const renderResults = (customResults) => {
@@ -664,6 +830,8 @@
         },
 
         initGlobalUI() {
+            DocSearchCore.applyPermissionVisibility({});
+
             // Check for both possible IDs for compatibility
             const btnTheme = document.getElementById('themeToggleBtn') || document.getElementById('btnThemeToggle');
             if (btnTheme) {

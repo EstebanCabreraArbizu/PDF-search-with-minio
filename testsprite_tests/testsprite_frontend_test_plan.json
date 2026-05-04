@@ -1,0 +1,142 @@
+[
+  {
+    "id": "TC001",
+    "title": "Iniciar sesión con credenciales válidas y acceder al módulo inicial",
+    "description": "Este caso verifica que un usuario puede autenticarse desde la pantalla de login y es redirigido correctamente al módulo de constancias con la sesión activa.",
+    "category": "Uso de credenciales de prueba para pruebas y validación",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /ui/login/."
+      },
+      {
+        "type": "action",
+        "description": "Fill {{LOGIN_USER}} into the username field."
+      },
+      {
+        "type": "action",
+        "description": "Fill {{LOGIN_PASSWORD}} into the password field."
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the constancias search page."
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC002",
+    "title": "Cerrar sesión y bloquear acceso a módulos protegidos",
+    "description": "Este caso verifica que al cerrar sesión el usuario ya no puede acceder a páginas protegidas y se le bloquea o redirige al login.",
+    "category": "Uso de credenciales de prueba para pruebas y validación",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /ui/login/."
+      },
+      {
+        "type": "action",
+        "description": "Fill {{LOGIN_USER}} into the username field."
+      },
+      {
+        "type": "action",
+        "description": "Fill {{LOGIN_PASSWORD}} into the password field."
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form."
+      },
+      {
+        "type": "action",
+        "description": "Click the logout control."
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /ui/constancias/."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify access is blocked and the user is redirected to the login page."
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC003",
+    "title": "Navegar entre módulos desde el sidebar con sesión activa",
+    "description": "Este caso verifica que un usuario autenticado puede navegar entre Constancias, Seguros y T-Registro usando la navegación principal sin perder la sesión.",
+    "category": "Uso de credenciales de prueba para pruebas y validación",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /ui/login/."
+      },
+      {
+        "type": "action",
+        "description": "Fill {{LOGIN_USER}} into the username field."
+      },
+      {
+        "type": "action",
+        "description": "Fill {{LOGIN_PASSWORD}} into the password field."
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form."
+      },
+      {
+        "type": "action",
+        "description": "Click the sidebar navigation item for seguros."
+      },
+      {
+        "type": "action",
+        "description": "Click the sidebar navigation item for t-registro."
+      },
+      {
+        "type": "action",
+        "description": "Click the sidebar navigation item for constancias."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the constancias search page is displayed."
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC004",
+    "title": "Mostrar error al iniciar sesión con credenciales inválidas",
+    "description": "Este caso verifica que al enviar credenciales inválidas el usuario permanece en la vista de login y ve una notificación de error.",
+    "category": "Uso de credenciales de prueba para pruebas y validación",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /ui/login/."
+      },
+      {
+        "type": "action",
+        "description": "Fill invalid_user into the username field."
+      },
+      {
+        "type": "action",
+        "description": "Fill invalid_password into the password field."
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an authentication error notification is visible."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user remains on the login page."
+      }
+    ],
+    "priority": "Low"
+  }
+]

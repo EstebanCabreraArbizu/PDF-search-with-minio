@@ -40,6 +40,10 @@ let selectedPaths = new Set();
 let pendingUploadMap = new Map(); // filename → { file, previewItem }
 let syncRunning = false;
 let syncShouldStop = false;
+let uploadMode = 'auto';
+let selectedManualFolder = '';
+let manualFolderFromPreview = false;
+let classifyPreviewRequestId = 0;
 
 /* ── Helpers de autenticación ───────────────────────────────────────── */
 function getAuthHeaders(includeContentType = true) {
@@ -161,7 +165,8 @@ async function restoreSession() {
     const raw = localStorage.getItem(USER_KEY);
     if (raw) {
       currentUser = JSON.parse(raw);
-      isAdmin = currentUser?.role === 'admin' || currentUser?.is_staff === true;
+      const groups = Array.isArray(currentUser?.groups) ? currentUser.groups.map(g => String(g).toLowerCase()) : [];
+      isAdmin = currentUser?.can_manage_files === true || groups.includes('planillas');
     }
   } catch (_) { }
 
@@ -557,7 +562,7 @@ async function handleBatchDownload() {
     const resp = await fetch(API.mergePdfs, {
       method: 'POST',
       headers: getAuthHeaders(true),
-      body: JSON.stringify({ paths, output_name: 'documentos_seleccionados' })
+      body: JSON.stringify({ paths, output_name: 'documentos_seleccionados', output_format: 'pdf' })
     });
 
     if (!resp.ok) {
@@ -578,7 +583,44 @@ async function handleBatchDownload() {
     alert(`Error al generar PDF combinado: ${e.message || e}`);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-file-download"></i> Descargar como PDF combinado';
+    btn.innerHTML = '<i class="ti ti-files"></i> Combinar PDF';
+  }
+}
+
+async function handleBatchZipDownload() {
+  const paths = [...selectedPaths];
+  if (paths.length === 0) return;
+
+  const btn = document.getElementById('batchZipBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i> Generando ZIP...';
+
+  try {
+    const resp = await fetch(API.mergePdfs, {
+      method: 'POST',
+      headers: getAuthHeaders(true),
+      body: JSON.stringify({ paths, output_name: 'documentos_seleccionados', output_format: 'zip' })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${resp.status}`);
+    }
+
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'documentos_seleccionados.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert(`Error al generar ZIP: ${e.message || e}`);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-file-zip"></i> Descargar ZIP';
   }
 }
 
@@ -600,11 +642,193 @@ function initDropZone() {
     if (files.length) triggerClassifyPreview(files);
   });
 
-  fileInput.addEventListener('change', () => {
+fileInput.addEventListener('change', () => {
     const files = [...fileInput.files];
     if (files.length) triggerClassifyPreview(files);
     fileInput.value = '';
   });
+}
+
+function initUploadModeToggle() {
+  const autoOpt = document.getElementById('uploadModeAuto');
+  const manualOpt = document.getElementById('uploadModeManual');
+  const manualControls = document.getElementById('uploadManualControls');
+  const useCurrentBtn = document.getElementById('useCurrentFolderBtn');
+  const browseBtn = document.getElementById('browseFoldersBtn');
+  const manualInput = document.getElementById('manualFolderInput');
+  const folderBrowserResult = document.getElementById('folderBrowserResult');
+  const selectedFolderPath = document.getElementById('selectedFolderPath');
+
+  if (!autoOpt || !manualOpt) return;
+
+  function setUploadMode(mode) {
+    uploadMode = mode;
+    manualFolderFromPreview = false;
+    if (mode === 'auto') {
+      autoOpt.checked = true;
+      manualOpt.closest('.auto-option')?.classList.add('active');
+      manualOpt.closest('.manual-option')?.classList.remove('active');
+      manualControls?.classList.add('hidden');
+      selectedManualFolder = '';
+    } else {
+      manualOpt.checked = true;
+      manualOpt.closest('.manual-option')?.classList.add('active');
+      autoOpt.closest('.auto-option')?.classList.remove('active');
+      manualControls?.classList.remove('hidden');
+      if (rutaActiva.length > 0) {
+        selectedManualFolder = rutaActiva.join('/');
+      } else {
+        selectedManualFolder = normalizeFolderValue(manualInput?.value || '');
+      }
+    }
+  }
+
+  autoOpt.addEventListener('change', () => setUploadMode('auto'));
+  manualOpt.addEventListener('change', () => setUploadMode('manual'));
+
+  useCurrentBtn?.addEventListener('click', () => {
+    if (rutaActiva.length > 0) {
+      selectedManualFolder = rutaActiva.join('/');
+      manualFolderFromPreview = false;
+      manualInput.value = selectedManualFolder;
+      if (folderBrowserResult) {
+        folderBrowserResult.classList.remove('hidden');
+        if (selectedFolderPath) selectedFolderPath.textContent = selectedManualFolder;
+      }
+    } else {
+      alert('No hay una carpeta activa en el explorador.');
+    }
+  });
+
+  browseBtn?.addEventListener('click', async () => {
+    const existingBackdrop = document.querySelector('.folder-browser-backdrop');
+    if (existingBackdrop) existingBackdrop.remove();
+
+    let currentPath = rutaActiva.length > 0 ? rutaActiva.join('/') + '/' : '';
+
+    function buildBreadcrumb(path) {
+      const clean = path ? path.replace(/\/+$/, '') : '';
+      const parts = clean ? clean.split('/') : [];
+      const crumbs = [];
+      let accumulated = '';
+      for (const part of parts) {
+        accumulated += part + '/';
+        crumbs.push({ name: part, path: accumulated });
+      }
+      return crumbs;
+    }
+
+    function closeBrowser() {
+      document.querySelector('.folder-browser-backdrop')?.remove();
+    }
+
+    function renderFolderBrowser(path, folders, breadcrumb) {
+      const backdrop = document.querySelector('.folder-browser-backdrop') || (() => {
+        const el = document.createElement('div');
+        el.className = 'modal-backdrop folder-browser-backdrop';
+        el.setAttribute('role', 'dialog');
+        el.setAttribute('aria-modal', 'true');
+        el.addEventListener('click', e => { if (e.target === el) closeBrowser(); });
+        document.body.appendChild(el);
+        return el;
+      })();
+
+      const crumbs = buildBreadcrumb(path);
+      backdrop.innerHTML = `
+        <div class="modal-card folder-browser-modal acrylic-surface">
+          <div class="modal-header">
+            <span class="modal-title"><i class="ti ti-folder"></i> Examinar carpetas</span>
+            <button type="button" class="btn btn-ghost btn-sm folder-browser-close" aria-label="Cerrar">&times;</button>
+          </div>
+          <div class="modal-body" style="padding:0;overflow:hidden;">
+            ${crumbs.length > 0 ? `
+              <div class="folder-browser-breadcrumb">
+                <button type="button" class="btn btn-ghost btn-sm crumb-home" data-path="">Raíz</button>
+                ${crumbs.map((c, i) => `
+                  <span class="crumb-sep">/</span>
+                  <button type="button" class="btn btn-ghost btn-sm crumb-btn" data-path="${c.path}">${safeText(c.name)}</button>
+                `).join('')}
+              </div>
+            ` : ''}
+            <div class="folder-browser-list">
+              ${folders.length === 0 ? `
+                <div class="folder-browser-empty">No hay subcarpetas en esta ubicación.</div>
+              ` : folders.map(f => `
+                <div class="folder-browser-item">
+                  <span class="folder-browser-item-name"><i class="ti ti-folder"></i> ${safeText(f.name)}</span>
+                  <div class="folder-browser-item-actions">
+                    <button type="button" class="btn btn-ghost btn-sm folder-browser-open" data-path="${f.path}" title="Entrar">
+                      <i class="ti ti-arrow-right"></i> Entrar
+                    </button>
+                    <button type="button" class="btn btn-sm folder-browser-pick" data-path="${f.path.replace(/\/$/, '')}" title="Seleccionar esta carpeta">
+                      <i class="ti ti-check"></i> Seleccionar
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="modal-footer">
+            <span class="folder-browser-hint">Usa <strong>Entrar</strong> para navegar o <strong>Seleccionar</strong> para usar esta carpeta</span>
+            <button type="button" class="btn btn-ghost folder-browser-cancel">Cancelar</button>
+          </div>
+        </div>
+      `;
+
+      backdrop.querySelector('.folder-browser-close')?.addEventListener('click', closeBrowser);
+      backdrop.querySelector('.folder-browser-cancel')?.addEventListener('click', closeBrowser);
+      backdrop.querySelectorAll('.crumb-btn').forEach(btn => {
+        btn.addEventListener('click', () => loadFolderLevel(btn.dataset.path));
+      });
+      backdrop.querySelector('.crumb-home')?.addEventListener('click', () => loadFolderLevel(''));
+      backdrop.querySelectorAll('.folder-browser-open').forEach(btn => {
+        btn.addEventListener('click', () => loadFolderLevel(btn.dataset.path));
+      });
+      backdrop.querySelectorAll('.folder-browser-pick').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const chosen = btn.dataset.path;
+          selectedManualFolder = chosen;
+          manualFolderFromPreview = false;
+          manualInput.value = chosen;
+          if (folderBrowserResult) {
+            folderBrowserResult.classList.remove('hidden');
+            if (selectedFolderPath) selectedFolderPath.textContent = chosen;
+          }
+          closeBrowser();
+        });
+      });
+    }
+
+    async function loadFolderLevel(path) {
+      currentPath = path;
+      const params = new URLSearchParams();
+      if (path) params.set('folder', path);
+      try {
+        const data = await fetchJson(`${API.foldersList}?${params}`, { headers: getAuthHeaders() });
+        renderFolderBrowser(path, data.folders || [], data.breadcrumb || []);
+      } catch (e) {
+        alert('Error al cargar carpetas: ' + (e.message || e));
+        closeBrowser();
+      }
+    }
+
+    await loadFolderLevel(currentPath);
+  });
+
+  manualInput?.addEventListener('input', () => {
+    manualFolderFromPreview = false;
+    selectedManualFolder = normalizeFolderValue(manualInput.value);
+    if (folderBrowserResult) {
+      if (selectedManualFolder) {
+        folderBrowserResult.classList.remove('hidden');
+        if (selectedFolderPath) selectedFolderPath.textContent = selectedManualFolder;
+      } else {
+        folderBrowserResult.classList.add('hidden');
+      }
+    }
+  });
+
+  setUploadMode('auto');
 }
 
 function getSuggestedFolder(item) {
@@ -623,6 +847,33 @@ function normalizeFolderValue(path) {
 function folderLabel(path) {
   const normalized = normalizeFolderValue(path);
   return normalized ? formatPathLabel(normalized) : 'Raiz del repositorio';
+}
+
+function resetPreviewRoutingState() {
+  document.querySelector('.classify-modal-backdrop')?.remove();
+  document.querySelector('.duplicate-warning-banner')?.remove();
+
+  if (!manualFolderFromPreview) return;
+
+  uploadMode = 'auto';
+  selectedManualFolder = '';
+  manualFolderFromPreview = false;
+
+  const autoOpt = document.getElementById('uploadModeAuto');
+  const manualOpt = document.getElementById('uploadModeManual');
+  const manualControls = document.getElementById('uploadManualControls');
+  const manualInput = document.getElementById('manualFolderInput');
+  const folderBrowserResult = document.getElementById('folderBrowserResult');
+  const selectedFolderPath = document.getElementById('selectedFolderPath');
+
+  if (autoOpt) autoOpt.checked = true;
+  if (manualOpt) manualOpt.checked = false;
+  document.querySelector('.auto-option')?.classList.add('active');
+  document.querySelector('.manual-option')?.classList.remove('active');
+  manualControls?.classList.add('hidden');
+  if (manualInput) manualInput.value = '';
+  folderBrowserResult?.classList.add('hidden');
+  if (selectedFolderPath) selectedFolderPath.textContent = '';
 }
 
 async function loadFolderOptions(suggestedFolder) {
@@ -665,18 +916,100 @@ function renderDuplicateBanner(items) {
 
   const banner = document.createElement('div');
   banner.className = 'duplicate-warning-banner';
-  const links = duplicates.map(item => {
-    const objectKey = item.duplicate?.object_key || '';
-    const href = objectKey ? encodeURI(`/api/download/${objectKey}`) : '#';
-    return `<a href="${safeText(href)}" class="duplicate-doc-link" data-download-url="${safeText(href)}">${safeText(item.filename)}</a>`;
-  }).join(', ');
+  const canOverride = isAdmin;
 
-  banner.innerHTML = `
-    <i class="ti ti-alert-triangle"></i>
-    <span>Archivo duplicado detectado. Ya existe en el repositorio: ${links}</span>
-  `;
+  duplicates.forEach(item => {
+    const objectKey = item.duplicate?.object_key || '';
+    const existingPath = objectKey;
+    const existingFolder = existingPath.split('/').slice(0, -1).join('/') || '';
+
+    const itemDiv = document.createElement('div');
+    itemDiv.style.marginBottom = duplicates.length > 1 ? '10px' : '0';
+    itemDiv.style.width = '100%';
+
+    const fileLink = objectKey
+      ? `<a href="${safeText(encodeURI(`/api/download/${objectKey}`))}" class="duplicate-doc-link" data-download-url="${safeText(encodeURI(`/api/download/${objectKey}`))}">${safeText(item.filename)}</a>`
+      : safeText(item.filename);
+
+    itemDiv.innerHTML = `
+      <div class="banner-text">
+        <i class="ti ti-alert-triangle"></i>
+        <span><strong>${safeText(item.filename)}</strong> es duplicado. Ya existe en:</span>
+      </div>
+      <code class="duplicate-existing-path">${safeText(existingPath)}</code>
+      <div class="duplicate-banner-actions">
+        <button type="button" class="btn-duplicate-use-folder" data-folder="${safeText(existingFolder)}" title="Usar la carpeta del archivo existente">
+          <i class="ti ti-folder"></i> Usar esta carpeta
+        </button>
+        ${canOverride ? `
+          <button type="button" class="btn-duplicate-override" data-duplicate-filename="${safeText(item.filename)}" title="Sobrescribir el archivo existente">
+            <i class="ti ti-upload"></i> Subir de todos modos
+          </button>
+        ` : `<span style="font-size:11px;color:var(--muted);">Solo admin puede forzar re-ingreso</span>`}
+      </div>
+    `;
+    banner.appendChild(itemDiv);
+  });
+
   previewArea.prepend(banner);
   bindDuplicateDownloadLinks(banner);
+
+  banner.querySelectorAll('.btn-duplicate-use-folder').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const folder = btn.getAttribute('data-folder');
+      if (folder) {
+        uploadMode = 'manual';
+        selectedManualFolder = folder;
+        manualFolderFromPreview = true;
+        const manualOpt = document.getElementById('uploadModeManual');
+        const manualControls = document.getElementById('uploadManualControls');
+        const manualInput = document.getElementById('manualFolderInput');
+        const folderBrowserResult = document.getElementById('folderBrowserResult');
+        const selectedFolderPath = document.getElementById('selectedFolderPath');
+        if (manualOpt) manualOpt.checked = true;
+        document.querySelector('.manual-option')?.classList.add('active');
+        document.querySelector('.auto-option')?.classList.remove('active');
+        if (manualControls) manualControls.classList.remove('hidden');
+        if (manualInput) manualInput.value = folder;
+        if (folderBrowserResult) folderBrowserResult.classList.remove('hidden');
+        if (selectedFolderPath) selectedFolderPath.textContent = folder;
+
+        const duplicateItem = duplicates.find(d => {
+          const existingPath = d.duplicate?.object_key || '';
+          const existingFolder = existingPath.split('/').slice(0, -1).join('/') || '';
+          return existingFolder === folder;
+        });
+        if (duplicateItem) {
+          const entry = pendingUploadMap.get(duplicateItem.filename);
+          if (entry) {
+            entry.allowDuplicate = true;
+            entry.isDuplicate = true;
+          }
+          const row = document.querySelector(`tr[data-preview-filename="${CSS.escape(duplicateItem.filename)}"]`);
+          if (row) row.classList.add('is-confirmed');
+          const checkbox = document.querySelector(`.preview-checkbox[data-filename="${CSS.escape(duplicateItem.filename)}"]`);
+          if (checkbox) checkbox.checked = true;
+        }
+      }
+    });
+  });
+
+  banner.querySelectorAll('.btn-duplicate-override').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const filename = btn.getAttribute('data-duplicate-filename');
+      const entry = pendingUploadMap.get(filename);
+      if (entry) {
+        entry.allowDuplicate = true;
+        entry.isDuplicate = true;
+      }
+      const row = document.querySelector(`tr[data-preview-filename="${CSS.escape(filename)}"]`);
+      if (row) row.classList.add('is-confirmed');
+      const checkbox = document.querySelector(`.preview-checkbox[data-filename="${CSS.escape(filename)}"]`);
+      if (checkbox) checkbox.checked = true;
+      btn.disabled = true;
+      btn.textContent = '✓ Re-ingreso permitido';
+    });
+  });
 }
 
 function bindDuplicateDownloadLinks(root) {
@@ -803,6 +1136,9 @@ async function openClassifyConfirmationModal(filename) {
 }
 
 async function triggerClassifyPreview(files) {
+  const requestId = ++classifyPreviewRequestId;
+  resetPreviewRoutingState();
+
   const previewArea = document.getElementById('uploadPreviewArea');
   const tbody = document.getElementById('classifyPreviewBody');
   const summaryEl = document.getElementById('previewSummary');
@@ -819,6 +1155,10 @@ async function triggerClassifyPreview(files) {
 
   const formData = new FormData();
   files.forEach(f => formData.append('files[]', f));
+  formData.append('upload_mode', uploadMode);
+  if (uploadMode === 'manual' && selectedManualFolder) {
+    formData.append('folder', selectedManualFolder);
+  }
 
   try {
     const data = await fetchJson(API.classifyPreview, {
@@ -827,10 +1167,12 @@ async function triggerClassifyPreview(files) {
       body: formData
     });
 
+    if (requestId !== classifyPreviewRequestId) return;
+
     const items = data.files || [];
     items.forEach((item, i) => {
-      if (item.status !== 'INVALID_FILE' && item.status !== 'DUPLICATE') {
-        pendingUploadMap.set(item.filename, { file: files[i], previewItem: item });
+      if (item.status !== 'INVALID_FILE') {
+        pendingUploadMap.set(item.filename, { file: files[i], previewItem: item, allowDuplicate: false, isDuplicate: false });
       }
     });
 
@@ -847,11 +1189,17 @@ async function triggerClassifyPreview(files) {
 
     const firstRequiresConfirmation = items.find(i => i.status === 'REQUIRES_CONFIRMATION');
     if (firstRequiresConfirmation) {
-      setTimeout(() => openClassifyConfirmationModal(firstRequiresConfirmation.filename), 80);
+      setTimeout(() => {
+        if (requestId === classifyPreviewRequestId) {
+          openClassifyConfirmationModal(firstRequiresConfirmation.filename);
+        }
+      }, 80);
     }
   } catch (e) {
+    if (requestId !== classifyPreviewRequestId) return;
     tbody.innerHTML = `<tr><td colspan="8" class="preview-error">Error clasificando: ${safeText(e.message)}</td></tr>`;
   } finally {
+    if (requestId !== classifyPreviewRequestId) return;
     zone.classList.remove('drop-zone-loading');
     zone.querySelector('.drop-zone-title').textContent = 'Arrastra PDFs aquí o haz clic para seleccionar';
   }
@@ -981,7 +1329,7 @@ async function handleUpload() {
     progressText.textContent = `Subiendo ${filename}...`;
     countEl.textContent = `${done}/${total}`;
 
-    const formData = new FormData();
+const formData = new FormData();
     formData.append('files[]', entry.file);
 
     // Incluir hints del preview si están disponibles
@@ -991,9 +1339,17 @@ async function handleUpload() {
     if (meta.razon_social) formData.append('razon_social', meta.razon_social);
     if (meta.banco) formData.append('banco', meta.banco);
     if (meta.tipo_documento) formData.append('tipo_documento', meta.tipo_documento);
-    if (entry.confirmation?.folder) formData.append('folder', entry.confirmation.folder);
+    if (entry.confirmation?.folder) {
+      formData.append('folder', entry.confirmation.folder);
+    } else if (uploadMode === 'manual' && selectedManualFolder) {
+      formData.append('folder', selectedManualFolder);
+    }
     if (entry.confirmation?.correctionReason) {
       formData.append('correction_reason', entry.confirmation.correctionReason);
+    }
+    formData.append('upload_mode', uploadMode);
+    if (entry.isDuplicate && entry.allowDuplicate) {
+      formData.append('allow_duplicate', 'true');
     }
 
     try {
@@ -1151,6 +1507,7 @@ function bindAllEvents() {
   });
 
   /* Batch actions */
+  document.getElementById('batchZipBtn')?.addEventListener('click', handleBatchZipDownload);
   document.getElementById('batchDownloadBtn')?.addEventListener('click', handleBatchDownload);
   document.getElementById('batchClearBtn')?.addEventListener('click', () => {
     selectedPaths.clear();
@@ -1187,6 +1544,7 @@ function bindAllEvents() {
   /* Upload */
   document.getElementById('uploadApprovedBtn')?.addEventListener('click', handleUpload);
   document.getElementById('classifyAgainBtn')?.addEventListener('click', () => {
+    resetPreviewRoutingState();
     document.getElementById('fileInput').click();
   });
 
@@ -1241,13 +1599,13 @@ async function bootstrap() {
   }
   SHARED.initTheme();
   SHARED.initGlobalUI();  // 🎨 Wire up theme toggle button and other global UI elements
-  renderSidebarUser();
 
   const hasSession = await restoreSession();
   if (!hasSession) { redirectToLogin(); return; }
 
   applyAdminVisibility();
   bindAllEvents();
+  initUploadModeToggle();
   initDropZone();
 
   // Restaurar ruta desde la URL si existe

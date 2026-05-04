@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,6 +31,7 @@ from .models import (
     StorageObject,
     TRegistroDocument,
 )
+from documents.utils import _infer_tregistro_movement_from_text
 
 
 @dataclass
@@ -50,6 +52,11 @@ def _safe_int(value: Any, default: int) -> int:
         return int(str(value).strip())
     except (TypeError, ValueError):
         return default
+
+
+def _normalize_search_text(value: Any) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch)).upper()
 
 
 def _extract_filename(object_key: str) -> str:
@@ -179,9 +186,11 @@ def _insurance_subtype(joined_text: str, insurance_type: CatalogInsuranceType):
     if not insurance_type.allows_subtype:
         return None
 
-    if "salud" in joined_text:
+    tokens = set(re.findall(r"\b\w+\b", _normalize_search_text(joined_text)))
+
+    if "SALUD" in tokens:
         code, name = "SALUD", "Salud"
-    elif "pension" in joined_text:
+    elif "PENSION" in tokens:
         code, name = "PENSION", "Pension"
     else:
         return None
@@ -219,6 +228,7 @@ def upsert_document_from_upload(
     is_indexed: bool,
     actor: Any | None = None,
     correction_reason: str = "",
+    pdf_text: str | None = None,
 ) -> UploadIngestionResult:
     object_key = _safe_text(object_key, 800)
     tipo_documento = _safe_text(metadata.get("tipo_documento") or "GENERAL", 300) or "GENERAL"
@@ -315,8 +325,20 @@ def upsert_document_from_upload(
     _clear_non_domain_details(document, domain_code)
 
     joined_text = f"{object_key} {tipo_documento}".lower()
+
     if domain_code == "TREGISTRO":
-        movement_type = _tregistro_type(is_baja=("baja" in joined_text))
+        is_baja = False
+        if pdf_text:
+            movement_code = _infer_tregistro_movement_from_text(pdf_text)
+            if movement_code:
+                is_baja = movement_code == "BAJA"
+            else:
+                header = pdf_text[:4000]
+                header_upper = header.upper()
+                is_baja = bool(re.search(r'\bBAJA\b', header_upper))
+        else:
+            is_baja = "baja" in joined_text
+        movement_type = _tregistro_type(is_baja=is_baja)
         TRegistroDocument.objects.update_or_create(
             document=document,
             defaults={

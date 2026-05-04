@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from auditlog.services import record_audit_event
 from documents.models import DownloadLog, PDFIndex
+from documents.permissions import allowed_domains_for_user
 from documents.utils import minio_client
 
 from .domain_inference import infer_domain_code
@@ -145,6 +146,16 @@ class BaseV2SearchView(APIView):
         start_time = time.time()
         payload = request.data if request.method == "POST" else request.query_params
 
+        if self.domain_code not in allowed_domains_for_user(request.user):
+            return Response(
+                {
+                    "error": "No tiene permisos para consultar este dominio documental.",
+                    "total": 0,
+                    "results": [],
+                },
+                status=403,
+            )
+
         try:
             employee_codes = _parse_employee_codes(payload)
         except ValueError as exc:
@@ -182,6 +193,13 @@ class BaseV2SearchView(APIView):
         queryset = self._build_v2_queryset(payload, employee_codes)
         max_results = int(getattr(settings, "DOCREPO_MAX_RESULTS", 500))
         documents = list(queryset[:max_results])
+        found_codes = set()
+        if employee_codes:
+            requested = set(employee_codes)
+            for document in documents:
+                for code in document.employee_codes.all():
+                    if code.employee_code in requested:
+                        found_codes.add(code.employee_code)
 
         response_data = {
             "total": len(documents),
@@ -189,6 +207,9 @@ class BaseV2SearchView(APIView):
             "source": "docrepo_v2",
             "search_time_ms": round((time.time() - start_time) * 1000, 2),
             "domain": self.domain_code,
+            "codigos_buscados": employee_codes,
+            "codigos_encontrados": sorted(found_codes),
+            "codigos_no_encontrados": [code for code in employee_codes if code not in found_codes],
         }
 
         comparison = self._build_dual_read_comparison(payload, employee_codes, documents)
@@ -354,8 +375,15 @@ class FilterOptionsV2View(APIView):
     def get(self, request):
         domain_filter = str(request.query_params.get("domain") or "").strip().upper()
         valid_domains = {"SEGUROS", "TREGISTRO", "CONSTANCIA_ABONO"}
+        allowed_domains = allowed_domains_for_user(request.user)
 
-        queryset = Document.objects.filter(is_active=True)
+        if not allowed_domains:
+            return Response({"error": "No tiene permisos para consultar filtros."}, status=403)
+
+        if domain_filter in valid_domains and domain_filter not in allowed_domains:
+            return Response({"error": "No tiene permisos para consultar este dominio documental."}, status=403)
+
+        queryset = Document.objects.filter(is_active=True, domain__code__in=allowed_domains)
         if domain_filter in valid_domains:
             queryset = queryset.filter(domain__code=domain_filter)
 
@@ -420,7 +448,7 @@ class DocumentDownloadV2View(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, document_id):
-        document = Document.objects.select_related("storage_object").filter(id=document_id, is_active=True).first()
+        document = Document.objects.select_related("domain", "storage_object").filter(id=document_id, is_active=True).first()
         if document is None:
             record_audit_event(
                 action="DOC_DOWNLOAD_FAILED",
@@ -430,6 +458,9 @@ class DocumentDownloadV2View(APIView):
                 metadata={"reason": "document_not_found", "status_code": 404},
             )
             return Response({"error": "Documento no encontrado."}, status=404)
+
+        if document.domain.code not in allowed_domains_for_user(request.user):
+            return Response({"error": "No tiene permisos para descargar este documento."}, status=403)
 
         storage = getattr(document, "storage_object", None)
         object_key = ""
@@ -508,7 +539,7 @@ class DocumentsZipDownloadV2View(APIView):
 
         documents = list(
             Document.objects.select_related("domain", "storage_object")
-            .filter(id__in=document_ids, is_active=True)
+            .filter(id__in=document_ids, is_active=True, domain__code__in=allowed_domains_for_user(request.user))
             .order_by("domain__code", "created_at")
         )
         if not documents:
@@ -518,6 +549,14 @@ class DocumentsZipDownloadV2View(APIView):
         added = 0
         errors: list[dict[str, str]] = []
         used_names: set[str] = set()
+        basename_counts: dict[str, int] = {}
+        basename_seen: dict[str, int] = {}
+
+        for document in documents:
+            storage = getattr(document, "storage_object", None)
+            object_key = storage.object_key if storage and storage.object_key else document.source_path_legacy
+            archive_name = object_key.strip("/").replace("\\", "/").rsplit("/", 1)[-1] if object_key else f"{document.id}.pdf"
+            basename_counts[archive_name] = basename_counts.get(archive_name, 0) + 1
 
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
             for document in documents:
@@ -536,14 +575,17 @@ class DocumentsZipDownloadV2View(APIView):
                     errors.append({"document_id": str(document.id), "object_key": object_key, "error": "storage_object_not_found"})
                     continue
 
-                archive_name = object_key.strip("/").replace("\\", "/")
-                if not archive_name:
-                    archive_name = f"{document.id}.pdf"
-                if archive_name in used_names:
-                    parts = archive_name.rsplit("/", 1)
-                    filename = parts[-1]
-                    prefix = f"{document.id}_"
-                    archive_name = f"{parts[0]}/{prefix}{filename}" if len(parts) > 1 else f"{prefix}{filename}"
+                base_name = object_key.strip("/").replace("\\", "/").rsplit("/", 1)[-1]
+                if not base_name:
+                    base_name = f"{document.id}.pdf"
+                if basename_counts.get(base_name, 0) > 1:
+                    basename_seen[base_name] = basename_seen.get(base_name, 0) + 1
+                    archive_name = f"{basename_seen[base_name]:03d}_{base_name}"
+                else:
+                    archive_name = base_name
+                while archive_name in used_names:
+                    basename_seen[base_name] = basename_seen.get(base_name, 0) + 1
+                    archive_name = f"{basename_seen[base_name]:03d}_{base_name}"
                 used_names.add(archive_name)
 
                 archive.writestr(archive_name, content)

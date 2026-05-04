@@ -19,7 +19,7 @@
     <article class="stat-card acrylic-surface" id="statSize">
       <div class="label">Almacenamiento Total</div>
       <div class="value" id="statSizeValue">—</div>
-      <div class="hint" id="statSizeHint">En MinIO</div>
+      <div class="hint" id="statSizeHint">En almacenamiento</div>
     </article>
     <article class="stat-card acrylic-surface" id="statOk">
       <div class="label">Indexados OK</div>
@@ -74,8 +74,11 @@
     <!-- Batch actions bar (visible when rows selected) -->
     <div id="batchActionsBar" class="batch-actions-bar hidden">
       <span id="batchCount" class="batch-count">0 seleccionados</span>
-      <button id="batchDownloadBtn" class="btn btn-primary btn-sm">
-        <i class="ti ti-file-download"></i> Descargar como PDF combinado
+      <button id="batchZipBtn" class="btn btn-primary btn-sm">
+        <i class="ti ti-file-zip"></i> Descargar ZIP
+      </button>
+      <button id="batchDownloadBtn" class="btn btn-ghost btn-sm">
+        <i class="ti ti-files"></i> Combinar PDF
       </button>
       <button id="batchClearBtn" class="btn btn-ghost btn-sm">Deseleccionar</button>
     </div>
@@ -129,6 +132,42 @@
   <section id="upload-section" class="results-panel acrylic-surface files-upload-panel">
     <div class="results-header">
       <div class="results-count"><i class="ti ti-cloud-upload"></i> CARGA DE ARCHIVOS</div>
+    </div>
+
+    <!-- FEAT-1/2: Upload mode toggle -->
+    <div class="upload-mode-block" id="uploadModeBlock">
+      <div class="upload-mode-row">
+        <label class="upload-mode-label">Modo de organización</label>
+        <div class="upload-mode-toggle">
+          <input type="radio" id="uploadModeAuto" name="uploadMode" value="auto" checked>
+          <label for="uploadModeAuto" class="mode-option auto-option">
+            <i class="ti ti-sparkles"></i> Auto-organizar
+          </label>
+          <input type="radio" id="uploadModeManual" name="uploadMode" value="manual">
+          <label for="uploadModeManual" class="mode-option manual-option">
+            <i class="ti ti-folder"></i> Elegir carpeta
+          </label>
+        </div>
+      </div>
+      <div class="upload-manual-controls hidden" id="uploadManualControls">
+        <div class="manual-folder-row">
+          <input id="manualFolderInput" type="text" class="form-control manual-folder-input"
+                 placeholder="Ej: Planillas 2025/RESGUARDO/ENERO"
+                 maxlength="500">
+          <button type="button" id="useCurrentFolderBtn" class="btn btn-ghost btn-sm">
+            <i class="ti ti-folder"></i> Usar carpeta actual
+          </button>
+          <button type="button" id="browseFoldersBtn" class="btn btn-ghost btn-sm">
+            <i class="ti tiFolders"></i> Examinar carpetas
+          </button>
+        </div>
+        <div class="folder-browser-result hidden" id="folderBrowserResult">
+          <div class="folder-browser-header">
+            <span class="folder-browser-path-label">Ruta seleccionada:</span>
+            <code class="folder-browser-selected-path" id="selectedFolderPath"></code>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Drop zone -->
@@ -198,7 +237,7 @@
       <div class="sync-info-card">
         <div class="sync-info-label">Que hace la sincronizacion</div>
         <ul class="sync-info-list">
-          <li><i class="ti ti-plus"></i> Indexa nuevos PDFs detectados en MinIO</li>
+          <li><i class="ti ti-plus"></i> Indexa nuevos PDFs detectados en el almacenamiento</li>
           <li><i class="ti ti-arrows-exchange"></i> Detecta y registra archivos movidos (via hash MD5)</li>
           <li><i class="ti ti-trash"></i> Desactiva entradas huerfanas del indice</li>
         </ul>
@@ -255,7 +294,7 @@
       <div class="modal-body">
         <p>¿Estas seguro de que deseas eliminar el archivo?</p>
         <code id="deleteModalPath" class="delete-path-code"></code>
-        <p class="modal-warning">Esta accion eliminara el archivo de MinIO y su entrada en el indice PostgreSQL. No se puede deshacer.</p>
+        <p class="modal-warning">Esta accion eliminará el archivo del almacenamiento y su entrada en el indice PostgreSQL. No se puede deshacer.</p>
       </div>
       <div class="modal-footer">
         <button id="deleteModalCancel" class="btn btn-ghost">Cancelar</button>

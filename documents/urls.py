@@ -4,6 +4,7 @@ from .views import (
     DownloadView, SyncIndexView, PopulateHashesView, IndexStatsView, index,
     seguros_ui, tregistro_ui,
     FilesListView, FilesClassifyPreviewView, FilesUploadView, CreateFolderView, FilesDeleteView, FoldersListView,
+    FolderOptionsView,
     BulkSearchView, MergePdfsView, CurrentUserView, HealthCheckView
 )
 from .auth_views import AuthLoginView, AuthLogoutView
@@ -41,4 +42,5 @@ urlpatterns = [
     path('api/files/create-folder', CreateFolderView.as_view(), name='create_folder'),
     path('api/files/delete', FilesDeleteView.as_view(), name='files_delete'),
     path('api/folders/list', FoldersListView.as_view(), name='folders_list'),
+    path('api/folders/options', FolderOptionsView.as_view(), name='folders_options'),
 ]

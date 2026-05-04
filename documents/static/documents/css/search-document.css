@@ -31,13 +31,13 @@
   --radius: 3px;
   --shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
   --sidebar-width: 238px;
-  --glass-bg: color-mix(in srgb, var(--panel) 62%, transparent);
-  --glass-bg-strong: color-mix(in srgb, var(--panel) 70%, transparent);
-  --glass-bg-soft: color-mix(in srgb, var(--panel) 48%, transparent);
-  --glass-border: color-mix(in srgb, var(--line) 82%, transparent);
-  --glass-shadow: 0 22px 48px rgba(16, 24, 40, 0.22);
-  --glass-blur: 30px;
-  --glass-saturation: 186%;
+  --glass-bg: color-mix(in srgb, var(--fa-acrylic-bg, var(--panel)) 82%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--fa-acrylic-bg-strong, var(--panel)) 82%, transparent);
+  --glass-bg-soft: color-mix(in srgb, var(--fa-acrylic-bg-subtle, var(--panel)) 82%, transparent);
+  --glass-border: var(--fa-acrylic-border, color-mix(in srgb, var(--line) 82%, transparent));
+  --glass-shadow: var(--fa-shadow-glass, 0 22px 48px rgba(16, 24, 40, 0.22));
+  --glass-blur: 28px;
+  --glass-saturation: 170%;
   --glass-tint: rgba(255, 255, 255, 0.42);
   --glass-tint-soft: rgba(255, 255, 255, 0.14);
   --logout-outline: color-mix(in srgb, #a4142a 78%, var(--line) 22%);
@@ -48,12 +48,12 @@
 }
 
 :root[data-theme="dark"] {
-  --glass-bg: color-mix(in srgb, var(--panel) 78%, transparent);
-  --glass-bg-strong: color-mix(in srgb, var(--panel) 86%, transparent);
-  --glass-bg-soft: color-mix(in srgb, var(--panel) 70%, transparent);
-  --glass-border: color-mix(in srgb, var(--line) 84%, transparent);
-  --glass-shadow: 0 20px 42px rgba(0, 0, 0, 0.42);
-  --glass-blur: 18px;
+  --glass-bg: color-mix(in srgb, var(--fa-acrylic-bg, var(--panel)) 72%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--fa-acrylic-bg-strong, var(--panel)) 76%, transparent);
+  --glass-bg-soft: color-mix(in srgb, var(--fa-acrylic-bg-subtle, var(--panel)) 70%, transparent);
+  --glass-border: var(--fa-acrylic-border, color-mix(in srgb, var(--line) 84%, transparent));
+  --glass-shadow: var(--fa-shadow-glass, 0 20px 42px rgba(0, 0, 0, 0.42));
+  --glass-blur: 22px;
   --glass-tint: rgba(255, 255, 255, 0.12);
   --glass-tint-soft: rgba(255, 255, 255, 0.03);
   --logout-outline: color-mix(in srgb, #355f96 76%, var(--line) 24%);
@@ -62,11 +62,11 @@
 
 :root[data-theme="corp-dark"] {
   --danger: #ff5f7d;
-  --glass-bg: color-mix(in srgb, var(--panel) 70%, transparent);
-  --glass-bg-strong: color-mix(in srgb, var(--panel) 78%, transparent);
-  --glass-bg-soft: color-mix(in srgb, var(--panel) 60%, transparent);
-  --glass-border: color-mix(in srgb, var(--line) 86%, transparent);
-  --glass-shadow: 0 24px 54px rgba(0, 0, 0, 0.54);
+  --glass-bg: color-mix(in srgb, var(--fa-acrylic-bg, var(--panel)) 70%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--fa-acrylic-bg-strong, var(--panel)) 74%, transparent);
+  --glass-bg-soft: color-mix(in srgb, var(--fa-acrylic-bg-subtle, var(--panel)) 68%, transparent);
+  --glass-border: var(--fa-acrylic-border, color-mix(in srgb, var(--line) 86%, transparent));
+  --glass-shadow: var(--fa-shadow-glass, 0 24px 54px rgba(0, 0, 0, 0.54));
   --glass-blur: 24px;
   --glass-saturation: 186%;
   --glass-tint: rgba(255, 255, 255, 0.16);
@@ -78,11 +78,17 @@
 :root[data-theme="light"] {
   --logout-outline: color-mix(in srgb, #0b839e 74%, var(--line) 26%);
   --logout-outline-hover: #08a3c4;
+  --glass-bg: color-mix(in srgb, var(--fa-acrylic-bg, var(--panel)) 88%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--fa-acrylic-bg-strong, var(--panel)) 88%, transparent);
+  --glass-bg-soft: color-mix(in srgb, var(--fa-acrylic-bg-subtle, var(--panel)) 84%, transparent);
 }
 
 :root[data-theme="corp"] {
   --logout-outline: color-mix(in srgb, #a4142a 82%, var(--line) 18%);
   --logout-outline-hover: #d62f4d;
+  --glass-bg: color-mix(in srgb, var(--fa-acrylic-bg, var(--panel)) 76%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--fa-acrylic-bg-strong, var(--panel)) 80%, transparent);
+  --glass-bg-soft: color-mix(in srgb, var(--fa-acrylic-bg-subtle, var(--panel)) 72%, transparent);
 }
 
 * {
@@ -98,20 +104,49 @@ body {
 }
 
 body.search-page-body {
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(980px 460px at -8% -12%, color-mix(in srgb, var(--primary) 14%, transparent) 0%, transparent 68%),
-    radial-gradient(760px 500px at 52% 102%, color-mix(in srgb, var(--primary) 10%, transparent) 0%, transparent 76%),
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--bg) 88%, #ffffff 12%) 0%,
-      var(--bg) 55%,
-      color-mix(in srgb, var(--bg) 84%, #d7e3e7 16%) 100%
-    );
+  background-color: var(--fa-color-bg-base);
+  background-image: none;
   background-attachment: fixed;
   color: var(--text);
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   display: flex;
+  min-height: 100dvh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body.search-page-body::before {
+  content: "";
+  position: fixed;
+  width: min(760px, 68vw);
+  height: min(760px, 68vw);
+  top: -22%;
+  left: -16%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  background: var(--fa-bg-blob-1, rgba(0, 229, 255, 0.32));
+  filter: blur(90px) saturate(1.18);
+  opacity: 0.95;
+  will-change: transform;
+  animation: fa-blob-float-1 18s ease-in-out infinite;
+}
+
+body.search-page-body::after {
+  content: "";
+  position: fixed;
+  width: min(680px, 60vw);
+  height: min(680px, 60vw);
+  right: -12%;
+  bottom: -18%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  background: var(--fa-bg-blob-2, rgba(0, 100, 220, 0.24));
+  filter: blur(84px) saturate(1.12);
+  opacity: 0.88;
+  will-change: transform;
+  animation: fa-blob-float-2 24s ease-in-out infinite;
 }
 
 .workspace {
@@ -122,35 +157,11 @@ body.search-page-body {
   flex-direction: column;
   position: relative;
   overflow: hidden;
+  z-index: 1;
 }
 
 .workspace::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(760px 360px at -4% -8%, color-mix(in srgb, var(--primary) 18%, transparent) 0%, transparent 70%);
-  opacity: 0.14;
-  animation: corner-ambient-drift 10s ease-in-out infinite;
-  z-index: 0;
-}
-
-@keyframes corner-ambient-drift {
-  0%,
-  100% {
-    opacity: 0.08;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-
-  45% {
-    opacity: 0.2;
-    transform: translate3d(10px, -4px, 0) scale(1.05);
-  }
-
-  70% {
-    opacity: 0.12;
-    transform: translate3d(4px, 3px, 0) scale(1.02);
-  }
+  content: none;
 }
 
 .sidebar {
@@ -614,6 +625,8 @@ body.search-page-body {
   gap: 12px;
   position: relative;
   z-index: 1;
+  flex: 1;
+  min-height: calc(100dvh - 56px);
 }
 
 .acrylic-surface {
@@ -1778,6 +1791,113 @@ body.search-page-body.login-page {
   overflow: hidden;
 }
 
+/* ── Upload mode toggle ───────────────────────────────────────────── */
+.upload-mode-block {
+  padding: .75rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0;
+}
+
+.upload-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.upload-mode-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.upload-mode-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-surface-secondary);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.upload-mode-toggle input[type="radio"] {
+  display: none;
+}
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--motion-fast) var(--motion-ease);
+  white-space: nowrap;
+}
+
+.mode-option i {
+  font-size: 15px;
+}
+
+.mode-option:hover {
+  color: var(--text);
+}
+
+.mode-option.auto-option.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.mode-option.manual-option.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.upload-manual-controls {
+  margin-top: 10px;
+}
+
+.manual-folder-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.manual-folder-input {
+  flex: 1;
+  min-width: 200px;
+  font-size: 13px;
+}
+
+.folder-browser-result {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--bg-surface-secondary);
+  border-radius: 6px;
+}
+
+.folder-browser-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.folder-browser-path-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.folder-browser-selected-path {
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-all;
+}
+
 /* ── Drop zone ──────────────────────────────────────────────────────── */
 .drop-zone {
   margin: 0 1.5rem 1.5rem;
@@ -1951,10 +2071,68 @@ body.search-page-body.login-page {
   background: color-mix(in srgb, #c89a00 12%, var(--panel) 88%);
   color: #8a6500;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.duplicate-warning-banner .banner-text {
+  flex: 1;
+  min-width: 200px;
+}
+
+.duplicate-banner-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.btn-duplicate-use-folder,
+.btn-duplicate-override {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--motion-fast) var(--motion-ease);
+}
+
+.btn-duplicate-use-folder {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.btn-duplicate-use-folder:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-duplicate-override {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn-duplicate-override:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-duplicate-override:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.duplicate-existing-path {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 6px;
+  word-break: break-all;
 }
 
 .duplicate-warning-banner a,
@@ -1984,6 +2162,79 @@ body.search-page-body.login-page {
   color: #8a6500;
   font-size: 10px;
   font-weight: 700;
+}
+
+.missing-codes-modal {
+  max-width: 560px;
+}
+
+.missing-codes-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+}
+
+.missing-codes-list code {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.search-error-backdrop {
+  position: fixed;
+  z-index: 2;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, .34);
+}
+
+.search-error-card {
+  position: relative;
+  width: min(460px, 100%);
+  padding: 1.5rem;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, #dc3545 34%, var(--line));
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+}
+
+.search-error-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.search-error-icon {
+  display: inline-flex;
+  margin-bottom: .75rem;
+  color: #dc3545;
+  font-size: 2.2rem;
+}
+
+.search-error-card h3 {
+  margin: 0 0 .5rem;
+  color: var(--text);
+}
+
+.search-error-card p {
+  margin: 0 0 1rem;
+  color: var(--muted);
 }
 
 .classify-preview-table tr.is-confirmed {
@@ -2081,6 +2332,8 @@ body.search-page-body.login-page {
   flex-wrap: wrap;
   gap: 6px;
   margin: 12px 0 2px;
+  max-height: 80px;
+  overflow: auto;
 }
 
 .classify-warning-chip {
@@ -2288,7 +2541,7 @@ body.search-page-body.login-page {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 900;
+  z-index: 4000;
   backdrop-filter: blur(4px);
   animation: fadeIn 140ms ease;
 }
@@ -2306,6 +2559,96 @@ body.search-page-body.login-page {
   overflow: hidden;
   box-shadow: var(--glass-shadow);
   animation: slideUp 160ms var(--motion-ease);
+}
+
+.folder-browser-modal {
+  max-width: 720px;
+}
+
+.folder-browser-modal .modal-body {
+  padding: 0;
+  overflow: hidden;
+}
+
+.folder-browser-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.folder-browser-breadcrumb .crumb-sep {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.folder-browser-breadcrumb .crumb-btn {
+  font-size: 12px;
+  padding: 2px 6px;
+  color: var(--primary);
+}
+
+.folder-browser-breadcrumb .crumb-home {
+  font-size: 12px;
+  padding: 2px 6px;
+}
+
+.folder-browser-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.folder-browser-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.folder-browser-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  gap: 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.folder-browser-item:last-child { border-bottom: none; }
+
+.folder-browser-item-name {
+  font-size: 13px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.folder-browser-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.folder-browser-item-actions .btn {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.folder-browser-hint {
+  font-size: 11px;
+  color: var(--muted);
+  flex: 1;
 }
 
 @keyframes slideUp {
