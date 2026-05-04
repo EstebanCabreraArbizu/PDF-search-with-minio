@@ -227,6 +227,7 @@ def upsert_document_from_upload(
     is_indexed: bool,
     actor: Any | None = None,
     correction_reason: str = "",
+    pdf_text: str | None = None,
 ) -> UploadIngestionResult:
     object_key = _safe_text(object_key, 800)
     tipo_documento = _safe_text(metadata.get("tipo_documento") or "GENERAL", 300) or "GENERAL"
@@ -322,9 +323,17 @@ def upsert_document_from_upload(
 
     _clear_non_domain_details(document, domain_code)
 
-    joined_text = f"{object_key} {tipo_documento}".lower()
     if domain_code == "TREGISTRO":
-        movement_type = _tregistro_type(is_baja=("baja" in joined_text))
+        is_baja = False
+        if pdf_text:
+            header = pdf_text[:4000]
+            header_upper = header.upper()
+            if re.search(r'\bBAJA\b', header_upper):
+                is_baja = True
+        else:
+            joined_text = f"{object_key} {tipo_documento}".lower()
+            is_baja = "baja" in joined_text
+        movement_type = _tregistro_type(is_baja=is_baja)
         TRegistroDocument.objects.update_or_create(
             document=document,
             defaults={

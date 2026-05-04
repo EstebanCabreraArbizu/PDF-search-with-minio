@@ -991,6 +991,7 @@ class SyncIndexView(APIView):
                             employee_codes=codigos,
                             is_indexed=is_indexed,
                             actor=request.user,
+                            pdf_text=text,
                         )
 
                         if dual_write_legacy:
@@ -1367,6 +1368,7 @@ class ReindexView(APIView):
                         employee_codes=codigos,
                         is_indexed=is_indexed,
                         actor=request.user,
+                        pdf_text=text,
                     )
 
                     if dual_write_legacy:
@@ -2113,6 +2115,7 @@ class FilesUploadView(APIView):
                     is_indexed=indexed,
                     actor=request.user,
                     correction_reason=correction_reason,
+                    pdf_text=text,
                 )
 
                 legacy_synced = False
