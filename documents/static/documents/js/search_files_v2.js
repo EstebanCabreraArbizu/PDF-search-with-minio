@@ -40,6 +40,8 @@ let selectedPaths = new Set();
 let pendingUploadMap = new Map(); // filename → { file, previewItem }
 let syncRunning = false;
 let syncShouldStop = false;
+let uploadMode = 'auto';
+let selectedManualFolder = '';
 
 /* ── Helpers de autenticación ───────────────────────────────────────── */
 function getAuthHeaders(includeContentType = true) {
@@ -600,11 +602,104 @@ function initDropZone() {
     if (files.length) triggerClassifyPreview(files);
   });
 
-  fileInput.addEventListener('change', () => {
+fileInput.addEventListener('change', () => {
     const files = [...fileInput.files];
     if (files.length) triggerClassifyPreview(files);
     fileInput.value = '';
   });
+}
+
+function initUploadModeToggle() {
+  const autoOpt = document.getElementById('uploadModeAuto');
+  const manualOpt = document.getElementById('uploadModeManual');
+  const manualControls = document.getElementById('uploadManualControls');
+  const useCurrentBtn = document.getElementById('useCurrentFolderBtn');
+  const browseBtn = document.getElementById('browseFoldersBtn');
+  const manualInput = document.getElementById('manualFolderInput');
+  const folderBrowserResult = document.getElementById('folderBrowserResult');
+  const selectedFolderPath = document.getElementById('selectedFolderPath');
+
+  if (!autoOpt || !manualOpt) return;
+
+  function setUploadMode(mode) {
+    uploadMode = mode;
+    if (mode === 'auto') {
+      autoOpt.checked = true;
+      manualOpt.closest('.auto-option')?.classList.add('active');
+      manualOpt.closest('.manual-option')?.classList.remove('active');
+      manualControls?.classList.add('hidden');
+      selectedManualFolder = '';
+    } else {
+      manualOpt.checked = true;
+      manualOpt.closest('.manual-option')?.classList.add('active');
+      autoOpt.closest('.auto-option')?.classList.remove('active');
+      manualControls?.classList.remove('hidden');
+      if (rutaActiva.length > 0) {
+        selectedManualFolder = rutaActiva.join('/');
+      } else {
+        selectedManualFolder = normalizeFolderValue(manualInput?.value || '');
+      }
+    }
+  }
+
+  autoOpt.addEventListener('change', () => setUploadMode('auto'));
+  manualOpt.addEventListener('change', () => setUploadMode('manual'));
+
+  useCurrentBtn?.addEventListener('click', () => {
+    if (rutaActiva.length > 0) {
+      selectedManualFolder = rutaActiva.join('/');
+      manualInput.value = selectedManualFolder;
+      if (folderBrowserResult) {
+        folderBrowserResult.classList.remove('hidden');
+        if (selectedFolderPath) selectedFolderPath.textContent = selectedManualFolder;
+      }
+    } else {
+      alert('No hay una carpeta activa en el explorador.');
+    }
+  });
+
+  browseBtn?.addEventListener('click', async () => {
+    const params = new URLSearchParams();
+    if (rutaActiva.length > 0) params.set('folder', rutaActiva.join('/') + '/');
+    try {
+      const data = await fetchJson(`${API.foldersList}?${params}`, { headers: getAuthHeaders() });
+      const folders = data.folders || [];
+      if (folders.length === 0) {
+        alert('No hay subcarpetas disponibles en la ruta actual.');
+        return;
+      }
+      const selected = prompt(
+        'Seleccione una carpeta:\n\n' +
+        folders.map((f, i) => `${i + 1}. ${f.name}`).join('\n') +
+        '\n\nIngrese el número:'
+      );
+      const idx = parseInt(selected, 10) - 1;
+      if (!isNaN(idx) && idx >= 0 && idx < folders.length) {
+        selectedManualFolder = folders[idx].path.replace(/\/$/, '');
+        manualInput.value = selectedManualFolder;
+        if (folderBrowserResult) {
+          folderBrowserResult.classList.remove('hidden');
+          if (selectedFolderPath) selectedFolderPath.textContent = selectedManualFolder;
+        }
+      }
+    } catch (e) {
+      alert('Error al cargar carpetas: ' + (e.message || e));
+    }
+  });
+
+  manualInput?.addEventListener('input', () => {
+    selectedManualFolder = normalizeFolderValue(manualInput.value);
+    if (folderBrowserResult) {
+      if (selectedManualFolder) {
+        folderBrowserResult.classList.remove('hidden');
+        if (selectedFolderPath) selectedFolderPath.textContent = selectedManualFolder;
+      } else {
+        folderBrowserResult.classList.add('hidden');
+      }
+    }
+  });
+
+  setUploadMode('auto');
 }
 
 function getSuggestedFolder(item) {
@@ -665,18 +760,99 @@ function renderDuplicateBanner(items) {
 
   const banner = document.createElement('div');
   banner.className = 'duplicate-warning-banner';
-  const links = duplicates.map(item => {
-    const objectKey = item.duplicate?.object_key || '';
-    const href = objectKey ? encodeURI(`/api/download/${objectKey}`) : '#';
-    return `<a href="${safeText(href)}" class="duplicate-doc-link" data-download-url="${safeText(href)}">${safeText(item.filename)}</a>`;
-  }).join(', ');
+  const canOverride = isAdmin;
 
-  banner.innerHTML = `
-    <i class="ti ti-alert-triangle"></i>
-    <span>Archivo duplicado detectado. Ya existe en el repositorio: ${links}</span>
-  `;
+  duplicates.forEach(item => {
+    const objectKey = item.duplicate?.object_key || '';
+    const existingPath = objectKey;
+    const existingFolder = existingPath.split('/').slice(0, -1).join('/') || '';
+
+    const itemDiv = document.createElement('div');
+    itemDiv.style.marginBottom = duplicates.length > 1 ? '10px' : '0';
+    itemDiv.style.width = '100%';
+
+    const fileLink = objectKey
+      ? `<a href="${safeText(encodeURI(`/api/download/${objectKey}`))}" class="duplicate-doc-link" data-download-url="${safeText(encodeURI(`/api/download/${objectKey}`))}">${safeText(item.filename)}</a>`
+      : safeText(item.filename);
+
+    itemDiv.innerHTML = `
+      <div class="banner-text">
+        <i class="ti ti-alert-triangle"></i>
+        <span><strong>${safeText(item.filename)}</strong> es duplicado. Ya existe en:</span>
+      </div>
+      <code class="duplicate-existing-path">${safeText(existingPath)}</code>
+      <div class="duplicate-banner-actions">
+        <button type="button" class="btn-duplicate-use-folder" data-folder="${safeText(existingFolder)}" title="Usar la carpeta del archivo existente">
+          <i class="ti ti-folder"></i> Usar esta carpeta
+        </button>
+        ${canOverride ? `
+          <button type="button" class="btn-duplicate-override" data-duplicate-filename="${safeText(item.filename)}" title="Sobrescribir el archivo existente">
+            <i class="ti ti-upload"></i> Subir de todos modos
+          </button>
+        ` : `<span style="font-size:11px;color:var(--muted);">Solo admin puede forzar re-ingreso</span>`}
+      </div>
+    `;
+    banner.appendChild(itemDiv);
+  });
+
   previewArea.prepend(banner);
   bindDuplicateDownloadLinks(banner);
+
+  banner.querySelectorAll('.btn-duplicate-use-folder').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const folder = btn.getAttribute('data-folder');
+      if (folder) {
+        uploadMode = 'manual';
+        selectedManualFolder = folder;
+        const manualOpt = document.getElementById('uploadModeManual');
+        const manualControls = document.getElementById('uploadManualControls');
+        const manualInput = document.getElementById('manualFolderInput');
+        const folderBrowserResult = document.getElementById('folderBrowserResult');
+        const selectedFolderPath = document.getElementById('selectedFolderPath');
+        if (manualOpt) manualOpt.checked = true;
+        document.querySelector('.manual-option')?.classList.add('active');
+        document.querySelector('.auto-option')?.classList.remove('active');
+        if (manualControls) manualControls.classList.remove('hidden');
+        if (manualInput) manualInput.value = folder;
+        if (folderBrowserResult) folderBrowserResult.classList.remove('hidden');
+        if (selectedFolderPath) selectedFolderPath.textContent = folder;
+
+        const duplicateItem = duplicates.find(d => {
+          const existingPath = d.duplicate?.object_key || '';
+          const existingFolder = existingPath.split('/').slice(0, -1).join('/') || '';
+          return existingFolder === folder;
+        });
+        if (duplicateItem) {
+          const entry = pendingUploadMap.get(duplicateItem.filename);
+          if (entry) {
+            entry.allowDuplicate = true;
+            entry.isDuplicate = true;
+          }
+          const row = document.querySelector(`tr[data-preview-filename="${CSS.escape(duplicateItem.filename)}"]`);
+          if (row) row.classList.add('is-confirmed');
+          const checkbox = document.querySelector(`.preview-checkbox[data-filename="${CSS.escape(duplicateItem.filename)}"]`);
+          if (checkbox) checkbox.checked = true;
+        }
+      }
+    });
+  });
+
+  banner.querySelectorAll('.btn-duplicate-override').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const filename = btn.getAttribute('data-duplicate-filename');
+      const entry = pendingUploadMap.get(filename);
+      if (entry) {
+        entry.allowDuplicate = true;
+        entry.isDuplicate = true;
+      }
+      const row = document.querySelector(`tr[data-preview-filename="${CSS.escape(filename)}"]`);
+      if (row) row.classList.add('is-confirmed');
+      const checkbox = document.querySelector(`.preview-checkbox[data-filename="${CSS.escape(filename)}"]`);
+      if (checkbox) checkbox.checked = true;
+      btn.disabled = true;
+      btn.textContent = '✓ Re-ingreso permitido';
+    });
+  });
 }
 
 function bindDuplicateDownloadLinks(root) {
@@ -819,6 +995,10 @@ async function triggerClassifyPreview(files) {
 
   const formData = new FormData();
   files.forEach(f => formData.append('files[]', f));
+  formData.append('upload_mode', uploadMode);
+  if (uploadMode === 'manual' && selectedManualFolder) {
+    formData.append('folder', selectedManualFolder);
+  }
 
   try {
     const data = await fetchJson(API.classifyPreview, {
@@ -829,8 +1009,8 @@ async function triggerClassifyPreview(files) {
 
     const items = data.files || [];
     items.forEach((item, i) => {
-      if (item.status !== 'INVALID_FILE' && item.status !== 'DUPLICATE') {
-        pendingUploadMap.set(item.filename, { file: files[i], previewItem: item });
+      if (item.status !== 'INVALID_FILE') {
+        pendingUploadMap.set(item.filename, { file: files[i], previewItem: item, allowDuplicate: false, isDuplicate: false });
       }
     });
 
@@ -981,7 +1161,7 @@ async function handleUpload() {
     progressText.textContent = `Subiendo ${filename}...`;
     countEl.textContent = `${done}/${total}`;
 
-    const formData = new FormData();
+const formData = new FormData();
     formData.append('files[]', entry.file);
 
     // Incluir hints del preview si están disponibles
@@ -991,9 +1171,17 @@ async function handleUpload() {
     if (meta.razon_social) formData.append('razon_social', meta.razon_social);
     if (meta.banco) formData.append('banco', meta.banco);
     if (meta.tipo_documento) formData.append('tipo_documento', meta.tipo_documento);
-    if (entry.confirmation?.folder) formData.append('folder', entry.confirmation.folder);
+    if (entry.confirmation?.folder) {
+      formData.append('folder', entry.confirmation.folder);
+    } else if (uploadMode === 'manual' && selectedManualFolder) {
+      formData.append('folder', selectedManualFolder);
+    }
     if (entry.confirmation?.correctionReason) {
       formData.append('correction_reason', entry.confirmation.correctionReason);
+    }
+    formData.append('upload_mode', uploadMode);
+    if (entry.isDuplicate && entry.allowDuplicate) {
+      formData.append('allow_duplicate', 'true');
     }
 
     try {
@@ -1246,8 +1434,9 @@ async function bootstrap() {
   const hasSession = await restoreSession();
   if (!hasSession) { redirectToLogin(); return; }
 
-  applyAdminVisibility();
+applyAdminVisibility();
   bindAllEvents();
+  initUploadModeToggle();
   initDropZone();
 
   // Restaurar ruta desde la URL si existe

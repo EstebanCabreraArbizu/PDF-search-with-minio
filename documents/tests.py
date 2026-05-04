@@ -13,6 +13,7 @@ from documents.views import (
 	FilesListView,
 	FilesUploadView,
 	FoldersListView,
+	FolderOptionsView,
 	IndexStatsView,
 	PopulateHashesView,
 	ReindexView,
@@ -778,3 +779,296 @@ class DocrepoFileManagementViewsUnitTests(TestCase):
 		self.assertIn('12345678', response.data['codigos_encontrados'])
 		self.assertIn('99999999', response.data['codigos_no_encontrados'])
 		self.assertEqual(response.data['results'][0]['codigos_match'], ['12345678'])
+
+
+class FolderOptionsAndUploadModeTests(TestCase):
+	"""Tests para las nuevas funcionalidades de Fase 2: upload manual/auto y manejo de duplicados."""
+	
+	def setUp(self):
+		self.admin_user = SimpleNamespace(
+			id=2001,
+			is_authenticated=True,
+			is_staff=True,
+		)
+
+	def _request(self, data=None, query_params=None, files=None, post=None):
+		return SimpleNamespace(
+			data=data or {},
+			query_params=query_params or {},
+			FILES=files or SimpleNamespace(getlist=lambda _key: []),
+			POST=post or {},
+			user=self.admin_user,
+			META={},
+		)
+
+	@patch('documents.views.Document.objects.filter')
+	def test_folder_options_returns_available_folders(self, mock_document_filter):
+		"""GET /api/folders/options lista carpetas disponibles."""
+		mock_document_filter.return_value.values.return_value = [
+			{'storage_object__object_key': 'Planillas 2026/RESGUARDO/01.ENERO/BCP/file1.pdf', 'source_path_legacy': ''},
+			{'storage_object__object_key': 'Planillas 2026/FACILITIES/01.ENERO/SEGUROS/file2.pdf', 'source_path_legacy': ''},
+		]
+
+		request = self._request(query_params={})
+		response = FolderOptionsView().get(request)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.data['success'])
+		self.assertIn('folders', response.data)
+		# RESGUARDO y FACILITIES son carpetas de nivel 1
+		folder_names = [f['name'] for f in response.data['folders']]
+		self.assertIn('RESGUARDO', folder_names)
+		self.assertIn('FACILITIES', folder_names)
+
+	@patch('documents.views.Document.objects.filter')
+	def test_folder_options_filters_by_domain(self, mock_document_filter):
+		"""GET /api/folders/options?domain=SEGUROS filtra por dominio."""
+		mock_document_filter.return_value.values.return_value = [
+			{'storage_object__object_key': 'Planillas 2026/FACILITIES/01.ENERO/SEGUROS/file.pdf', 'source_path_legacy': ''},
+		]
+
+		request = self._request(query_params={'domain': 'SEGUROS'})
+		response = FolderOptionsView().get(request)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['domain_filter'], 'SEGUROS')
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.settings.DOCREPO_AUTO_ROUTE_UPLOAD_ENABLED', True)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views._find_active_duplicate_by_hash_size')
+	@patch('documents.views.build_auto_storage_prefix')
+	@patch('documents.views.infer_upload_metadata')
+	@patch('documents.views.extract_text_from_pdf_bytes')
+	def test_files_classify_preview_accepts_upload_mode_auto(
+		self,
+		mock_extract_text_from_bytes,
+		mock_infer_upload_metadata,
+		mock_build_auto_storage_prefix,
+		mock_find_duplicate,
+		mock_record_audit,
+	):
+		"""POST /api/files/classify-preview con upload_mode=auto."""
+		fake_upload = SimpleNamespace(
+			name='planilla_test.pdf',
+			read=lambda: b'%PDF-1.4 test content',
+		)
+		files = SimpleNamespace(getlist=lambda _key: [fake_upload])
+
+		mock_extract_text_from_bytes.return_value = ('PLANILLA', [])
+		mock_infer_upload_metadata.return_value = {
+			'año': '2026', 'mes': '01', 'razon_social': 'RESGUARDO',
+			'banco': 'BCP', 'tipo_documento': 'FIN DE MES', 'domain_code': 'CONSTANCIA_ABONO',
+		}
+		mock_build_auto_storage_prefix.return_value = 'Planillas 2026/RESGUARDO/01.ENERO/BCP/FIN DE MES'
+		mock_find_duplicate.return_value = None
+
+		request = self._request(files=files, post={'upload_mode': 'auto'})
+		response = FilesClassifyPreviewView().post(request)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['summary']['upload_mode'], 'auto')
+		self.assertEqual(response.data['files'][0]['upload_mode'], 'auto')
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views._find_active_duplicate_by_hash_size')
+	@patch('documents.views.extract_metadata')
+	def test_files_classify_preview_manual_mode_requires_folder(
+		self,
+		mock_extract_metadata,
+		mock_find_duplicate,
+		mock_record_audit,
+	):
+		"""POST /api/files/classify-preview con upload_mode=manual sin folder retorna error."""
+		fake_upload = SimpleNamespace(
+			name='planilla_test.pdf',
+			read=lambda: b'%PDF-1.4 test content',
+		)
+		files = SimpleNamespace(getlist=lambda _key: [fake_upload])
+
+		request = self._request(files=files, post={'upload_mode': 'manual'})
+		response = FilesClassifyPreviewView().post(request)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertEqual(response.data['code'], 'MANUAL_MODE_REQUIRES_FOLDER')
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.settings.DOCREPO_AUTO_ROUTE_UPLOAD_ENABLED', True)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views._find_active_duplicate_by_hash_size')
+	@patch('documents.views.build_auto_storage_prefix')
+	@patch('documents.views.infer_upload_metadata')
+	@patch('documents.views.extract_text_from_pdf_bytes')
+	def test_files_classify_preview_manual_mode_with_folder(
+		self,
+		mock_extract_text_from_bytes,
+		mock_infer_upload_metadata,
+		mock_build_auto_storage_prefix,
+		mock_find_duplicate,
+		mock_record_audit,
+	):
+		"""POST /api/files/classify-preview con upload_mode=manual y folder."""
+		fake_upload = SimpleNamespace(
+			name='planilla_test.pdf',
+			read=lambda: b'%PDF-1.4 test content',
+		)
+		files = SimpleNamespace(getlist=lambda _key: [fake_upload])
+
+		mock_extract_text_from_bytes.return_value = ('PLANILLA', [])
+		mock_infer_upload_metadata.return_value = {
+			'año': '2026', 'mes': '01', 'razon_social': 'RESGUARDO',
+			'banco': 'BCP', 'tipo_documento': 'FIN DE MES', 'domain_code': 'CONSTANCIA_ABONO',
+		}
+		mock_build_auto_storage_prefix.return_value = 'Planillas 2026/RESGUARDO/01.ENERO/BCP/FIN DE MES'
+		mock_find_duplicate.return_value = None
+
+		request = self._request(files=files, post={
+			'upload_mode': 'manual',
+			'folder': '2026/RESGUARDO',
+		})
+		response = FilesClassifyPreviewView().post(request)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data['summary']['upload_mode'], 'manual')
+		self.assertEqual(response.data['summary']['folder'], '2026/RESGUARDO')
+		self.assertEqual(response.data['files'][0]['upload_mode'], 'manual')
+		# En modo manual, logical_prefix es la carpeta especificada sin el archivo
+		self.assertEqual(response.data['files'][0]['logical_prefix'], '2026/RESGUARDO')
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views._find_active_duplicate_by_hash_size')
+	@patch('documents.views.upsert_document_from_upload')
+	@patch('documents.views.extract_text_from_pdf')
+	@patch('documents.views.extract_metadata')
+	@patch('documents.views.minio_client.stat_object')
+	@patch('documents.views.minio_client.put_object')
+	def test_files_upload_with_allow_duplicate_true(
+		self,
+		mock_put_object,
+		mock_stat_object,
+		mock_extract_metadata,
+		mock_extract_text,
+		mock_upsert,
+		mock_find_duplicate,
+		mock_record_audit,
+	):
+		"""POST /api/files/upload con allow_duplicate=true permite re-ingreso."""
+		fake_upload = SimpleNamespace(
+			name='duplicado_reingreso.pdf',
+			read=lambda: b'%PDF-1.4 reingreso content',
+		)
+		files = SimpleNamespace(getlist=lambda _key: [fake_upload])
+
+		# Simular que hay un duplicado
+		mock_find_duplicate.return_value = SimpleNamespace(
+			document=SimpleNamespace(id='dup-doc-1'),
+			object_key='Planillas 2026/RESGUARDO/01.ENERO/BCP/duplicado_reingreso.pdf',
+		)
+		
+		mock_stat_object.return_value = SimpleNamespace(
+			etag='"etag-reingreso"',
+			last_modified=datetime.utcnow(),
+		)
+		mock_extract_metadata.return_value = {
+			'año': '2026', 'mes': '01', 'razon_social': 'RESGUARDO',
+			'banco': 'BCP', 'tipo_documento': 'FIN DE MES',
+		}
+		mock_extract_text.return_value = ('contenido', [])
+		mock_upsert.return_value = SimpleNamespace(
+			document=SimpleNamespace(id='doc-new'),
+			domain_code='CONSTANCIA_ABONO',
+		)
+
+		request = self._request(files=files, post={
+			'folder': '2026/RESGUARDO',
+			'allow_duplicate': 'true',
+		})
+		response = FilesUploadView().post(request)
+
+		self.assertEqual(response.status_code, 201)
+		self.assertTrue(response.data['success'])
+		self.assertEqual(response.data['total_uploaded'], 1)
+		self.assertEqual(response.data['uploaded'][0]['duplicate_replaced'], {
+			'document_id': 'dup-doc-1',
+			'object_key': 'Planillas 2026/RESGUARDO/01.ENERO/BCP/duplicado_reingreso.pdf',
+		})
+		# Verificar que se permitió el upload (no se bloqueó)
+		mock_put_object.assert_called_once()
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views._find_active_duplicate_by_hash_size')
+	@patch('documents.views.upsert_document_from_upload')
+	@patch('documents.views.extract_text_from_pdf')
+	@patch('documents.views.extract_metadata')
+	@patch('documents.views.minio_client.stat_object')
+	@patch('documents.views.minio_client.put_object')
+	def test_files_upload_manual_mode_with_folder(
+		self,
+		mock_put_object,
+		mock_stat_object,
+		mock_extract_metadata,
+		mock_extract_text,
+		mock_upsert,
+		mock_find_duplicate,
+		mock_record_audit,
+	):
+		"""POST /api/files/upload con upload_mode=manual usa folder especificado."""
+		fake_upload = SimpleNamespace(
+			name='planilla_manual.pdf',
+			read=lambda: b'%PDF-1.4 manual test content',
+		)
+		files = SimpleNamespace(getlist=lambda _key: [fake_upload])
+
+		mock_find_duplicate.return_value = None
+		mock_stat_object.return_value = SimpleNamespace(
+			etag='"etag-manual"',
+			last_modified=datetime.utcnow(),
+		)
+		mock_extract_metadata.return_value = {
+			'año': '2026', 'mes': '01', 'razon_social': 'RESGUARDO',
+			'banco': 'BCP', 'tipo_documento': 'FIN DE MES',
+		}
+		mock_extract_text.return_value = ('contenido', [])
+		mock_upsert.return_value = SimpleNamespace(
+			document=SimpleNamespace(id='doc-manual'),
+			domain_code='CONSTANCIA_ABONO',
+		)
+
+		request = self._request(files=files, post={
+			'upload_mode': 'manual',
+			'folder': 'Planillas 2026/RESGUARDO/01.ENERO/BCP',
+		})
+		response = FilesUploadView().post(request)
+
+		self.assertEqual(response.status_code, 201)
+		self.assertTrue(response.data['success'])
+		self.assertEqual(response.data['uploaded'][0]['upload_mode'], 'manual')
+		self.assertEqual(
+			response.data['uploaded'][0]['path'],
+			'Planillas 2026/RESGUARDO/01.ENERO/BCP/planilla_manual.pdf'
+		)
+		self.assertFalse(response.data['uploaded'][0]['auto_routed'])
+
+	@patch('documents.views.settings.DOCREPO_DUAL_WRITE_LEGACY_ENABLED', False)
+	@patch('documents.views.record_audit_event')
+	@patch('documents.views._find_active_duplicate_by_hash_size')
+	def test_files_upload_manual_mode_without_folder_returns_error(
+		self,
+		mock_find_duplicate,
+		mock_record_audit,
+	):
+		"""POST /api/files/upload con upload_mode=manual sin folder retorna error."""
+		fake_upload = SimpleNamespace(
+			name='planilla_test.pdf',
+			read=lambda: b'%PDF-1.4 test content',
+		)
+		files = SimpleNamespace(getlist=lambda _key: [fake_upload])
+
+		request = self._request(files=files, post={'upload_mode': 'manual'})
+		response = FilesUploadView().post(request)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertEqual(response.data['code'], 'MANUAL_MODE_REQUIRES_FOLDER')

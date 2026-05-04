@@ -1778,6 +1778,113 @@ body.search-page-body.login-page {
   overflow: hidden;
 }
 
+/* ── Upload mode toggle ───────────────────────────────────────────── */
+.upload-mode-block {
+  padding: .75rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0;
+}
+
+.upload-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.upload-mode-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.upload-mode-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-surface-secondary);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.upload-mode-toggle input[type="radio"] {
+  display: none;
+}
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--motion-fast) var(--motion-ease);
+  white-space: nowrap;
+}
+
+.mode-option i {
+  font-size: 15px;
+}
+
+.mode-option:hover {
+  color: var(--text);
+}
+
+.mode-option.auto-option.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.mode-option.manual-option.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.upload-manual-controls {
+  margin-top: 10px;
+}
+
+.manual-folder-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.manual-folder-input {
+  flex: 1;
+  min-width: 200px;
+  font-size: 13px;
+}
+
+.folder-browser-result {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--bg-surface-secondary);
+  border-radius: 6px;
+}
+
+.folder-browser-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.folder-browser-path-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.folder-browser-selected-path {
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-all;
+}
+
 /* ── Drop zone ──────────────────────────────────────────────────────── */
 .drop-zone {
   margin: 0 1.5rem 1.5rem;
@@ -1951,10 +2058,68 @@ body.search-page-body.login-page {
   background: color-mix(in srgb, #c89a00 12%, var(--panel) 88%);
   color: #8a6500;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.duplicate-warning-banner .banner-text {
+  flex: 1;
+  min-width: 200px;
+}
+
+.duplicate-banner-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.btn-duplicate-use-folder,
+.btn-duplicate-override {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--motion-fast) var(--motion-ease);
+}
+
+.btn-duplicate-use-folder {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.btn-duplicate-use-folder:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-duplicate-override {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn-duplicate-override:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-duplicate-override:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.duplicate-existing-path {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 6px;
+  word-break: break-all;
 }
 
 .duplicate-warning-banner a,

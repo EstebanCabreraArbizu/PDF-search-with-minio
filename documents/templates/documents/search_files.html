@@ -131,6 +131,42 @@
       <div class="results-count"><i class="ti ti-cloud-upload"></i> CARGA DE ARCHIVOS</div>
     </div>
 
+    <!-- FEAT-1/2: Upload mode toggle -->
+    <div class="upload-mode-block" id="uploadModeBlock">
+      <div class="upload-mode-row">
+        <label class="upload-mode-label">Modo de organización</label>
+        <div class="upload-mode-toggle">
+          <input type="radio" id="uploadModeAuto" name="uploadMode" value="auto" checked>
+          <label for="uploadModeAuto" class="mode-option auto-option">
+            <i class="ti ti-sparkles"></i> Auto-organizar
+          </label>
+          <input type="radio" id="uploadModeManual" name="uploadMode" value="manual">
+          <label for="uploadModeManual" class="mode-option manual-option">
+            <i class="ti ti-folder"></i> Elegir carpeta
+          </label>
+        </div>
+      </div>
+      <div class="upload-manual-controls hidden" id="uploadManualControls">
+        <div class="manual-folder-row">
+          <input id="manualFolderInput" type="text" class="form-control manual-folder-input"
+                 placeholder="Ej: Planillas 2025/RESGUARDO/ENERO"
+                 maxlength="500">
+          <button type="button" id="useCurrentFolderBtn" class="btn btn-ghost btn-sm">
+            <i class="ti ti-folder"></i> Usar carpeta actual
+          </button>
+          <button type="button" id="browseFoldersBtn" class="btn btn-ghost btn-sm">
+            <i class="ti tiFolders"></i> Examinar carpetas
+          </button>
+        </div>
+        <div class="folder-browser-result hidden" id="folderBrowserResult">
+          <div class="folder-browser-header">
+            <span class="folder-browser-path-label">Ruta seleccionada:</span>
+            <code class="folder-browser-selected-path" id="selectedFolderPath"></code>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Drop zone -->
     <div id="dropZone" class="drop-zone" role="button" tabindex="0"
          aria-label="Zona de arrastre de archivos PDF">

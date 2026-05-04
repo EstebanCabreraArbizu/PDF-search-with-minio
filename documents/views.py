@@ -1584,12 +1584,120 @@ class FilesListView(APIView):
             return Response({'error': f'Error al listar archivos: {str(e)}'}, status=500)
 
 
+class FolderOptionsView(APIView):
+    """
+    Lista opciones de carpetas disponibles para selección manual.
+    GET /api/folders/options
+    
+    Parámetros opcionales:
+    - domain: SEGUROS | TREGISTRO | CONSTANCIA_ABONO (filtra estructura)
+    - parent: ruta padre para drill-down
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        import re
+        from django.db.models import Q
+        
+        parent = request.query_params.get('parent', '').strip()
+        domain = request.query_params.get('domain', '').strip().upper()
+        
+        if parent and not parent.endswith('/'):
+            parent += '/'
+        
+        try:
+            # Construir query base
+            query = Q(is_active=True)
+            
+            if parent:
+                query &= Q(
+                    storage_object__object_key__startswith=parent
+                ) | Q(source_path_legacy__startswith=parent)
+            
+            # Obtener todas las rutas únicas
+            docs = Document.objects.filter(query).values(
+                'storage_object__object_key', 
+                'source_path_legacy'
+            ).distinct()
+            
+            folder_options = []
+            seen_folders = set()
+            
+            for doc in docs:
+                path = doc['storage_object__object_key'] or doc['source_path_legacy']
+                if not path:
+                    continue
+                
+                relative_path = path[len(parent):] if parent else path
+                parts = relative_path.split('/')
+                
+                # Skip years at root level (they're structural)
+                if not parent and len(parts) > 0 and re.fullmatch(r'20\d{2}', parts[0]):
+                    continue
+                
+                if len(parts) >= 2:
+                    folder_name = parts[0]
+                    folder_path = parent + folder_name + '/'
+                    
+                    if folder_path not in seen_folders:
+                        seen_folders.add(folder_path)
+                        
+                        # Map to domain structure
+                        domain_label = ''
+                        if domain == 'SEGUROS':
+                            domain_label = 'SEGUROS'
+                        elif domain == 'TREGISTRO':
+                            domain_label = 'TREGISTRO'
+                        elif domain == 'CONSTANCIA_ABONO':
+                            # Check if contains bank
+                            bank_match = re.search(r'/(BCP|INTERBACK|BBVA|MIBANCO|SCOTIABANK|GENERAL)/', path)
+                            if bank_match:
+                                domain_label = f"PLANILLAS / {bank_match.group(1)}"
+                            else:
+                                domain_label = 'PLANILLAS'
+                        
+                        folder_options.append({
+                            'name': folder_name,
+                            'path': folder_path,
+                            'label': f"{folder_name} ({domain_label})" if domain_label else folder_name,
+                            'domain_hint': self._infer_domain_from_path(folder_path),
+                        })
+            
+            return Response({
+                'success': True,
+                'current_path': parent,
+                'folders': sorted(folder_options, key=lambda x: x['name'].lower()),
+                'domain_filter': domain or None,
+            })
+            
+        except Exception as e:
+            return Response({
+                'error': f'Error listando carpetas: {str(e)}',
+                'folders': []
+            }, status=500)
+    
+    def _infer_domain_from_path(self, folder_path):
+        """Infiere el dominio basado en la ruta."""
+        path_upper = folder_path.upper()
+        if 'SEGUROS' in path_upper or 'SCTR' in path_upper or 'VIDA LEY' in path_upper:
+            return 'SEGUROS'
+        if 'TREGISTRO' in path_upper or '/MOV/' in folder_path:
+            return 'TREGISTRO'
+        if 'PLANILLAS' in path_upper or '/' in folder_path:
+            return 'CONSTANCIA_ABONO'
+        return ''
+
+
 class FilesClassifyPreviewView(APIView):
     """
     Previsualiza clasificación automática y ruta lógica sin guardar en MinIO.
     POST /api/files/classify-preview (multipart/form-data)
+    
+    Soporta:
+    - upload_mode: 'auto' (predeterminado) | 'manual' (requiere folder)
+    - folder: ruta destino para modo manual
+    - domain_hint: forzar dominio (SEGUROS|TREGISTRO|CONSTANCIA_ABONO)
     """
-
     permission_classes = [IsAdminUser]
 
     def post(self, request):
@@ -1600,6 +1708,18 @@ class FilesClassifyPreviewView(APIView):
         if not files:
             return Response({'error': 'No se proporcionaron archivos.'}, status=400)
 
+        # FEAT-2: Parámetros de modo de upload
+        upload_mode = request.POST.get('upload_mode', 'auto').strip().lower()
+        requested_folder = request.POST.get('folder', '').strip()
+        domain_hint = request.POST.get('domain', '').strip().upper()
+        
+        # Validar modo manual requiere folder
+        if upload_mode == 'manual' and not requested_folder:
+            return Response({
+                'error': 'En modo manual debe especificar la ruta del folder.',
+                'code': 'MANUAL_MODE_REQUIRES_FOLDER',
+            }, status=400)
+        
         hints = _build_upload_hints(request)
         min_confidence = float(getattr(settings, 'DOCREPO_CLASSIFICATION_MIN_CONFIDENCE', 0.7))
 
@@ -1620,6 +1740,7 @@ class FilesClassifyPreviewView(APIView):
                     'warnings': ['invalid_extension'],
                     'missing_fields': [],
                     'duplicate': None,
+                    'upload_mode': upload_mode,
                 })
                 requires_confirmation += 1
                 continue
@@ -1630,10 +1751,29 @@ class FilesClassifyPreviewView(APIView):
                 file_md5 = hashlib.md5(file_content).hexdigest()
 
                 preview_text, preview_codes = extract_text_from_pdf_bytes(file_content)
-                meta = infer_upload_metadata(file.name, preview_text, hints)
+                
+                # Usar domain_hint si está presente, sino inferir de metadata
+                if domain_hint:
+                    meta = infer_upload_metadata(file.name, preview_text, hints)
+                    meta['domain_code'] = domain_hint
+                else:
+                    meta = infer_upload_metadata(file.name, preview_text, hints)
+                
                 domain_code = meta.get('domain_code', 'CONSTANCIA_ABONO')
-                logical_prefix = build_auto_storage_prefix(meta, domain_code)
-                logical_path = f"{logical_prefix}/{file.name}"
+                
+                # FEAT-1/2: Determinar prefijo según modo
+                if upload_mode == 'manual' and requested_folder:
+                    normalized_folder = requested_folder
+                    if not normalized_folder.endswith('/'):
+                        normalized_folder += '/'
+                    logical_prefix = normalized_folder.rstrip('/')
+                    logical_path = f"{normalized_folder}{file.name}"
+                    auto_routed = False
+                else:
+                    # Modo automático: inferir ruta
+                    logical_prefix = build_auto_storage_prefix(meta, domain_code)
+                    logical_path = f"{logical_prefix}/{file.name}"
+                    auto_routed = True
 
                 duplicate = _find_active_duplicate_by_hash_size(file_size, file_md5)
                 if duplicate is not None:
@@ -1661,6 +1801,12 @@ class FilesClassifyPreviewView(APIView):
                 else:
                     ready += 1
 
+                # FEAT-2: Incluir sugerencias de folder alternativas
+                folder_suggestions = []
+                if upload_mode == 'manual':
+                    # En modo manual, sugerir carpetas basadas en metadata detectada
+                    folder_suggestions = self._get_folder_suggestions(meta, domain_code)
+
                 items.append({
                     'filename': file.name,
                     'size': file_size,
@@ -1669,6 +1815,7 @@ class FilesClassifyPreviewView(APIView):
                     'requires_confirmation': needs_confirmation,
                     'confidence': confidence,
                     'domain': domain_code,
+                    'upload_mode': upload_mode,
                     'metadata': {
                         'año': meta.get('año', ''),
                         'mes': meta.get('mes', ''),
@@ -1678,12 +1825,14 @@ class FilesClassifyPreviewView(APIView):
                     },
                     'logical_prefix': logical_prefix,
                     'logical_path': logical_path,
+                    'folder_suggestions': folder_suggestions,
                     'missing_fields': missing_fields,
                     'warnings': warnings,
                     'detected_codes_count': len(preview_codes or []),
                     'duplicate': {
                         'document_id': str(duplicate.document.id),
                         'object_key': duplicate.object_key,
+                        'suggested_folder': self._suggest_duplicate_folder(duplicate.object_key) if duplicate else None,
                     } if duplicate is not None else None,
                 })
             except Exception as preview_error:
@@ -1696,6 +1845,7 @@ class FilesClassifyPreviewView(APIView):
                     'warnings': ['preview_error'],
                     'missing_fields': [],
                     'error': str(preview_error),
+                    'upload_mode': upload_mode,
                     'duplicate': None,
                 })
 
@@ -1705,6 +1855,8 @@ class FilesClassifyPreviewView(APIView):
             'requires_confirmation': requires_confirmation,
             'duplicates': duplicates,
             'min_confidence': min_confidence,
+            'upload_mode': upload_mode,
+            'folder': requested_folder if upload_mode == 'manual' else None,
         }
 
         record_audit_event(
@@ -1721,12 +1873,69 @@ class FilesClassifyPreviewView(APIView):
             'summary': summary,
             'files': items,
         })
+    
+    def _get_folder_suggestions(self, meta, domain_code):
+        """Genera sugerencias de carpetas basadas en metadata detectada."""
+        suggestions = []
+        año = meta.get('año', '')
+        mes = meta.get('mes', '')
+        razon_social = meta.get('razon_social', '')
+        banco = meta.get('banco', '')
+        tipo = meta.get('tipo_documento', '')
+        
+        if año:
+            if razon_social:
+                base = f"Planillas {año}/{razon_social}"
+                if mes:
+                    mes_label = f"{int(mes):02d}.{self._month_name(mes)}"
+                    suggestions.append(f"{base}/{mes_label}")
+                    if banco:
+                        suggestions.append(f"{base}/{mes_label}/{banco}")
+                        if tipo:
+                            suggestions.append(f"{base}/{mes_label}/{banco}/{tipo}")
+                        else:
+                            suggestions.append(f"{base}/{mes_label}/{banco}/FIN DE MES DESTACADOS")
+                else:
+                    suggestions.append(base)
+            else:
+                suggestions.append(f"Planillas {año}")
+        
+        # Agregar rutas de dominio específicas
+        if domain_code == 'SEGUROS':
+            if año and razon_social:
+                suggestions.append(f"Planillas {año}/{razon_social}/SEGUROS")
+        elif domain_code == 'TREGISTRO':
+            suggestions.append("TREGISTRO/MOV")
+        
+        return list(dict.fromkeys(suggestions))[:5]  # Max 5 sugerencias
+    
+    def _month_name(self, month_num):
+        """Convierte número de mes a nombre."""
+        names = {
+            '01': 'ENERO', '02': 'FEBRERO', '03': 'MARZO', '04': 'ABRIL',
+            '05': 'MAYO', '06': 'JUNIO', '07': 'JULIO', '08': 'AGOSTO',
+            '09': 'SEPTIEMBRE', '10': 'OCTUBRE', '11': 'NOVIEMBRE', '12': 'DICIEMBRE',
+        }
+        return names.get(month_num.zfill(2), month_num)
+    
+    def _suggest_duplicate_folder(self, existing_path):
+        """Sugiere carpeta para re-ingreso de duplicado."""
+        if not existing_path:
+            return None
+        parts = existing_path.split('/')
+        if len(parts) >= 2:
+            # Suggest a different folder within the same company/year
+            return '/'.join(parts[:-1]) + '/'
+        return None
 
 
 class FilesUploadView(APIView):
     """
     Subir uno o varios PDFs a MinIO y auto-indexarlos.
     POST /api/files/upload (multipart/form-data)
+    
+    FEAT-1: Soporta upload_mode='auto'|'manual'
+    FEAT-3: Soporta allow_duplicate=true para re-ingresar archivos duplicados
     """
     permission_classes = [IsAdminUser]
 
@@ -1740,9 +1949,25 @@ class FilesUploadView(APIView):
         files = request.FILES.getlist('files[]')
         requested_folder = request.POST.get('folder', '').strip()
         correction_reason = request.POST.get('correction_reason', '').strip()[:500]
+        
+        # FEAT-1: Modo de upload
+        upload_mode = request.POST.get('upload_mode', 'auto').strip().lower()
+        
+        # FEAT-3: Permitir duplicados solo para admins (planillas/admin)
+        # No se audita aquí porque el override real ocurre en la línea de éxito
+        is_admin_override = request.user.is_staff
+        allow_duplicate_raw = request.POST.get('allow_duplicate', 'false').strip().lower()
+        allow_duplicate = allow_duplicate_raw in {'true', '1', 'yes'} and is_admin_override
 
         if not files:
             return Response({'error': 'No se proporcionaron archivos.'}, status=400)
+
+        # Validar modo manual requiere folder
+        if upload_mode == 'manual' and not requested_folder:
+            return Response({
+                'error': 'En modo manual debe especificar la ruta del folder.',
+                'code': 'MANUAL_MODE_REQUIRES_FOLDER',
+            }, status=400)
 
         uploaded = []
         errors = []
@@ -1762,7 +1987,9 @@ class FilesUploadView(APIView):
                 file_md5 = hashlib.md5(file_content).hexdigest()
 
                 duplicate = _find_active_duplicate_by_hash_size(file_size, file_md5)
-                if duplicate is not None:
+                
+                # FEAT-3: Si hay duplicado y no se permite override, bloquear
+                if duplicate is not None and not allow_duplicate:
                     record_audit_event(
                         action='FILE_UPLOAD_DUPLICATE_BLOCKED',
                         resource_type='file',
@@ -1785,8 +2012,36 @@ class FilesUploadView(APIView):
                         'code': 'DUPLICATE_FILE',
                         'existing_document_id': str(duplicate.document.id),
                         'existing_path': duplicate.object_key,
+                        'suggested_override': allow_duplicate,
                     })
                     continue
+                
+                # FEAT-3: Si allow_duplicate=true, continuar con upload (re-ingreso)
+                duplicate_replaced = None
+                if duplicate is not None and allow_duplicate:
+                    # Registrar que estamos reemplazando un duplicado
+                    duplicate_replaced = {
+                        'document_id': str(duplicate.document.id),
+                        'object_key': duplicate.object_key,
+                    }
+                    logger.info(f"Re-ingresando duplicado: {duplicate.object_key} → nuevo archivo")
+                    record_audit_event(
+                        action='FILE_UPLOAD_DUPLICATE_OVERRIDDEN',
+                        resource_type='file',
+                        resource_id=file.name,
+                        request=request,
+                        actor=request.user,
+                        document=duplicate.document,
+                        metadata={
+                            'status_code': 201,
+                            'filename': file.name,
+                            'size_bytes': file_size,
+                            'md5_hash': file_md5,
+                            'replaced_document_id': str(duplicate.document.id),
+                            'replaced_object_key': duplicate.object_key,
+                            'new_object_key': object_name,
+                        },
+                    )
 
                 hints = _build_upload_hints(request)
 
@@ -1796,7 +2051,17 @@ class FilesUploadView(APIView):
                 preview_text = None
                 preview_codes = []
 
-                if normalized_folder:
+                # FEAT-1: Determinar ruta según modo
+                if upload_mode == 'manual' and requested_folder:
+                    normalized_folder = requested_folder
+                    if not normalized_folder.endswith('/'):
+                        normalized_folder += '/'
+                    object_name = f"{normalized_folder}{file.name}"
+                    meta = extract_metadata(object_name)
+                    for hint_key, hint_value in hints.items():
+                        if str(hint_value or '').strip():
+                            meta[hint_key] = hint_value
+                elif normalized_folder:
                     if not normalized_folder.endswith('/'):
                         normalized_folder += '/'
                     object_name = f"{normalized_folder}{file.name}"
@@ -1886,6 +2151,9 @@ class FilesUploadView(APIView):
                         'domain_preview': preview_domain,
                         'auto_routed': auto_routed,
                         'requested_folder': requested_folder,
+                        'upload_mode': upload_mode,
+                        'allow_duplicate': allow_duplicate,
+                        'duplicate_replaced': duplicate_replaced,
                         'correction_reason': correction_reason,
                         'md5_hash': file_md5,
                         'indexed': indexed,
@@ -1905,6 +2173,8 @@ class FilesUploadView(APIView):
                     'domain': ingest_result.domain_code,
                     'domain_preview': preview_domain,
                     'auto_routed': auto_routed,
+                    'upload_mode': upload_mode,
+                    'duplicate_replaced': duplicate_replaced,
                     'md5_hash': file_md5,
                     'legacy_sync_enabled': dual_write_legacy,
                     'legacy_synced': legacy_synced,
