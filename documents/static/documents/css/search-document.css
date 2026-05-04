@@ -31,13 +31,13 @@
   --radius: 3px;
   --shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
   --sidebar-width: 238px;
-  --glass-bg: color-mix(in srgb, var(--panel) 62%, transparent);
-  --glass-bg-strong: color-mix(in srgb, var(--panel) 70%, transparent);
-  --glass-bg-soft: color-mix(in srgb, var(--panel) 48%, transparent);
-  --glass-border: color-mix(in srgb, var(--line) 82%, transparent);
-  --glass-shadow: 0 22px 48px rgba(16, 24, 40, 0.22);
-  --glass-blur: 30px;
-  --glass-saturation: 186%;
+  --glass-bg: color-mix(in srgb, var(--fa-acrylic-bg, var(--panel)) 82%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--fa-acrylic-bg-strong, var(--panel)) 82%, transparent);
+  --glass-bg-soft: color-mix(in srgb, var(--fa-acrylic-bg-subtle, var(--panel)) 82%, transparent);
+  --glass-border: var(--fa-acrylic-border, color-mix(in srgb, var(--line) 82%, transparent));
+  --glass-shadow: var(--fa-shadow-glass, 0 22px 48px rgba(16, 24, 40, 0.22));
+  --glass-blur: 28px;
+  --glass-saturation: 170%;
   --glass-tint: rgba(255, 255, 255, 0.42);
   --glass-tint-soft: rgba(255, 255, 255, 0.14);
   --logout-outline: color-mix(in srgb, #a4142a 78%, var(--line) 22%);
@@ -48,12 +48,12 @@
 }
 
 :root[data-theme="dark"] {
-  --glass-bg: color-mix(in srgb, var(--panel) 78%, transparent);
-  --glass-bg-strong: color-mix(in srgb, var(--panel) 86%, transparent);
-  --glass-bg-soft: color-mix(in srgb, var(--panel) 70%, transparent);
-  --glass-border: color-mix(in srgb, var(--line) 84%, transparent);
-  --glass-shadow: 0 20px 42px rgba(0, 0, 0, 0.42);
-  --glass-blur: 18px;
+  --glass-bg: color-mix(in srgb, var(--fa-acrylic-bg, var(--panel)) 72%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--fa-acrylic-bg-strong, var(--panel)) 76%, transparent);
+  --glass-bg-soft: color-mix(in srgb, var(--fa-acrylic-bg-subtle, var(--panel)) 70%, transparent);
+  --glass-border: var(--fa-acrylic-border, color-mix(in srgb, var(--line) 84%, transparent));
+  --glass-shadow: var(--fa-shadow-glass, 0 20px 42px rgba(0, 0, 0, 0.42));
+  --glass-blur: 22px;
   --glass-tint: rgba(255, 255, 255, 0.12);
   --glass-tint-soft: rgba(255, 255, 255, 0.03);
   --logout-outline: color-mix(in srgb, #355f96 76%, var(--line) 24%);
@@ -62,11 +62,11 @@
 
 :root[data-theme="corp-dark"] {
   --danger: #ff5f7d;
-  --glass-bg: color-mix(in srgb, var(--panel) 70%, transparent);
-  --glass-bg-strong: color-mix(in srgb, var(--panel) 78%, transparent);
-  --glass-bg-soft: color-mix(in srgb, var(--panel) 60%, transparent);
-  --glass-border: color-mix(in srgb, var(--line) 86%, transparent);
-  --glass-shadow: 0 24px 54px rgba(0, 0, 0, 0.54);
+  --glass-bg: color-mix(in srgb, var(--fa-acrylic-bg, var(--panel)) 70%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--fa-acrylic-bg-strong, var(--panel)) 74%, transparent);
+  --glass-bg-soft: color-mix(in srgb, var(--fa-acrylic-bg-subtle, var(--panel)) 68%, transparent);
+  --glass-border: var(--fa-acrylic-border, color-mix(in srgb, var(--line) 86%, transparent));
+  --glass-shadow: var(--fa-shadow-glass, 0 24px 54px rgba(0, 0, 0, 0.54));
   --glass-blur: 24px;
   --glass-saturation: 186%;
   --glass-tint: rgba(255, 255, 255, 0.16);
@@ -78,11 +78,17 @@
 :root[data-theme="light"] {
   --logout-outline: color-mix(in srgb, #0b839e 74%, var(--line) 26%);
   --logout-outline-hover: #08a3c4;
+  --glass-bg: color-mix(in srgb, var(--fa-acrylic-bg, var(--panel)) 88%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--fa-acrylic-bg-strong, var(--panel)) 88%, transparent);
+  --glass-bg-soft: color-mix(in srgb, var(--fa-acrylic-bg-subtle, var(--panel)) 84%, transparent);
 }
 
 :root[data-theme="corp"] {
   --logout-outline: color-mix(in srgb, #a4142a 82%, var(--line) 18%);
   --logout-outline-hover: #d62f4d;
+  --glass-bg: color-mix(in srgb, var(--fa-acrylic-bg, var(--panel)) 76%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--fa-acrylic-bg-strong, var(--panel)) 80%, transparent);
+  --glass-bg-soft: color-mix(in srgb, var(--fa-acrylic-bg-subtle, var(--panel)) 72%, transparent);
 }
 
 * {
@@ -98,20 +104,49 @@ body {
 }
 
 body.search-page-body {
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(980px 460px at -8% -12%, color-mix(in srgb, var(--primary) 14%, transparent) 0%, transparent 68%),
-    radial-gradient(760px 500px at 52% 102%, color-mix(in srgb, var(--primary) 10%, transparent) 0%, transparent 76%),
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--bg) 88%, #ffffff 12%) 0%,
-      var(--bg) 55%,
-      color-mix(in srgb, var(--bg) 84%, #d7e3e7 16%) 100%
-    );
+  background-color: var(--fa-color-bg-base);
+  background-image: none;
   background-attachment: fixed;
   color: var(--text);
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   display: flex;
+  min-height: 100dvh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body.search-page-body::before {
+  content: "";
+  position: fixed;
+  width: min(760px, 68vw);
+  height: min(760px, 68vw);
+  top: -22%;
+  left: -16%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  background: var(--fa-bg-blob-1, rgba(0, 229, 255, 0.32));
+  filter: blur(90px) saturate(1.18);
+  opacity: 0.95;
+  will-change: transform;
+  animation: fa-blob-float-1 18s ease-in-out infinite;
+}
+
+body.search-page-body::after {
+  content: "";
+  position: fixed;
+  width: min(680px, 60vw);
+  height: min(680px, 60vw);
+  right: -12%;
+  bottom: -18%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  background: var(--fa-bg-blob-2, rgba(0, 100, 220, 0.24));
+  filter: blur(84px) saturate(1.12);
+  opacity: 0.88;
+  will-change: transform;
+  animation: fa-blob-float-2 24s ease-in-out infinite;
 }
 
 .workspace {
@@ -122,35 +157,11 @@ body.search-page-body {
   flex-direction: column;
   position: relative;
   overflow: hidden;
+  z-index: 1;
 }
 
 .workspace::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(760px 360px at -4% -8%, color-mix(in srgb, var(--primary) 18%, transparent) 0%, transparent 70%);
-  opacity: 0.14;
-  animation: corner-ambient-drift 10s ease-in-out infinite;
-  z-index: 0;
-}
-
-@keyframes corner-ambient-drift {
-  0%,
-  100% {
-    opacity: 0.08;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-
-  45% {
-    opacity: 0.2;
-    transform: translate3d(10px, -4px, 0) scale(1.05);
-  }
-
-  70% {
-    opacity: 0.12;
-    transform: translate3d(4px, 3px, 0) scale(1.02);
-  }
+  content: none;
 }
 
 .sidebar {
@@ -614,6 +625,8 @@ body.search-page-body {
   gap: 12px;
   position: relative;
   z-index: 1;
+  flex: 1;
+  min-height: calc(100dvh - 56px);
 }
 
 .acrylic-surface {
@@ -2177,6 +2190,7 @@ body.search-page-body.login-page {
 
 .search-error-backdrop {
   position: fixed;
+  z-index: 2;
   inset: 0;
   z-index: 3000;
   display: grid;
@@ -2527,7 +2541,7 @@ body.search-page-body.login-page {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 900;
+  z-index: 4000;
   backdrop-filter: blur(4px);
   animation: fadeIn 140ms ease;
 }
@@ -2535,6 +2549,20 @@ body.search-page-body.login-page {
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 480px;
+  margin: 1rem;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: var(--glass-shadow);
+  animation: slideUp 160ms var(--motion-ease);
+}
+
+.folder-browser-modal {
+  max-width: 720px;
 }
 
 .folder-browser-modal .modal-body {
