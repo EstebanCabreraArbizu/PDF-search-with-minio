@@ -54,13 +54,29 @@
         async ensureAuth() {
             const token = this.getAuthToken();
             if (!token) {
+                this.applyPermissionVisibility({});
                 this.redirectToLogin();
                 return null;
             }
             try {
-                await this.validateToken(API_PATHS.me, token);
-            } catch (_) {}
+                const isValid = await this.validateToken(API_PATHS.me, token);
+                if (!isValid) {
+                    this.clearSession({ updateUi: false });
+                    this.applyPermissionVisibility({});
+                    this.redirectToLogin();
+                    return null;
+                }
+            } catch (_) {
+                this.clearSession({ updateUi: false });
+                this.applyPermissionVisibility({});
+                this.redirectToLogin();
+                return null;
+            }
             return token;
+        },
+
+        async ensureAuthToken() {
+            return this.ensureAuth();
         },
 
         redirectToLogin(loginUrl = '/ui/login/', options = {}) {
@@ -105,9 +121,9 @@
                 user = {};
             }
 
-            const username = user.username || 'admin';
+            const username = user.username || 'Validando...';
             const groups = Array.isArray(user.groups) ? user.groups.map(g => String(g).toLowerCase()) : [];
-            const canManage = user.can_manage_files === true || user.is_staff === true || user.role === 'admin' || groups.includes('planillas');
+            const canManage = user.can_manage_files === true || groups.includes('planillas');
             const isStaff = user.is_staff === true || user.role === 'admin';
             const nameEl = document.getElementById('sidebarUserName');
             const roleEl = document.getElementById('sidebarUserRole');
@@ -123,7 +139,7 @@
 
         applyPermissionVisibility(user = {}) {
             const groups = Array.isArray(user.groups) ? user.groups.map(g => String(g).toLowerCase()) : [];
-            const canManage = user.can_manage_files === true || user.is_staff === true || user.role === 'admin' || groups.includes('planillas');
+            const canManage = user.can_manage_files === true || groups.includes('planillas');
             const allowedDomains = new Set(
                 (Array.isArray(user.allowed_domains) ? user.allowed_domains : [])
                     .map(domain => String(domain).toUpperCase())
@@ -135,9 +151,7 @@
 
             document.querySelectorAll('[data-domain]').forEach(el => {
                 const domain = String(el.getAttribute('data-domain') || '').toUpperCase();
-                if (allowedDomains.size > 0) {
-                    el.classList.toggle('hidden', !allowedDomains.has(domain));
-                }
+                el.classList.toggle('hidden', !allowedDomains.has(domain));
             });
         },
 
@@ -816,6 +830,8 @@
         },
 
         initGlobalUI() {
+            DocSearchCore.applyPermissionVisibility({});
+
             // Check for both possible IDs for compatibility
             const btnTheme = document.getElementById('themeToggleBtn') || document.getElementById('btnThemeToggle');
             if (btnTheme) {

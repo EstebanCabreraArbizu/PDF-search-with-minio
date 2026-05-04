@@ -5,28 +5,28 @@
       <img src="{% static 'documents/img/Logo-Liderman2.svg' %}" alt="Liderman Logo" style="width: 100%; height: 100%; object-fit: contain;">
     </div>
     <div class="sidebar-title">
-      <h4>LIDERMAN</h4>
-      <span>v2.0</span>
+      <h4>LIDERSEARCH</h4>
+      <span>v2.1</span>
     </div>
   </div>
 
   <nav class="sidebar-nav">
     <div class="nav-section-label">Modulos</div>
-    <a class="nav-item{% if active_module == 'seguros' %} active{% endif %}" data-domain="SEGUROS" href="{% url 'search_seguros_ui' %}"><i class="ti ti-shield"></i> Seguros</a>
-    <a class="nav-item{% if active_module == 'tregistro' %} active{% endif %}" data-domain="TREGISTRO" href="{% url 'search_tregistro_ui' %}"><i class="ti ti-file-certificate"></i> T-Registro</a>
-    <a class="nav-item{% if active_module == 'constancias' %} active{% endif %}" data-domain="CONSTANCIA_ABONO" href="{% url 'search_constancias_ui' %}"><i class="ti ti-folders"></i> Constancias</a>
+    <a class="nav-item hidden{% if active_module == 'seguros' %} active{% endif %}" data-domain="SEGUROS" href="{% url 'search_seguros_ui' %}"><i class="ti ti-shield"></i> Seguros</a>
+    <a class="nav-item hidden{% if active_module == 'tregistro' %} active{% endif %}" data-domain="TREGISTRO" href="{% url 'search_tregistro_ui' %}"><i class="ti ti-file-certificate"></i> T-Registro</a>
+    <a class="nav-item hidden{% if active_module == 'constancias' %} active{% endif %}" data-domain="CONSTANCIA_ABONO" href="{% url 'search_constancias_ui' %}"><i class="ti ti-folders"></i> Constancias</a>
 
-    <div class="nav-section-label">Administracion</div>
-    <a id="adminFilesLink" class="nav-item{% if active_admin == 'files' %} active{% endif %}" data-requires-manage="true" href="{% url 'files_management_ui' %}"><i class="ti ti-folder-cog"></i> Gestion de Archivos</a>
-    <a id="adminSyncLink" class="nav-item{% if active_admin == 'sync' %} active{% endif %}" data-requires-manage="true" href="{% url 'files_management_ui' %}?section=sync#sync-section"><i class="ti ti-refresh"></i> Sincronizacion</a>
+    <div class="nav-section-label hidden" data-requires-manage="true">Administracion</div>
+    <a id="adminFilesLink" class="nav-item hidden{% if active_admin == 'files' %} active{% endif %}" data-requires-manage="true" href="{% url 'files_management_ui' %}"><i class="ti ti-folder-cog"></i> Gestion de Archivos</a>
+    <a id="adminSyncLink" class="nav-item hidden{% if active_admin == 'sync' %} active{% endif %}" data-requires-manage="true" href="{% url 'files_management_ui' %}?section=sync#sync-section"><i class="ti ti-refresh"></i> Sincronizacion</a>
   </nav>
 
   <div class="sidebar-user">
     <div class="sidebar-user-main">
-      <div class="sidebar-avatar">AD</div>
+      <div class="sidebar-avatar">--</div>
       <div>
-        <p class="sidebar-user-name" id="sidebarUserName">admin</p>
-        <p class="sidebar-user-role" id="sidebarUserRole">ADMINISTRADOR</p>
+        <p class="sidebar-user-name" id="sidebarUserName">Validando...</p>
+        <p class="sidebar-user-role" id="sidebarUserRole"></p>
       </div>
     </div>
     <button class="sidebar-logout" type="button" id="btnLogout" aria-label="CERRAR SESION" title="CERRAR SESION">

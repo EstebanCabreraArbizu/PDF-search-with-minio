@@ -165,7 +165,8 @@ async function restoreSession() {
     const raw = localStorage.getItem(USER_KEY);
     if (raw) {
       currentUser = JSON.parse(raw);
-      isAdmin = currentUser?.can_manage_files === true || currentUser?.role === 'admin' || currentUser?.is_staff === true;
+      const groups = Array.isArray(currentUser?.groups) ? currentUser.groups.map(g => String(g).toLowerCase()) : [];
+      isAdmin = currentUser?.can_manage_files === true || groups.includes('planillas');
     }
   } catch (_) { }
 
@@ -1598,7 +1599,6 @@ async function bootstrap() {
   }
   SHARED.initTheme();
   SHARED.initGlobalUI();  // 🎨 Wire up theme toggle button and other global UI elements
-  renderSidebarUser();
 
   const hasSession = await restoreSession();
   if (!hasSession) { redirectToLogin(); return; }
